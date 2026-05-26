@@ -1,0 +1,898 @@
+<!--
+=============================================================
+  MOTOR BANCO MIR — v10
+  Novedades respecto a v9:
+  - Numeración correlativa fija por sección (no se mezcla)
+  - Badge neutro en pestaña "Todos" + mezcla real inter-secciones
+  - Temporizador sticky editable en header (play/pausa/reset)
+  - Buscador de texto en tiempo real
+  - Modo repaso rápido (muestra RC + explicación directamente)
+  - Estadísticas de errores recurrentes entre sesiones
+=============================================================
+-->
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title id="page-title">Banco MIR</title>
+<style>
+:root{
+  --bg:#f4f3ef;--surf:#fff;--bd:#e5e5e5;--bd2:#ddd;
+  --txt:#1a1a1a;--txt2:#555;--txt3:#999;--txt4:#666;
+  --hdr:#1a1a1a;--hdr-t:#fff;
+  --ok-bg:#e6f9ef;--ok-t:#0b6e52;--ok-bd:#2da060;
+  --ko-bg:#fdecea;--ko-t:#b91c1c;--ko-bd:#d94f45;
+  --sc-ok:#dcf5ed;--sc-ko:#fdecea;--sc-rem:#f0f0f0;--sc-rem-t:#666;
+  --exp:#fffbe6;--exp-bd:#f0c04a;--exp-t:#5a4500;
+  --prog:#e5e5e5;--prog-fill:#1a56db;
+  --star:#ccc;--star-on:#f59e0b;
+  --hint:#fafafa;--hint-bd:#eee;
+  --tab-bd:#ddd;--tab-t:#555;
+  --all-bg:#e8f0fe;--all-t:#1a56db;--all-bd:#1a56db;
+  --fab:#1a1a1a;--fab-t:#fff;
+  --nota-btn-t:#1a56db;--nota-btn-bd:#1a56db;--nota-btn-bg:var(--surf);
+  --timer-bg:#222;--timer-t:#fff;--timer-danger:#ef4444;
+}
+[data-theme="dark"]{
+  --bg:#0f0f1a;--surf:#1e1e30;--bd:#2a2a45;--bd2:#333355;
+  --txt:#e8e8f0;--txt2:#aaa;--txt3:#555;--txt4:#888;
+  --hdr:#0a0a14;--hdr-t:#e8e8f0;
+  --ok-bg:#0b3020;--ok-t:#4ade80;--ok-bd:#166534;
+  --ko-bg:#2d0a0a;--ko-t:#f87171;--ko-bd:#7f1d1d;
+  --sc-ok:#0b3020;--sc-ko:#2d0a0a;--sc-rem:#252540;--sc-rem-t:#aaa;
+  --exp:#1a1500;--exp-bd:#a37f10;--exp-t:#d4b84a;
+  --prog:#2a2a45;--prog-fill:#60a5fa;
+  --star:#444;--star-on:#f59e0b;
+  --hint:#1a1a2e;--hint-bd:#2a2a45;
+  --tab-bd:#2a2a45;--tab-t:#aaa;
+  --all-bg:#1a2a4a;--all-t:#60a5fa;--all-bd:#3b82f6;
+  --fab:#2a2a50;--fab-t:#e8e8f0;
+  --nota-btn-t:#60a5fa;--nota-btn-bd:#3b82f6;--nota-btn-bg:var(--surf);
+  --timer-bg:#1a1a2e;--timer-t:#e8e8f0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;transition:background .25s,color .25s}
+
+/* ── Header ── */
+header{background:var(--hdr);color:var(--hdr-t);padding:9px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;position:sticky;top:0;z-index:100}
+header h1{font-size:13.5px;font-weight:600;white-space:nowrap}
+.hright{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.hmeta{font-size:11px;color:#888}
+.hbtn{background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:3px 5px;border-radius:5px;transition:background .15s;color:var(--hdr-t)}
+.hbtn:hover{background:rgba(255,255,255,.12)}
+.sbadge{font-size:11px;padding:3px 9px;border-radius:5px;font-weight:500}
+.sbadge.ok{background:#15803d;color:#dcfce7}.sbadge.warn{background:#92400e;color:#fef3c7}
+
+/* ── Temporizador ── */
+#timer-wrap{display:flex;align-items:center;gap:4px;background:var(--timer-bg);border-radius:7px;padding:3px 8px;border:1px solid rgba(255,255,255,.1)}
+#timer-display{font-size:13px;font-weight:700;font-family:monospace;color:var(--timer-t);min-width:58px;text-align:center;cursor:pointer;border-radius:3px;padding:1px 3px}
+#timer-display:hover{background:rgba(255,255,255,.08)}
+#timer-display.editing{background:rgba(255,255,255,.15);outline:none;color:var(--timer-t)}
+#timer-display.danger{color:var(--timer-danger)}
+#timer-wrap button{background:none;border:none;cursor:pointer;color:rgba(255,255,255,.7);font-size:12px;padding:1px 3px;border-radius:3px;line-height:1}
+#timer-wrap button:hover{background:rgba(255,255,255,.12);color:#fff}
+
+/* ── Barra de progreso ── */
+#prog-wrap{height:3px;background:var(--prog);position:sticky;top:40px;z-index:99}
+#prog-bar{height:100%;background:var(--prog-fill);width:0%;transition:width .4s}
+
+/* ── Contenedor ── */
+.container{max-width:820px;margin:0 auto;padding:16px 12px}
+
+/* ── Buscador ── */
+.search-wrap{position:relative;margin-bottom:13px}
+.search-wrap input{width:100%;padding:8px 34px 8px 12px;border:1.5px solid var(--bd2);border-radius:8px;font-size:13px;background:var(--surf);color:var(--txt);outline:none;transition:border-color .15s}
+.search-wrap input:focus{border-color:var(--prog-fill)}
+.search-clear{position:absolute;right:9px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--txt3);font-size:16px;display:none;line-height:1}
+#search-count{font-size:11px;color:var(--txt3);margin-top:4px;display:none}
+
+/* ── Modo repaso ── */
+.mode-bar{display:flex;gap:6px;margin-bottom:12px;align-items:center}
+.mode-btn{padding:5px 12px;border:1.5px solid var(--bd2);border-radius:7px;cursor:pointer;font-size:12px;font-weight:500;background:var(--surf);color:var(--txt2);transition:all .15s}
+.mode-btn:hover{border-color:#999}
+.mode-btn.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Tabs ── */
+.tabs{display:flex;gap:7px;margin-bottom:13px;flex-wrap:wrap}
+.tab{padding:7px 14px;border:1.5px solid var(--tab-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;background:var(--surf);color:var(--tab-t);transition:all .15s}
+.tab:hover{border-color:#999;color:var(--txt)}
+.tab.t-all.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Score global ── */
+.ph-global{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 15px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-left:4px solid var(--prog-fill)}
+.score-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.sc{font-size:12px;font-weight:600;padding:3px 9px;border-radius:6px}
+.sc.ok{background:var(--sc-ok);color:var(--ok-t)}.sc.ko{background:var(--sc-ko);color:var(--ko-t)}.sc.rem{background:var(--sc-rem);color:var(--sc-rem-t)}
+
+/* ── Acciones ── */
+.global-actions{display:none;margin-bottom:10px;gap:7px;flex-wrap:wrap;align-items:center}
+.container[data-tab="all"] .global-actions{display:flex}
+.sec-actions{margin:6px 0 15px;display:flex;gap:7px;flex-wrap:wrap}
+.reset-btn{padding:7px 14px;background:var(--fab);color:var(--fab-t);border:none;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:opacity .15s}
+.reset-btn:hover{opacity:.82}
+.nota-btn{padding:7px 14px;background:var(--nota-btn-bg);color:var(--nota-btn-t);border:1.5px solid var(--nota-btn-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:background .15s}
+.nota-btn:hover{background:var(--all-bg)}
+
+/* ── Nota box ── */
+.nota-box,.global-nota-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:2px solid var(--bd2);font-size:13px;line-height:1.7;display:none}
+.nota-box.pass,.global-nota-box.pass{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t)}
+.nota-box.fail,.global-nota-box.fail{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t)}
+.nota-score{font-size:26px;font-weight:700;display:block;margin-bottom:4px}
+.nota-detail{font-size:12px;opacity:.85;font-family:monospace}
+
+/* ── Vista revisión ── */
+.review-list{margin-top:12px;border-top:1px solid var(--bd2);padding-top:10px}
+.review-title{font-size:12px;font-weight:700;margin-bottom:9px;color:var(--txt)}
+.review-sec-label{font-size:11.5px;font-weight:700;color:var(--txt3);margin:8px 0 5px;padding-top:6px;border-top:1px solid var(--bd)}
+.review-item{background:var(--surf);border-radius:8px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden}
+.review-item summary{padding:9px 12px;cursor:pointer;font-size:12.5px;color:var(--txt);list-style:none;display:flex;gap:8px;align-items:flex-start}
+.review-item summary::-webkit-details-marker{display:none}
+.review-item summary::before{content:'▶';font-size:9px;color:var(--txt3);flex-shrink:0;margin-top:4px;transition:transform .18s}
+details[open] summary::before{transform:rotate(90deg)}
+.review-body{padding:0 12px 11px}
+.review-ans{font-size:12px;color:var(--ok-t);margin-bottom:7px;font-weight:500}
+
+/* ── Estadísticas ── */
+.stats-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:1.5px solid var(--bd2);background:var(--surf);display:none}
+.stats-box.show{display:block}
+.stats-title{font-size:12px;font-weight:700;margin-bottom:10px;color:var(--txt)}
+.stats-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:12.5px}
+.stats-item:last-child{border-bottom:none}
+.stats-bar-wrap{flex:1;background:var(--sc-rem);border-radius:4px;height:6px;overflow:hidden}
+.stats-bar{height:100%;background:var(--ko-bd);border-radius:4px;transition:width .4s}
+.stats-n{font-size:11px;color:var(--txt3);white-space:nowrap}
+.stats-q{flex:2;color:var(--txt);font-size:12px;line-height:1.3}
+
+/* ── Panel secciones ── */
+.sec-panel{display:none}.sec-panel.visible{display:block}
+.ph{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ph-left{flex:1;display:flex;flex-direction:column;gap:5px}
+.ph-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt3);margin-bottom:1px}
+.ph-desc{font-size:12px;color:var(--txt4)}
+.fbtn{padding:6px 12px;font-size:12px;font-weight:500;border:1.5px solid var(--bd2);border-radius:8px;cursor:pointer;background:var(--surf);color:var(--txt2);transition:all .15s;white-space:nowrap}
+.fbtn:hover{border-color:#999;color:var(--txt)}.fbtn.on{background:var(--ko-bg);color:#b91c1c;border-color:#f87171}
+.no-failed{display:none;text-align:center;padding:16px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin-top:4px}
+.no-failed.show{display:block}
+.no-results{display:none;text-align:center;padding:20px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin:8px 0}
+
+/* ── Hint ── */
+.hint{font-size:11px;color:var(--txt3);margin-bottom:15px;padding:7px 11px;background:var(--hint);border-radius:6px;border:1px solid var(--hint-bd)}
+
+/* ── Tarjeta ── */
+.qcard{background:var(--surf);border-radius:10px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden;transition:box-shadow .15s}
+.qcard:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.qcard.kb-focus{outline:2px solid var(--prog-fill);outline-offset:-2px}
+.qcard.search-hidden{display:none}
+.qhead{padding:11px 13px;cursor:pointer;display:flex;align-items:flex-start;gap:9px}
+
+/* ── Badge numérico ── */
+.qnum{font-size:11px;font-weight:700;padding:3px 7px;border-radius:5px;white-space:nowrap;flex-shrink:0;margin-top:2px;background:var(--sc-rem);color:var(--sc-rem-t)}
+/* En pestaña "Todos" siempre neutro; en sección aplica color de sección */
+.qnum.sec-colored{background:var(--sec-dim);color:var(--sec-col)}
+
+.qtxt{font-size:13px;line-height:1.5;flex:1}
+.star-btn{background:none;border:none;cursor:pointer;font-size:15px;color:var(--star);padding:0 2px;flex-shrink:0;margin-top:2px;line-height:1;transition:color .15s,transform .15s}
+.star-btn:hover{transform:scale(1.2)}
+.star-btn .si{display:inline}.star-btn .sf{display:none}
+.star-btn.on .si{display:none}.star-btn.on .sf{display:inline;color:var(--star-on)}
+.chev{font-size:15px;color:var(--bd2);flex-shrink:0;margin-top:2px;transition:transform .2s}
+.qhead.open .chev{transform:rotate(180deg)}
+.qbody{display:none;padding:0 13px 13px}.qbody.open{display:block}
+
+/* ── Imagen ── */
+.clinimg-wrap{margin:9px 0 7px;background:#111;border-radius:8px;overflow:hidden;border:1px solid var(--bd2);text-align:center}
+.clinimg{max-width:100%;max-height:340px;object-fit:contain;display:block;margin:0 auto}
+.clinimg-cap{font-size:11px;color:var(--txt3);padding:4px 0 5px;background:var(--hint);border-top:1px solid var(--bd)}
+
+/* ── Opciones ── */
+.opts{list-style:none;margin-top:9px;display:flex;flex-direction:column;gap:5px}
+.opt{padding:9px 12px;border-radius:8px;border:1.5px solid var(--bd2);cursor:pointer;display:flex;align-items:flex-start;gap:9px;color:var(--txt);font-size:13px;line-height:1.45;transition:border-color .12s,background .12s;user-select:none}
+.opt:hover:not(.done){border-color:#999;background:var(--hint)}
+.opt.correct{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t);font-weight:500;cursor:default}
+.opt.wrong{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t);cursor:default}
+.opt.done:not(.correct):not(.wrong){cursor:default;opacity:.7}
+.onum{font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px;min-width:15px}
+
+/* ── Modo repaso rápido ── */
+.quick-card{padding:9px 12px;border-radius:8px;border:1.5px solid var(--ok-bd);background:var(--ok-bg);margin-top:8px}
+.quick-rc{font-size:12.5px;font-weight:600;color:var(--ok-t);margin-bottom:6px}
+
+/* ── Explicación ── */
+.expbox{margin-top:10px;padding:10px 12px;background:var(--exp);border-left:4px solid var(--exp-bd);border-radius:0 8px 8px 0;font-size:12.5px;color:var(--exp-t);line-height:1.65}
+.expbox b,.expbox strong{font-weight:600}
+.et{display:block;margin-bottom:4px;font-weight:600;font-size:13px}
+.atag{font-size:10px;padding:2px 6px;border-radius:4px;margin-left:5px;vertical-align:middle}
+.atag.ok{background:var(--sc-ok);color:var(--ok-t)}.atag.ko{background:var(--sc-ko);color:#c0392b}
+
+/* ── All-tab CSS ── */
+.container[data-tab="all"] .ph{display:none!important}
+.container[data-tab="all"] .sec-actions{display:none!important}
+.container[data-tab="all"] .no-failed{display:none!important}
+.container[data-tab="all"] .nota-box{display:none!important}
+.container:not([data-tab="all"]) .global-nota-box{display:none!important}
+.container:not([data-tab="all"]) #stats-global{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="h-tit">Banco MIR</h1>
+  <div class="hright">
+    <span class="hmeta" id="h-meta"></span>
+    <!-- Temporizador -->
+    <div id="timer-wrap" title="Haz clic en el tiempo para editar">
+      <span id="timer-display">0:00:00</span>
+      <button id="btn-tplay" onclick="timerToggle()" title="Play/Pausa">▶</button>
+      <button onclick="timerReset()" title="Reset">↺</button>
+    </div>
+    <button class="hbtn" id="btn-dark" onclick="toggleDark()" title="Modo oscuro">🌙</button>
+    <span id="save-badge" class="sbadge"></span>
+  </div>
+</header>
+<div id="prog-wrap"><div id="prog-bar"></div></div>
+
+<div class="container" id="main-cont" data-tab="all">
+  <!-- Buscador -->
+  <div class="search-wrap">
+    <input type="text" id="search-input" placeholder="🔍 Buscar en enunciados..." oninput="onSearch(this.value)">
+    <button class="search-clear" id="search-clear" onclick="clearSearch()">✕</button>
+  </div>
+  <div id="search-count"></div>
+
+  <!-- Modo -->
+  <div class="mode-bar">
+    <span style="font-size:11.5px;color:var(--txt3);font-weight:600">MODO:</span>
+    <button class="mode-btn on" id="mode-test" onclick="setMode('test')">📝 Test</button>
+    <button class="mode-btn" id="mode-quick" onclick="setMode('quick')">⚡ Repaso rápido</button>
+    <button class="mode-btn" id="btn-stars" onclick="filterStarred()" style="margin-left:auto;border-color:#f59e0b;color:#b45309">⭐ Marcadas</button>
+    <button class="mode-btn" id="btn-stats" onclick="toggleStats()">📊 Errores</button>
+  </div>
+
+  <!-- Stats globales -->
+  <div class="stats-box" id="stats-global"></div>
+
+  <!-- Tabs -->
+  <div class="tabs" id="tabs-wrap"></div>
+
+  <!-- Score global -->
+  <div class="ph-global">
+    <div class="ph-left">
+      <span class="ph-desc" id="ph-gdesc"></span>
+      <div class="score-row">
+        <span class="sc ok" id="sc-ok-all">✓ 0</span>
+        <span class="sc ko" id="sc-ko-all">✗ 0</span>
+        <span class="sc rem" id="sc-rem-all">○ 0</span>
+      </div>
+    </div>
+  </div>
+  <div class="global-actions">
+    <button class="reset-btn" onclick="resetAll()">↺ Reiniciar y mezclar</button>
+    <button class="nota-btn" onclick="calcNotaAll()">✎ Calcular nota global</button>
+  </div>
+  <div class="global-nota-box" id="nota-all"></div>
+  <p class="hint">💡 <b>1–5</b> responde · <b>↑↓</b> navega · <b>S</b> marca ⭐ · Progreso guardado automáticamente</p>
+
+  <div id="panels-wrap"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════ MOTOR v10 ═══════════════════════════════════════ */
+
+var KEY=/*__KEY__*/'pdt2025_ceu_v10';
+var META=/*__META_JSON__*/{"titulo":"PDT 2025 \u2014 Examen Final CEU Valencia","subtitulo":"Cirug\u00eda Endocrina \u00b7 Geriatr\u00eda \u00b7 Cuidados Paliativos","examen":"Examen Final PDT 2025 \u00b7 CEU Cardenal Herrera \u00b7 6\u00ba Medicina","secciones":{"endo":{"label":"Cirug\u00eda Endocrina","emoji":"\u2697\ufe0f","color":"#9a3412","colorDim":"#ffedd5","desc":"Paratiroides \u00b7 MEN \u00b7 Tiroides \u00b7 Suprarrenal \u00b7 Bari\u00e1trica \u00b7 Neuroendocrinos"},"geria":{"label":"Geriatr\u00eda","emoji":"\ud83e\uddd3","color":"#b45309","colorDim":"#fef3c7","desc":"Barthel \u00b7 Cognici\u00f3n \u00b7 Delirium \u00b7 Sarcopenia \u00b7 S\u00edndromes geri\u00e1tricos"},"pal":{"label":"Cuidados Paliativos","emoji":"\ud83c\udf3f","color":"#15803d","colorDim":"#dcfce7","desc":"Burnout \u00b7 Comunicaci\u00f3n \u00b7 Gasometr\u00eda \u00b7 RCP \u00b7 Muerte encef\u00e1lica"}}};
+var D=/*__D_JSON__*/{"endo":[{"n":"10","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l es la sistem\u00e1tica quir\u00fargica correcta ante una PARATIROIDECTOM\u00cdA \u00daNICA?","o":["Resecci\u00f3n de la gl\u00e1ndula patol\u00f3gica, biopsia de 1/3 de otra gl\u00e1ndula normal, PTHio y revisi\u00f3n del resto de las gl\u00e1ndulas","Resecci\u00f3n de la gl\u00e1ndula patol\u00f3gica y PTHio, revisi\u00f3n del resto, sin biopsia de 1/3 de las otras gl\u00e1ndulas","Resecci\u00f3n de la gl\u00e1ndula patol\u00f3gica sin biopsia ni PTHio","Resecci\u00f3n, biopsia de 1/3 de otra gl\u00e1ndula y PTHio, sin revisar el resto de las gl\u00e1ndulas normales"],"c":1,"e":"La paratiroidectom\u00eda \u00fanica guiada por imagen requiere: (1) <b>resecci\u00f3n de la gl\u00e1ndula patol\u00f3gica</b>, (2) <b>biopsia de 1/3 de otra gl\u00e1ndula normal</b> para confirmar tejido paratiroideo, (3) <b>PTH intraoperatoria</b> para confirmar ca\u00edda &gt;50% (criterio de Miami) y (4) <b>revisi\u00f3n del resto de gl\u00e1ndulas</b> para descartar enfermedad multiglandular."},{"n":"11","noShuffle":false,"img":null,"q":"Ni\u00f1o de 3 a\u00f1os con hallazgos de hiperplasia de plexos mient\u00e9ricos, macroglosia, labios gruesos, neuromas mucosos bucales, calcitonina 35 pg/mL y mutaci\u00f3n del protooncog\u00e9n RET. Ecograf\u00eda tiroidea y abdominal normales. \u00bfCu\u00e1l es la actitud m\u00e1s correcta? (MEN 2B)","o":["Seguimiento cl\u00ednico, anal\u00edtico y ecogr\u00e1fico cada 6 meses","Tiroidectom\u00eda total con vaciamiento ganglionar terap\u00e9utico del compartimento central (VI) y lateral (II-III-IV) bilateralmente","Tiroidectom\u00eda total con vaciamiento ganglionar profil\u00e1ctico del compartimento central (VI)","Tiroidectom\u00eda total sin vaciamiento ganglionar"],"c":2,"e":"MEN 2B con calcitonina elevada indica actividad del carcinoma medular (CMT) o hiperplasia de c\u00e9lulas C. Aunque la ecograf\u00eda es normal, la conducta en ni\u00f1os es <b>m\u00e1s agresiva que en adultos</b>: tiroidectom\u00eda total con <b>vaciamiento bilateral del compartimento central (VI) y laterales (II-IV)</b>. En adultos con calcitonina elevada solo se tratar\u00eda el lado ipsilateral, pero en MEN 2B pedi\u00e1trico se act\u00faa bilateralmente."},{"n":"12","noShuffle":false,"img":null,"q":"Desde el punto de vista quir\u00fargico, \u00bfcu\u00e1l es el significado del l\u00f3bulo piramidal de la gl\u00e1ndula tiroides?","o":["Es el polo superior del l\u00f3bulo derecho","Es el polo superior del l\u00f3bulo izquierdo","Es un vestigio del quiste tirogloso que surge del istmo tiroideo","Es un vestigio del quiste tirogloso que surge preferentemente del l\u00f3bulo derecho"],"c":3,"e":"El <b>l\u00f3bulo piramidal de Lalouette</b> es un vestigio del conducto tirogloso, presente en el 50-80% de las personas. Surge del <b>istmo tiroideo</b> y asciende hacia el hueso hioides. Tiene importancia quir\u00fargica porque si no se extirpa en la tiroidectom\u00eda total puede quedar tejido tiroideo funcionante que interfiere con la ablaci\u00f3n con radioyodo o el seguimiento con tiroglobulina."},{"n":"13","noShuffle":false,"img":null,"q":"Mujer de 39 a\u00f1os con fenotipo cushinoide e HTA rebelde al tratamiento en control postparto de diabetes gestacional. \u00bfQu\u00e9 pruebas diagn\u00f3sticas solicitar\u00eda en primer lugar?","o":["TAC de cuerpo entero para descartar organicidad","TAC abdominal sin contraste pensando en patolog\u00eda suprarrenal","Determinaci\u00f3n plasm\u00e1tica del \u00edndice aldosterona/renina","Excluir causa iatrog\u00e9nica e iniciar test de cortisol en orina de 24 horas"],"c":4,"e":"El primer paso siempre es <b>excluir causa iatrog\u00e9nica</b> (corticoides ex\u00f3genos, la causa m\u00e1s frecuente de hipercortisolismo). Despu\u00e9s se confirma bioqu\u00edmicamente el hipercortisolismo end\u00f3geno con <b>cortisol libre en orina de 24h</b>, cortisol salival nocturno o test de supresi\u00f3n con 1 mg de dexametasona. La imagen nunca es el primer paso: primero bioqu\u00edmica, luego etiolog\u00eda, luego imagen."},{"n":"14","noShuffle":false,"img":null,"q":"Var\u00f3n de 31 a\u00f1os con carcinoma medular de tiroides de 2,6 cm sin afectaci\u00f3n ganglionar, tratado con tiroidectom\u00eda total y vaciamiento central (T2N0M0). \u00bfCu\u00e1l es la afirmaci\u00f3n CORRECTA?","o":["El CMT es espor\u00e1dico y se encuentra en el contexto de s\u00edndrome de c\u00e1ncer de tiroides en la mayor\u00eda de los casos","Se puede usar el CEA o la tiroglobulina como seguimiento bioqu\u00edmico","El tratamiento con levotiroxina debe ajustarse para conseguir TSH suprimida siempre, tanto en hereditarios como espor\u00e1dicos","Se debe incluir el estudio gen\u00e9tico del protooncog\u00e9n RET, ya que puede estar mutado tanto en CMT hereditarios como espor\u00e1dicos"],"c":4,"e":"El CMT es espor\u00e1dico en el 75% y hereditario (MEN2, FMTC) en el 25%. El <b>estudio del protooncog\u00e9n RET es obligatorio en todos</b> porque hasta un 7% de los aparentemente espor\u00e1dicos tienen mutaci\u00f3n germinal. El marcador de seguimiento es la <b>calcitonina y el CEA</b>, nunca la tiroglobulina (que es marcador de tumores diferenciados foliculares/papilares). La levotiroxina supresora solo se usa en carcinomas diferenciados, no en el medular."},{"n":"15","noShuffle":false,"img":null,"q":"La t\u00e9cnica quir\u00fargica indicada en pacientes con adenoma tiroideo t\u00f3xico solitario que precisa intervenci\u00f3n quir\u00fargica es:","o":["Nodulectom\u00eda","Hemitiroidectom\u00eda del lado afecto","Tiroidectom\u00eda subtotal","Tiroidectom\u00eda total"],"c":2,"e":"En el adenoma t\u00f3xico solitario (n\u00f3dulo aut\u00f3nomo hiperfuncionante), la t\u00e9cnica de elecci\u00f3n es la <b>hemitiroidectom\u00eda del lado afecto</b> (lobectom\u00eda + istmectom\u00eda). El tejido contralateral, suprimido por el exceso hormonal, recupera su funci\u00f3n tras la extirpaci\u00f3n. La nodulectom\u00eda tiene alta tasa de recidiva. La tiroidectom\u00eda total o subtotal ser\u00eda excesiva cuando el par\u00e9nquima contralateral es sano."},{"n":"16","noShuffle":false,"img":null,"q":"Mujer de 35 a\u00f1os con carcinoma papilar de tiroides 2,3 cm variante c\u00e9lulas altas, sin infiltraci\u00f3n vascular pero s\u00ed capsular, tras tiroidectom\u00eda total con vaciamiento VI. Tiroglobulina postoperatoria 14 ng/mL. \u00bfCu\u00e1l es el siguiente paso?","o":["Remitir al cirujano para vaciamiento ganglionar laterocervical derecho","Iniciar levotiroxina supresora de TSH y revisi\u00f3n a los 6 meses","Solicitar PET-TAC para valorar afectaci\u00f3n ganglionar","Demorar el tratamiento sustitutivo y remitir a Medicina Nuclear para ablaci\u00f3n con 100 mCi de I-131"],"c":4,"e":"La variante de c\u00e9lulas altas es un <b>carcinoma papilar de alto riesgo</b> (&gt;4 cm, infiltraci\u00f3n capsular, variante agresiva). La tiroglobulina postoperatoria de 14 ng/mL (&gt;0,2 ng/mL esperado) indica enfermedad residual o metast\u00e1sica. El paso correcto es <b>ablaci\u00f3n con I-131 (100 mCi)</b>, para lo que se debe demorar la levotiroxina para conseguir hipotiroidismo y TSH &gt;30 mUI/L que estimule la captaci\u00f3n."},{"n":"17","noShuffle":false,"img":null,"q":"Mujer de 24 a\u00f1os asintom\u00e1tica con antecedentes familiares de carcinoma medular de tiroides. Se descubre incidentalmente masa adrenal de 5 cm. \u00bfCu\u00e1l debe ser la siguiente decisi\u00f3n cl\u00ednica?","o":["Control semestral con pruebas de imagen al estar asintom\u00e1tica","Punci\u00f3n-aspiraci\u00f3n de la lesi\u00f3n para determinar su naturaleza","Sospechar s\u00edndrome de Cushing precl\u00ednico en contexto de neoplasia endocrina m\u00faltiple","Determinar catecolaminas en orina para descartar feocromocitoma"],"c":4,"e":"En el contexto de antecedentes familiares de CMT (MEN2), una masa adrenal de 5 cm obliga a <b>descartar feocromocitoma antes de cualquier intervenci\u00f3n</b> mediante catecolaminas en orina de 24h o metanefrinas fraccionadas. El feocromocitoma no diagnosticado puede causar crisis hipertensiva mortal intraoperatoria. La PAAF est\u00e1 <b>contraindicada</b> en masas adrenales por riesgo de crisis si es feocromocitoma."},{"n":"18","noShuffle":true,"img":null,"q":"\u00bfEn cu\u00e1les de estas situaciones se deber\u00eda solicitar niveles de gastrina en plasma?","o":["Hipertrofia de pliegues g\u00e1stricos no corregida con omeprazol","\u00dalcera asociada a diarrea secretora","Historia familiar de MEN 1","En todas las circunstancias anteriores"],"c":4,"e":"La <b>gastrina elevada</b> orienta hacia s\u00edndrome de Zollinger-Ellison (gastrinoma). Se debe solicitar en: (1) \u00falceras refractarias o at\u00edpicas con <b>diarrea secretora</b> (hipersecreci\u00f3n \u00e1cida masiva), (2) <b>hipertrofia de pliegues g\u00e1stricos</b> no explicada (efecto tr\u00f3fico de la gastrina), y (3) <b>MEN1</b> donde el gastrinoma es el tumor pancre\u00e1tico m\u00e1s frecuente y condiciona la morbimortalidad. Las tres situaciones son correctas."},{"n":"19","noShuffle":false,"img":null,"q":"En relaci\u00f3n con la neoplasia endocrina m\u00faltiple tipo 2 (MEN 2), indica la afirmaci\u00f3n CIERTA:","o":["La presencia del gastrinoma condiciona la morbilidad y la mortalidad","La existencia de hiperparatiroidismo primario es infrecuente","El estudio de la mutaci\u00f3n del protooncog\u00e9n RET tiene importancia en su manejo","Suelen aparecer tumores carcinoides localizados en el timo"],"c":3,"e":"En el <b>MEN2</b>, el componente principal es el <b>carcinoma medular de tiroides</b> (100%), junto con feocromocitoma (50%) e hiperparatiroidismo primario (20-30% en MEN2A). El <b>estudio del protooncog\u00e9n RET es esencial</b> para el diagn\u00f3stico, screening familiar y decisi\u00f3n quir\u00fargica profil\u00e1ctica. El gastrinoma y los tumores carcinoides t\u00edmicos son componentes del MEN1, no del MEN2."},{"n":"20","noShuffle":false,"img":null,"q":"Paciente que presenta diabetes mellitus, p\u00e9rdida de peso, anemia y eritema migratorio necrol\u00edtico. El diagn\u00f3stico m\u00e1s probable es:","o":["Somatostatinoma","Insulinoma","Glucagonoma","Vipoma"],"c":3,"e":"La tr\u00edada cl\u00e1sica del <b>glucagonoma</b> es: <b>eritema migratorio necrol\u00edtico</b> (lesi\u00f3n cut\u00e1nea patognom\u00f3nica), <b>diabetes mellitus</b> (por efecto hiperglucemiante del glucag\u00f3n) y <b>p\u00e9rdida de peso + anemia</b>. El insulinoma cursa con hipoglucemia, lo opuesto. El somatostatinoma produce diabetes, esteatorrea y colelitiasis. El VIPoma produce diarrea acuosa masiva (s\u00edndrome de Verner-Morrison)."},{"n":"21","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l es la t\u00e9cnica diagn\u00f3stica de elecci\u00f3n para localizar el tumor primario y la extensi\u00f3n en pacientes con s\u00edndrome carcinoide?","o":["TAC toracoabdominop\u00e9lvico","Gammagraf\u00eda con Octre\u00f3tido marcado (octreoscan)","Resonancia magn\u00e9tica","PET-TAC con FDG"],"c":2,"e":"Los tumores carcinoides (tumores neuroendocrinos bien diferenciados) expresan <b>receptores de somatostatina tipo 2</b>, lo que permite su localizaci\u00f3n con <b>gammagraf\u00eda con octre\u00f3tido marcado (octreoscan)</b> o, actualmente con mayor sensibilidad, el PET con an\u00e1logos de somatostatina marcados con Ga-68 (DOTATATE-PET). El TAC es \u00fatil para la anatom\u00eda pero tiene menor sensibilidad funcional. El PET-FDG tiene escaso papel en tumores bien diferenciados."},{"n":"22","noShuffle":true,"img":null,"q":"\u00bfCu\u00e1l de estas premisas es una contraindicaci\u00f3n quir\u00fargica para la cirug\u00eda de la obesidad metab\u00f3lica?","o":["Hepatopat\u00eda activa","Trastorno l\u00edmite de la personalidad sin apoyo psicosocial y familiar","Fracaso del tratamiento m\u00e9dico o diet\u00e9tico correctamente realizado","Las respuestas A y B son contraindicaciones quir\u00fargicas"],"c":4,"e":"La <b>hepatopat\u00eda activa</b> supone un riesgo quir\u00fargico inaceptable. El <b>trastorno l\u00edmite de la personalidad sin apoyo</b> es contraindicaci\u00f3n porque el cumplimiento del protocolo a largo plazo es imprescindible para el \u00e9xito. El <b>fracaso del tratamiento m\u00e9dico correctamente realizado</b> es precisamente uno de los <b>criterios de indicaci\u00f3n</b> (junto con IMC \u226540 o \u226535 con comorbilidades). Por tanto A y B son contraindicaciones, no C."},{"n":"23","noShuffle":false,"img":null,"q":"Todas estas son complicaciones cr\u00f3nicas del By-pass G\u00e1strico en Y de Roux (t\u00e9cnica mixta malabsortiva/restrictiva), EXCEPTO:","o":["V\u00f3mitos postprandiales","\u00dalcera marginal de la boca anastom\u00f3tica","D\u00e9ficits metab\u00f3lico-nutricionales","S\u00edndrome de Dumping"],"c":1,"e":"Los <b>v\u00f3mitos postprandiales</b> son una complicaci\u00f3n <b>aguda o subaguda</b> relacionada con la adaptaci\u00f3n inicial al peque\u00f1o reservorio g\u00e1strico o con estenosis anastom\u00f3tica. Las complicaciones <b>cr\u00f3nicas</b> del bypass incluyen: \u00falcera marginal (exposici\u00f3n al \u00e1cido), d\u00e9ficits nutricionales (B12, hierro, calcio, vitamina D) y s\u00edndrome de dumping (vaciamiento g\u00e1strico r\u00e1pido con s\u00edntomas vasomotores). La clave es distinguir agudo de cr\u00f3nico."},{"n":"24","noShuffle":true,"img":null,"q":"\u00bfEn cu\u00e1l de estas situaciones es OBLIGATORIO descartar la presencia de un feocromocitoma?","o":["HTA + dos s\u00edntomas de la tr\u00edada cl\u00e1sica (cefalea, palpitaciones, diaforesis)","Historia familiar de MEN 2","Hipertensi\u00f3n maligna","En todas las situaciones anteriores"],"c":4,"e":"El feocromocitoma debe descartarse sistem\u00e1ticamente en: (1) <b>tr\u00edada cl\u00e1sica</b> (HTA + cefalea + sudoraci\u00f3n + palpitaciones), (2) <b>MEN2</b> donde aparece en el 50% y debe descartarse antes de cualquier cirug\u00eda tiroidea para evitar crisis mortal, y (3) <b>HTA maligna</b> (grave con da\u00f1o de \u00f3rgano diana de r\u00e1pida progresi\u00f3n). Las tres son indicaciones absolutas de screening."},{"n":"25","noShuffle":false,"img":null,"q":"\u00bfEn cu\u00e1l de estas situaciones NO suele existir hiperfuncionalismo glandular?","o":["En un struma ovarii","En situaciones de calcio plasm\u00e1tico bajo asociado a insuficiencia renal cr\u00f3nica","Tratamiento con yodo radiactivo tras la cirug\u00eda de un c\u00e1ncer tiroideo","En el s\u00edndrome de Conn (adenoma suprarrenal)"],"c":3,"e":"El <b>tratamiento ablativo con I-131</b> post-tiroidectom\u00eda tiene como objetivo destruir el tejido tiroideo residual, por lo que no genera hiperfuncionalismo sino que lo elimina. En cambio: el <b>struma ovarii</b> (tejido tiroideo en teratoma ov\u00e1rico) puede producir hipertiroidismo; el <b>hiperparatiroidismo secundario</b> a IRC es una situaci\u00f3n de hiperfuncionalismo adaptado; y el <b>s\u00edndrome de Conn</b> es un hiperaldosteronismo primario por adenoma suprarrenal hiperfuncionante."},{"n":"57","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes condiciones suele ser la habitual en el debut diab\u00e9tico en paciente joven (cetoacidosis)?","o":["Alcalemia metab\u00f3lica con GAP elevado","Acidemia metab\u00f3lica con GAP elevado","Alcalemia metab\u00f3lica con GAP normal","Acidemia metab\u00f3lica con GAP normal"],"c":2,"e":"La <b>cetoacidosis diab\u00e9tica</b> (DM1 debut) genera <b>acidosis metab\u00f3lica con ani\u00f3n GAP elevado</b> por acumulaci\u00f3n de cuerpos cet\u00f3nicos (\u00e1cido acetoac\u00e9tico y beta-hidroxibut\u00edrico). El pH &lt;7,35 confirma <b>acidemia</b>. El GAP elevado (&gt;12 mEq/L) refleja la presencia de \u00e1cidos no medibles. Contrastar con la acidosis hiperclor\u00e9mica (GAP normal) de otras causas como diarrea o p\u00e9rdidas digestivas de bicarbonato."}],"geria":[{"n":"26","noShuffle":false,"img":null,"q":"Var\u00f3n de 76 a\u00f1os con \u00edndice de Barthel de 70. \u00bfCu\u00e1l es su grado de dependencia?","o":["Grave (severa)","Total","Leve","Moderada"],"c":3,"e":"La clasificaci\u00f3n del \u00cdndice de Barthel es: <b>100 = independiente; 91-99 = dependencia m\u00ednima; 61-90 = dependencia leve; 41-60 = dependencia moderada; 21-40 = dependencia grave; \u226420 = dependencia total</b>. Un Barthel de 70 corresponde a <b>dependencia leve</b>: el paciente puede realizar la mayor\u00eda de las ABVD pero necesita ayuda en algunas actividades espec\u00edficas."},{"n":"27","noShuffle":false,"img":null,"q":"Respecto al envejecimiento poblacional, se\u00f1ale la respuesta INCORRECTA:","o":["La esperanza de vida media en ambos sexos se sit\u00faa en torno a los 83 a\u00f1os","La mayor esperanza de vida junto a menor natalidad hace que la poblaci\u00f3n y la sanidad est\u00e9n envejecidas, proceso que seguir\u00e1 aumentando","El reto de la geriatr\u00eda es conseguir que el envejecimiento tenga el menor impacto posible en la capacidad funcional y calidad de vida","Aproximadamente un 10% de los pacientes que atendemos en el entorno sanitario tienen m\u00e1s de 65 a\u00f1os"],"c":4,"e":"La afirmaci\u00f3n incorrecta es la D. En Espa\u00f1a, <b>m\u00e1s del 20% de la poblaci\u00f3n tiene m\u00e1s de 65 a\u00f1os</b>, y representan aproximadamente el <b>40-50% de los ingresos hospitalarios</b>. El dato del 10% subestima gravemente la realidad del envejecimiento poblacional espa\u00f1ol. Las dem\u00e1s afirmaciones son correctas: la esperanza de vida es ~83 a\u00f1os y la tendencia de envejecimiento es creciente."},{"n":"28","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 herramienta utilizar\u00eda para evaluar la situaci\u00f3n cognitiva?","o":["Barthel","Pfeiffer","Test de Tinetti","Lawton"],"c":2,"e":"El <b>test de Pfeiffer (SPMSQ)</b> es un cuestionario de 10 preguntas de orientaci\u00f3n y memoria que eval\u00faa el estado cognitivo. El Barthel eval\u00faa actividades b\u00e1sicas de la vida diaria (ABVD). El test de Tinetti eval\u00faa marcha y equilibrio (riesgo de ca\u00eddas). La escala de Lawton eval\u00faa actividades instrumentales (AIVD). Para cognici\u00f3n: Pfeiffer (cribado r\u00e1pido) o MEC/MMSE (m\u00e1s completo)."},{"n":"29","noShuffle":false,"img":null,"q":"Var\u00f3n de 75 a\u00f1os en urgencias con desorientaci\u00f3n, heteroagresividad y d\u00e9ficit severo en la atenci\u00f3n. \u00bfCu\u00e1l es la sospecha diagn\u00f3stica y actitud m\u00e1s correcta?","o":["Probable debut de demencia: benzodiacepinas y derivaci\u00f3n a neurolog\u00eda","Delirium: completar VGI y buscar la causa subyacente, cuyo tratamiento probablemente resolver\u00e1 el cuadro","Delirium: neurol\u00e9pticos hasta que ceda el cuadro","Normal a los 75 a\u00f1os, no prestar\u00eda especial atenci\u00f3n"],"c":2,"e":"El cuadro de <b>inicio agudo, fluctuante, con d\u00e9ficit de atenci\u00f3n</b> es el delirium, no una demencia (que es cr\u00f3nica y progresiva). La actitud correcta es la <b>Valoraci\u00f3n Geri\u00e1trica Integral (VGI)</b> para identificar y tratar la causa precipitante (infecci\u00f3n, f\u00e1rmacos, retenci\u00f3n urinaria, alteraci\u00f3n metab\u00f3lica...). El tratamiento de la causa suele resolver el delirium. Las benzodiacepinas est\u00e1n contraindicadas (empeoran el delirium)."},{"n":"30","noShuffle":false,"img":null,"q":"Paciente con demencia ingresada por fractura de cadera subcapital izquierda. Se\u00f1ale la respuesta INCORRECTA respecto a la indicaci\u00f3n quir\u00fargica:","o":["Barthel 90, Pfeiffer 3 errores: procede intervenci\u00f3n quir\u00fargica","Barthel 40, Pfeiffer 6 errores: procede intervenci\u00f3n quir\u00fargica","Barthel 20, Pfeiffer no ejecutable: desestimo intervenci\u00f3n quir\u00fargica","Barthel 60, Pfeiffer 9 errores: procede intervenci\u00f3n quir\u00fargica"],"c":2,"e":"La respuesta incorrecta es la B. Un <b>Barthel 40 (dependencia moderada-grave)</b> con <b>Pfeiffer 6 errores (deterioro cognitivo moderado)</b> no justifica cirug\u00eda de forma rutinaria, ya que el riesgo-beneficio es desfavorable. La cirug\u00eda se plantea cuando hay expectativa razonable de recuperaci\u00f3n funcional. Con Barthel muy bajo y deterioro cognitivo significativo, el manejo conservador analg\u00e9sico puede ser m\u00e1s adecuado que una intervenci\u00f3n mayor."},{"n":"31","noShuffle":false,"img":null,"q":"Se\u00f1ale cu\u00e1l NO es un s\u00edndrome geri\u00e1trico:","o":["Ca\u00eddas","Polifarmacia","Fragilidad","Astenia"],"c":4,"e":"Los <b>s\u00edndromes geri\u00e1tricos cl\u00e1sicos</b> incluyen: ca\u00eddas, delirium, incontinencia, \u00falceras por presi\u00f3n, deterioro cognitivo, depresi\u00f3n, malnutrici\u00f3n, fragilidad y polifarmacia. La <b>astenia</b> es un s\u00edntoma inespec\u00edfico, no un s\u00edndrome geri\u00e1trico como tal. Es manifestaci\u00f3n com\u00fan de m\u00faltiples condiciones pero no constituye por s\u00ed misma un s\u00edndrome geri\u00e1trico reconocido en las clasificaciones est\u00e1ndar."},{"n":"32","noShuffle":false,"img":null,"q":"Paciente de 90 a\u00f1os con dinamometr\u00eda de 22 kg, per\u00edmetro de pantorrilla de 29 cm y velocidad de marcha de 0,63 m/s. Responda la INCORRECTA:","o":["Tiene sarcopenia probable","Tiene m\u00e1s riesgo de ingreso, discapacidad, institucionalizaci\u00f3n y muerte","Tiene sarcopenia severa","Tiene m\u00e1s riesgo de ca\u00eddas"],"c":1,"e":"Seg\u00fan EWGSOP2: fuerza muscular baja (dinamometr\u00eda 22 kg &lt;27 kg hombre) + masa muscular reducida (pantorrilla 29 cm &lt;31 cm) + rendimiento f\u00edsico bajo (velocidad marcha 0,63 m/s &lt;0,8 m/s) = <b>sarcopenia SEVERA</b>, no 'probable'. La sarcopenia <b>probable</b> se diagnostica solo con baja fuerza muscular. Con los tres criterios alterados se confirma la sarcopenia y se clasifica como severa. Por tanto la afirmaci\u00f3n A es incorrecta."}],"pal":[{"n":"64","noShuffle":false,"img":null,"q":"En el cuidado del cuidador, \u00bfcu\u00e1l es una estrategia recomendada para evitar el burnout?","o":["Ignorar las emociones del cuidador","Fomentar la autonom\u00eda y el descanso del cuidador","Exigirle m\u00e1s responsabilidad para que se distraiga","Evitar hablar sobre el estr\u00e9s para no aumentar su carga emocional"],"c":2,"e":"El <b>s\u00edndrome del cuidador quemado (burnout)</b> se previene con: <b>respiro y descanso</b> (cuidados de relevo, ingresos de respiro), <b>apoyo emocional</b> (escucha activa, grupos de apoyo), <b>informaci\u00f3n y formaci\u00f3n</b> sobre la enfermedad, y <b>fomento de la autonom\u00eda</b> del cuidador para mantener su propia vida. Ignorar emociones, aumentar responsabilidades o evitar hablar del estr\u00e9s son estrategias contraproducentes que aceleran el burnout."},{"n":"65","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 estrategia es \u00fatil en la comunicaci\u00f3n de malas noticias en cuidados paliativos?","o":["Dar toda la informaci\u00f3n de golpe","Utilizar lenguaje t\u00e9cnico para parecer m\u00e1s serio","Explorar primero qu\u00e9 sabe el paciente","Evitar el contacto visual para no incomodar al paciente"],"c":3,"e":"El protocolo <b>SPIKES</b> para comunicaci\u00f3n de malas noticias establece como primer paso esencial <b>explorar qu\u00e9 sabe y qu\u00e9 quiere saber el paciente</b> (Setting, Perception, Invitation, Knowledge, Emotions, Strategy). Dar la informaci\u00f3n de golpe genera shock y bloqueo. El lenguaje t\u00e9cnico crea distancia. El contacto visual y la escucha emp\u00e1tica son fundamentales. La informaci\u00f3n se da de forma gradual, adaptada a lo que el paciente puede asimilar."},{"n":"66","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l o cu\u00e1les son los trastornos subyacentes en la gasometr\u00eda: pH 7,25; pCO2 34 mmHg; HCO3- 14 mmol/L?","o":["Acidosis metab\u00f3lica y acidosis respiratoria","Acidemia metab\u00f3lica y alcalosis respiratoria","Acidemia metab\u00f3lica y alcalosis respiratoria","Alcalemia metab\u00f3lica y acidosis respiratoria"],"c":2,"e":"pH 7,25 = <b>acidemia</b>. HCO3- 14 = <b>acidosis metab\u00f3lica primaria</b> (valor bajo). La compensaci\u00f3n respiratoria esperada: pCO2 = 1,5 \u00d7 HCO3- + 8 \u00b1 2 = 1,5\u00d714+8 = 29 \u00b1 2 mmHg. La pCO2 real es 34 mmHg &gt; 31 mmHg esperado, es decir, la CO2 est\u00e1 m\u00e1s alta de lo esperado \u2192 el pulm\u00f3n no compensa suficientemente \u2192 existe tambi\u00e9n un componente de <b>acidosis respiratoria</b> sobrea\u00f1adida. Por tanto: acidemia metab\u00f3lica + acidosis respiratoria."},{"n":"67","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes afirmaciones NO se encuentra dentro de los criterios de calidad de la RCP y compresiones tor\u00e1cicas?","o":["Se deben alcanzar 100-120 ppm","Se debe hundir el pecho unos 5-6 cm (o 1/3 del di\u00e1metro tor\u00e1cico)","Los ciclos son de 3 minutos","Se deben minimizar las interrupciones de las compresiones"],"c":3,"e":"Seg\u00fan las gu\u00edas ERC/AHA, los criterios de calidad de la RCP son: frecuencia <b>100-120 compresiones/min</b>, profundidad <b>5-6 cm</b> (adultos), permitir expansi\u00f3n tor\u00e1cica completa y <b>minimizar interrupciones</b>. Los ciclos de RCP son de <b>2 minutos</b> (no 3), tras los cuales se realiza el an\u00e1lisis del ritmo. Los ciclos de 3 minutos no corresponden al protocolo est\u00e1ndar, por lo que la afirmaci\u00f3n C es incorrecta."},{"n":"68","noShuffle":false,"img":null,"q":"El test de apnea en el diagn\u00f3stico de muerte encef\u00e1lica (se\u00f1ale la FALSA):","o":["Eval\u00faa el est\u00edmulo respiratorio del paciente","Es suficiente con evaluar el aumento de pCO2","Eval\u00faa el aumento de pCO2 y la movilidad tor\u00e1cica del paciente (est\u00edmulo respiratorio)","Siendo la \u00faltima exploraci\u00f3n f\u00edsica, es necesaria otra prueba posterior por otro especialista para confirmar el diagn\u00f3stico"],"c":2,"e":"La afirmaci\u00f3n falsa es la B. El test de apnea eval\u00faa <b>tanto el aumento de pCO2 como la ausencia de esfuerzo respiratorio</b> (movimientos tor\u00e1cicos). No basta con medir la pCO2: se requiere que esta suba &gt;60 mmHg (o &gt;20 mmHg sobre la basal) <b>sin que aparezca ning\u00fan movimiento respiratorio</b>. El protocolo tambi\u00e9n exige confirmaci\u00f3n posterior por otro facultativo y/o prueba instrumental (EEG, potenciales evocados, Doppler transcraneal)."}]};
+var IMGS=/*__IMGS_JSON__*/{};
+
+/* ── Estado ── */
+var canSave=typeof localStorage!=='undefined';
+var saved={};try{saved=JSON.parse(localStorage.getItem(KEY)||'null')||{};}catch(e){}
+var state   =saved.state   ||{};
+var qOrd    =saved.qOrd    ||{};
+var oOrd    =saved.oOrd    ||{};
+var starred =saved.starred ||{};
+var failHist=saved.failHist||{};  // {qid: count} entre sesiones
+var darkMode=saved.dark    ||false;
+var timerSec=saved.timerSec||0;   // segundos configurados
+var SECS=Object.keys(META.secciones||{});
+var fFailed={};
+var qIdx={};           // {sec: {n: q}}
+var qNums={};          // {sec: {n: numero_correlativo}}
+var allOrder=null;     // orden mezclado inter-secciones para pestaña Todos
+var activeCid=null;
+var currentTab='all';
+var currentMode='test';
+var saveTimer=null;
+var starsFilter=false;
+var statsVisible=false;
+var timerRunning=false;
+var timerRemaining=timerSec;
+var timerInterval=null;
+
+/* ── INIT ── */
+(function init(){
+  SECS.forEach(function(s){fFailed[s]=false;});
+  injectSecCSS();
+  buildHeader();
+  buildTabs();
+  buildPanels();
+  buildIdx();
+  buildNums();
+  buildAllOrder();
+  SECS.forEach(render);
+  renderAll();
+  updateScores();
+  updateProg();
+  applyTheme();
+  initTimer();
+  setBadge(canSave?'Guardado':'Sin guardado',canSave?'ok':'warn');
+  document.addEventListener('keydown',handleKey);
+  var si=document.getElementById('search-input');
+  if(si)si.addEventListener('keydown',function(e){if(e.key==='Escape'){clearSearch();}});
+})();
+
+/* ── CSS dinámico ── */
+function injectSecCSS(){
+  var css='';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{};
+    var c=m.color||'#1a56db',cd=m.colorDim||'#e8f0fe';
+    css+='.tab.t-'+s+'.on{background:'+cd+';color:'+c+';border-color:'+c+'}\n';
+    css+='.ph.s-'+s+'{border-left:4px solid '+c+'}\n';
+    // Variables CSS por sección para el badge coloreado
+    css+='#panel-'+s+' .qnum.sec-colored{background:'+cd+';color:'+c+'}\n';
+  });
+  var st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+}
+
+/* ── Header ── */
+function buildHeader(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var t=document.getElementById('h-tit');if(t)t.textContent=META.titulo||'Banco MIR';
+  var pt=document.getElementById('page-title');if(pt)pt.textContent=META.titulo||'Banco MIR';
+  var m=document.getElementById('h-meta');
+  if(m){var p=[];if(total)p.push(total+' preguntas');if(META.examen)p.push(META.examen);m.textContent=p.join(' · ');}
+  var d=document.getElementById('ph-gdesc');if(d)d.textContent=META.subtitulo||'';
+  var r=document.getElementById('sc-rem-all');if(r)r.textContent='○ '+total;
+}
+
+/* ── Tabs ── */
+function buildTabs(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var h='<button class="tab t-all on" onclick="showTab(\'all\')">📋 Todos ('+total+')</button>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<button class="tab t-'+s+'" onclick="showTab(\''+s+'\')">'+(m.emoji?m.emoji+' ':'')+escH(m.label||s)+' ('+cnt+')</button>';
+  });
+  var w=document.getElementById('tabs-wrap');if(w)w.innerHTML=h;
+}
+
+/* ── Paneles ── */
+function buildPanels(){
+  var h='<div id="panel-all" class="sec-panel visible"><div id="qs-all"></div><div class="no-results" id="nr-all">No se encontraron preguntas</div></div>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<div id="panel-'+s+'" class="sec-panel">';
+    h+='<div class="ph s-'+s+'">';
+    h+='<div class="ph-left">';
+    h+='<span class="ph-label">'+(m.emoji?m.emoji+'&nbsp;':'')+escH(m.label||s)+'</span>';
+    if(m.desc)h+='<span class="ph-desc">'+escH(m.desc)+'</span>';
+    h+='<div class="score-row">';
+    h+='<span class="sc ok" id="sc-ok-'+s+'">✓ 0</span>';
+    h+='<span class="sc ko" id="sc-ko-'+s+'">✗ 0</span>';
+    h+='<span class="sc rem" id="sc-rem-'+s+'">○ '+cnt+'</span>';
+    h+='</div></div>';
+    h+='<button class="fbtn" id="fb-'+s+'" onclick="toggleFail(\''+s+'\')">Solo falladas</button>';
+    h+='</div>';
+    h+='<div id="qs-'+s+'"></div>';
+    h+='<div class="no-failed" id="nf-'+s+'">Aún no has fallado ninguna 🎉</div>';
+    h+='<div class="no-results" id="nr-'+s+'">No se encontraron preguntas</div>';
+    h+='<div class="sec-actions">';
+    h+='<button class="reset-btn" onclick="resetSec(\''+s+'\')">↺ Reiniciar</button>';
+    h+='<button class="nota-btn" onclick="calcNota(\''+s+'\')">✎ Calcular nota</button>';
+    h+='</div>';
+    h+='<div class="nota-box" id="nota-'+s+'"></div>';
+    h+='</div>';
+  });
+  var pw=document.getElementById('panels-wrap');if(pw)pw.innerHTML=h;
+}
+
+/* ── Índice O(1) + numeración fija ── */
+function buildIdx(){
+  SECS.forEach(function(s){
+    qIdx[s]={};
+    if(D[s])D[s].forEach(function(q){qIdx[s][q.n]=q;});
+  });
+}
+function buildNums(){
+  // Numeración correlativa fija: 1, 2, 3... por sección
+  SECS.forEach(function(s){
+    qNums[s]={};
+    if(D[s])D[s].forEach(function(q,i){qNums[s][q.n]=i+1;});
+  });
+}
+function getNum(sec,n){return qNums[sec]?qNums[sec][n]||n:n;}
+function findQ(qid){
+  var d=qid.indexOf('-'),s=qid.substring(0,d),n=qid.substring(d+1);
+  return(qIdx[s]&&qIdx[s][n])||null;
+}
+function getSecFromQid(qid){return qid.substring(0,qid.indexOf('-'));}
+function getNFromQid(qid){return qid.substring(qid.indexOf('-')+1);}
+
+/* ── Orden inter-secciones para Todos ── */
+function buildAllOrder(){
+  var all=[];
+  SECS.forEach(function(s){if(D[s])D[s].forEach(function(q){all.push({sec:s,n:q.n});});});
+  if(!qOrd['__all__'])qOrd['__all__']=shuffle(all.map(function(x){return x.sec+'|'+x.n;}));
+  allOrder=qOrd['__all__'].map(function(key){
+    var p=key.indexOf('|'),sec=key.substring(0,p),n=key.substring(p+1);
+    return{sec:sec,n:n,q:qIdx[sec]&&qIdx[sec][n]};
+  }).filter(function(x){return x.q;});
+}
+
+/* ── Utilidades ── */
+function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function shuffle(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=b[i];b[i]=b[j];b[j]=t;}return b;}
+function getQOrd(s,qs){if(!qOrd[s])qOrd[s]=shuffle(qs.map(function(q){return q.n;}));return qOrd[s];}
+function getOOrd(qid){
+  var q=findQ(qid);var n=q&&q.o?q.o.length:4;
+  if(q&&q.noShuffle){var a=[];for(var i=0;i<n;i++)a.push(i);return a;}
+  if(!oOrd[qid]){var a=[];for(var i=0;i<n;i++)a.push(i);oOrd[qid]=shuffle(a);}
+  return oOrd[qid];
+}
+function imgHtml(key){
+  if(!IMGS[key]){console.warn('IMGS: clave no encontrada →',key);return'';}
+  return'<div class="clinimg-wrap"><img src="'+IMGS[key]+'" class="clinimg" alt="Imagen clínica" loading="lazy"><div class="clinimg-cap">Imagen clínica</div></div>';
+}
+
+/* ── localStorage debounce ── */
+function saveLocal(){
+  if(!canSave)return;
+  if(saveTimer)clearTimeout(saveTimer);
+  saveTimer=setTimeout(function(){
+    try{
+      localStorage.setItem(KEY,JSON.stringify({state:state,qOrd:qOrd,oOrd:oOrd,starred:starred,failHist:failHist,dark:darkMode,timerSec:timerSec}));
+      setBadge('Guardado','ok');
+    }catch(e){setBadge('Sin guardado','warn');}
+  },300);
+}
+function setBadge(t,c){var b=document.getElementById('save-badge');if(b){b.textContent=t;b.className='sbadge '+c;}}
+
+/* ── Construcción de tarjeta ── */
+function buildCard(q,sec,inAll,allPos){
+  var qid=sec+'-'+q.n;
+  var cid=(inAll?'A-':'S-')+qid;
+  var num=inAll?(allPos+1):getNum(sec,q.n);
+  var oo=getOOrd(qid);
+  var sOpts=oo.map(function(i){return q.o[i];});
+  var nc=oo.indexOf(q.c-1)+1;
+  var ans=state[qid];
+  var cc=ans?(ans.r?' answered-ok':' answered-wrong'):'';
+  var badgeCls='qnum'+(inAll?'':' sec-colored');
+  var h='<div class="qcard s-'+sec+cc+'" id="card-'+cid+'">';
+  h+='<div class="qhead" id="h-'+cid+'" data-cid="'+cid+'" data-qid="'+qid+'" data-sec="'+sec+'" onclick="tog(this.dataset.cid)">';
+  h+='<span class="'+badgeCls+'">'+num+'</span>';
+  h+='<span class="qtxt">'+q.q+(ans?'<span class="atag '+(ans.r?'ok':'ko')+'">'+(ans.r?'✓ acertada':'✗ fallada')+'</span>':'')+'</span>';
+  h+='<button class="star-btn'+(starred[qid]?' on':'')+'\" id="star-'+cid+'" onclick="event.stopPropagation();toggleStar(\''+qid+'\')" title="Marcar (S)"><span class="si">\u2606</span><span class="sf">\u2605</span></button>';
+  h+='<span class="chev">▾</span>';
+  h+='</div>';
+  h+='<div class="qbody" id="b-'+cid+'">';
+  if(q.img)h+=imgHtml(q.img);
+  if(currentMode==='quick'){
+    h+='<div class="quick-card"><div class="quick-rc">✓ Respuesta correcta: opción '+nc+' — '+escH(q.o[q.c-1])+'</div><div class="expbox">'+q.e+'</div></div>';
+  } else {
+    h+='<ul class="opts" id="opts-'+cid+'">';
+    h+=sOpts.map(function(o,i){
+      var p=i+1,oc='opt';
+      if(ans){oc+=' done';if(p===nc)oc+=' correct';else if(p===ans.c&&!ans.r)oc+=' wrong';}
+      return'<li class="'+oc+'" data-qid="'+qid+'" data-pos="'+p+'" data-sec="'+sec+'" onclick="answer(this.dataset.qid,+this.dataset.pos,this.dataset.sec)"><span class="onum">'+p+'.</span><span>'+o+'</span></li>';
+    }).join('');
+    h+='</ul>';
+    if(ans){h+='<div class="expbox"><span class="et">'+(ans.r?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e+'</div>';}
+  }
+  h+='</div></div>';
+  return h;
+}
+
+/* ── Render sección ── */
+function render(sec){
+  var qs=D[sec];if(!qs)return;
+  var ord=getQOrd(sec,qs);
+  var sorted=ord.map(function(n){return qIdx[sec]&&qIdx[sec][n];}).filter(Boolean);
+  var el=document.getElementById('qs-'+sec);
+  if(el)el.innerHTML=sorted.map(function(q){return buildCard(q,sec,false,0);}).join('');
+}
+
+/* ── Render Todos (mezcla inter-secciones) ── */
+function renderAll(){
+  if(!allOrder)buildAllOrder();
+  var el=document.getElementById('qs-all');
+  if(el)el.innerHTML=allOrder.map(function(x,i){return buildCard(x.q,x.sec,true,i);}).join('');
+}
+
+/* ── Toggle open/close ── */
+function tog(cid){
+  var b=document.getElementById('b-'+cid),h=document.getElementById('h-'+cid);
+  if(!b||!h)return;
+  var opening=!b.classList.contains('open');
+  b.classList.toggle('open');h.classList.toggle('open');
+  if(opening){
+    if(activeCid&&activeCid!==cid){var pc=document.getElementById('card-'+activeCid);if(pc)pc.classList.remove('kb-focus');}
+    activeCid=cid;
+    var card=document.getElementById('card-'+cid);if(card)card.classList.add('kb-focus');
+  }else{
+    if(activeCid===cid){activeCid=null;var card=document.getElementById('card-'+cid);if(card)card.classList.remove('kb-focus');}
+  }
+}
+
+/* ── Responder ── */
+function answer(qid,pos,sec){
+  if(state[qid])return;
+  var q=findQ(qid);if(!q)return;
+  var oo=getOOrd(qid);
+  var nc=oo.indexOf(q.c-1)+1;
+  var isRight=pos===nc;
+  state[qid]={c:pos,r:isRight};
+  // Registro de errores
+  if(!isRight){failHist[qid]=(failHist[qid]||0)+1;}
+  saveLocal();
+  // Actualizar todas las instancias del card (panel sección + panel all)
+  // Actualizar opciones en todas las instancias del card
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var optsEl=document.querySelectorAll('#opts-'+cid+' .opt');
+    optsEl.forEach(function(el,i){
+      el.classList.add('done');
+      if(i+1===nc)el.classList.add('correct');
+      else if(i+1===pos&&!isRight)el.classList.add('wrong');
+    });
+    var bdy=document.getElementById('b-'+cid);
+    if(bdy){
+      var eb=bdy.querySelector('.expbox');
+      if(!eb){eb=document.createElement('div');eb.className='expbox';bdy.appendChild(eb);}
+      eb.innerHTML='<span class="et">'+(isRight?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e;
+    }
+    var hd=document.getElementById('h-'+cid);
+    if(hd){var qt=hd.querySelector('.qtxt');if(qt&&!qt.querySelector('.atag')){var at=document.createElement('span');at.className='atag '+(isRight?'ok':'ko');at.innerHTML=isRight?'✓ acertada':'✗ fallada';qt.appendChild(at);}}
+    var card=document.getElementById('card-'+cid);
+    if(card)card.classList.add(isRight?'answered-ok':'answered-wrong');
+  });
+  updateScores();updateProg();
+  if(fFailed[sec]&&isRight){
+    var fcard=document.getElementById('card-S-'+qid);
+    if(fcard)fcard.style.display='none';
+    refreshNF(sec);
+  }
+}
+
+/* ── Estrella ── */
+function toggleStar(qid){
+  starred[qid]=!starred[qid];
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var btn=document.getElementById('star-'+cid);
+    if(btn)btn.classList.toggle('on',starred[qid]);
+  });
+  saveLocal();
+}
+function filterStarred(){
+  starsFilter=!starsFilter;
+  var btn=document.getElementById('btn-stars');
+  if(btn){btn.style.background=starsFilter?'#fef3c7':'';btn.style.fontWeight=starsFilter?'700':'';}
+  document.querySelectorAll('.qcard').forEach(function(card){
+    if(starsFilter){
+      var hd=card.querySelector('.qhead');
+      var qid=hd?hd.dataset.qid:'';
+      card.style.display=starred[qid]?'':'none';
+    }else{card.style.display='';}
+  });
+}
+
+/* ── Filtro falladas ── */
+function refreshNF(sec){
+  var c=document.getElementById('qs-'+sec);if(!c||!fFailed[sec])return;
+  var n=c.querySelectorAll('.qcard.answered-wrong').length;
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',n===0);
+}
+function toggleFail(sec){
+  fFailed[sec]=!fFailed[sec];
+  var btn=document.getElementById('fb-'+sec);
+  if(btn){btn.classList.toggle('on',fFailed[sec]);btn.textContent=fFailed[sec]?'← Ver todas':'Solo falladas';}
+  var c=document.getElementById('qs-'+sec);if(!c)return;
+  var nf=0;
+  c.querySelectorAll('.qcard').forEach(function(card){
+    if(fFailed[sec]){var show=card.classList.contains('answered-wrong');card.style.display=show?'':'none';if(show)nf++;}
+    else{card.style.display='';}
+  });
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',fFailed[sec]&&nf===0);
+}
+
+/* ── Scores y progreso ── */
+function updateScores(){
+  var tok=0,tok2=0,tok3=0;
+  SECS.forEach(function(sec){
+    var ok=0,ko=0;
+    if(D[sec])D[sec].forEach(function(q){var a=state[sec+'-'+q.n];if(a){if(a.r)ok++;else ko++;}});
+    var tot=D[sec]?D[sec].length:0,rem=tot-ok-ko;
+    tok+=ok;tok2+=ko;tok3+=rem;
+    var eok=document.getElementById('sc-ok-'+sec),eko=document.getElementById('sc-ko-'+sec),erm=document.getElementById('sc-rem-'+sec);
+    if(eok)eok.textContent='✓ '+ok;if(eko)eko.textContent='✗ '+ko;if(erm)erm.textContent='○ '+rem;
+  });
+  var eok=document.getElementById('sc-ok-all'),eko=document.getElementById('sc-ko-all'),erm=document.getElementById('sc-rem-all');
+  if(eok)eok.textContent='✓ '+tok;if(eko)eko.textContent='✗ '+tok2;if(erm)erm.textContent='○ '+tok3;
+}
+function updateProg(){
+  var total=0,done=Object.keys(state).length;
+  SECS.forEach(function(s){if(D[s])total+=D[s].length;});
+  var pct=total>0?Math.round(done/total*100):0;
+  var bar=document.getElementById('prog-bar');if(bar)bar.style.width=pct+'%';
+}
+
+/* ── Tabs ── */
+function showTab(t){
+  currentTab=t;
+  document.querySelectorAll('.tab').forEach(function(b){b.classList.remove('on');});
+  var tb=document.querySelector('.tab.t-'+t);if(tb)tb.classList.add('on');
+  var mc=document.getElementById('main-cont');if(mc)mc.setAttribute('data-tab',t);
+  var panelAll=document.getElementById('panel-all');
+  if(panelAll)panelAll.classList.toggle('visible',t==='all');
+  SECS.forEach(function(s){
+    var p=document.getElementById('panel-'+s);
+    if(p)p.classList.toggle('visible',t===s);
+  });
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  clearSearch();
+}
+
+/* ── Reset ── */
+function resetSec(sec){
+  if(D[sec])D[sec].forEach(function(q){var qid=sec+'-'+q.n;delete state[qid];delete oOrd[qid];});
+  delete qOrd[sec];fFailed[sec]=false;activeCid=null;
+  var btn=document.getElementById('fb-'+sec);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+  var nb=document.getElementById('nota-'+sec);if(nb){nb.style.display='none';nb.className='nota-box';}
+  saveLocal();render(sec);
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.remove('show');
+  updateScores();updateProg();
+  // Reconstruir panel all para reflejar cambios
+  buildAllOrder();renderAll();
+}
+function resetAll(){
+  Object.keys(state).forEach(function(k){delete state[k];});
+  Object.keys(oOrd).forEach(function(k){delete oOrd[k];});
+  Object.keys(qOrd).forEach(function(k){delete qOrd[k];});
+  activeCid=null;starsFilter=false;allOrder=null;
+  var bs=document.getElementById('btn-stars');if(bs){bs.style.background='';bs.style.fontWeight='';}
+  SECS.forEach(function(s){
+    fFailed[s]=false;
+    var btn=document.getElementById('fb-'+s);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+    var nb=document.getElementById('nota-'+s);if(nb){nb.style.display='none';nb.className='nota-box';}
+  });
+  saveLocal();
+  SECS.forEach(render);
+  buildAllOrder();renderAll();
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  updateScores();updateProg();
+}
+
+/* ── Nota y revisión ── */
+function buildRevList(sec){
+  var qs=D[sec];if(!qs)return'';
+  var failed=qs.filter(function(q){var a=state[sec+'-'+q.n];return a&&!a.r;});
+  if(!failed.length)return'';
+  var html='<div class="review-list"><div class="review-title">📋 '+failed.length+' pregunta'+(failed.length>1?'s':'')+' fallada'+(failed.length>1?'s':'')+' — repasa aquí:</div>';
+  failed.forEach(function(q){
+    var qid=sec+'-'+q.n;var oo=getOOrd(qid);var nc=oo.indexOf(q.c-1)+1;
+    html+='<details class="review-item"><summary><span><b>'+getNum(sec,q.n)+'.</b> '+q.q+'</span></summary>';
+    html+='<div class="review-body"><div class="review-ans">✓ Opción '+nc+': '+escH(q.o[q.c-1]||'')+'</div>';
+    html+='<div class="expbox">'+q.e+'</div></div></details>';
+  });
+  return html+'</div>';
+}
+function calcNota(sec){
+  var qs=D[sec];if(!qs)return;
+  var total=qs.length,ok=0,ko=0,skip=0;
+  qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-'+sec);if(!box)return;
+  box.className='nota-box '+(pass?'pass':'fail');
+  box.innerHTML='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>'
+    +buildRevList(sec);
+  box.style.display='block';
+}
+function calcNotaAll(){
+  var total=0,ok=0,ko=0,skip=0;
+  SECS.forEach(function(sec){
+    var qs=D[sec];if(!qs)return;
+    total+=qs.length;
+    qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  });
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-all');if(!box)return;
+  box.className='global-nota-box '+(pass?'pass':'fail');
+  var html='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10 (global)</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>';
+  SECS.forEach(function(sec){
+    var rv=buildRevList(sec);
+    if(rv){var m=META.secciones[sec]||{};html+='<div class="review-sec-label">'+(m.emoji?m.emoji+' ':'')+escH(m.label||sec)+'</div>'+rv;}
+  });
+  box.innerHTML=html;box.style.display='block';
+}
+
+/* ── Estadísticas de errores ── */
+function toggleStats(){
+  statsVisible=!statsVisible;
+  var btn=document.getElementById('btn-stats');
+  if(btn){btn.style.background=statsVisible?'var(--ko-bg)':'';btn.style.color=statsVisible?'var(--ko-t)':'';}
+  var box=document.getElementById('stats-global');
+  if(!box)return;
+  if(!statsVisible){box.classList.remove('show');return;}
+  var entries=Object.entries(failHist).filter(function(e){return e[1]>0;});
+  if(!entries.length){box.innerHTML='<div class="stats-title">📊 Sin errores registrados todavía</div>';box.classList.add('show');return;}
+  entries.sort(function(a,b){return b[1]-a[1];});
+  var top=entries.slice(0,10);
+  var maxV=top[0][1];
+  var html='<div class="stats-title">📊 Preguntas más falladas (acumulado entre sesiones)</div>';
+  top.forEach(function(e,i){
+    var qid=e[0],count=e[1];
+    var q=findQ(qid);if(!q)return;
+    var sec=getSecFromQid(qid),n=getNFromQid(qid);
+    var m=META.secciones[sec]||{};
+    var pct=Math.round(count/maxV*100);
+    html+='<div class="stats-item">';
+    html+='<span class="stats-n" style="min-width:18px;color:var(--ko-t);font-weight:700">'+(i+1)+'.</span>';
+    html+='<span class="stats-q">'+(m.emoji?m.emoji+' ':'')+getNum(sec,n)+'. '+q.q.substring(0,60)+(q.q.length>60?'…':'')+'</span>';
+    html+='<div class="stats-bar-wrap"><div class="stats-bar" style="width:'+pct+'%"></div></div>';
+    html+='<span class="stats-n">'+count+'✗</span>';
+    html+='</div>';
+  });
+  box.innerHTML=html;box.classList.add('show');
+}
+
+/* ── Buscador ── */
+function onSearch(val){
+  var v=val.trim().toLowerCase();
+  var clr=document.getElementById('search-clear');
+  var cnt=document.getElementById('search-count');
+  if(clr)clr.style.display=v?'block':'none';
+  var found=0,total=0;
+  document.querySelectorAll('.qcard').forEach(function(card){
+    total++;
+    if(!v){card.classList.remove('search-hidden');found++;}
+    else{
+      var qtxt=card.querySelector('.qtxt');
+      var match=qtxt&&qtxt.textContent.toLowerCase().indexOf(v)!==-1;
+      card.classList.toggle('search-hidden',!match);
+      if(match)found++;
+    }
+  });
+  if(cnt){
+    if(v){cnt.textContent=found+' de '+total+' preguntas';cnt.style.display='block';}
+    else{cnt.style.display='none';}
+  }
+  // Mostrar "sin resultados" por panel
+  ['all'].concat(SECS).forEach(function(s){
+    var panel=document.getElementById('panel-'+s);if(!panel||!panel.classList.contains('visible'))return;
+    var cards=panel.querySelectorAll('.qcard:not(.search-hidden)');
+    var nr=document.getElementById('nr-'+s);if(nr)nr.style.display=cards.length===0&&v?'block':'none';
+  });
+}
+function clearSearch(){
+  var si=document.getElementById('search-input');if(si)si.value='';
+  onSearch('');
+}
+
+/* ── Modo ── */
+function setMode(mode){
+  currentMode=mode;
+  document.getElementById('mode-test').classList.toggle('on',mode==='test');
+  document.getElementById('mode-quick').classList.toggle('on',mode==='quick');
+  // Rerenderizar todo
+  SECS.forEach(render);renderAll();
+}
+
+/* ── Modo oscuro ── */
+function applyTheme(){
+  document.documentElement.setAttribute('data-theme',darkMode?'dark':'light');
+  var btn=document.getElementById('btn-dark');if(btn)btn.textContent=darkMode?'☀️':'🌙';
+}
+function toggleDark(){darkMode=!darkMode;applyTheme();saveLocal();}
+
+/* ── Temporizador ── */
+function initTimer(){
+  timerRemaining=timerSec;
+  renderTimer();
+  var disp=document.getElementById('timer-display');
+  if(disp){
+    disp.addEventListener('click',function(){startEditTimer();});
+  }
+}
+function fmtTime(s){
+  var h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60;
+  return h+':'+(m<10?'0':'')+m+':'+(ss<10?'0':'')+ss;
+}
+function renderTimer(){
+  var disp=document.getElementById('timer-display');
+  if(!disp)return;
+  disp.textContent=fmtTime(timerRemaining);
+  disp.classList.toggle('danger',timerSec>0&&timerRemaining===0);
+}
+function timerToggle(){
+  if(timerRunning){
+    clearInterval(timerInterval);timerRunning=false;
+    document.getElementById('btn-tplay').textContent='▶';
+  }else{
+    if(timerRemaining<=0&&timerSec>0)timerRemaining=timerSec;
+    timerRunning=true;
+    document.getElementById('btn-tplay').textContent='⏸';
+    timerInterval=setInterval(function(){
+      if(timerRemaining>0){timerRemaining--;renderTimer();}
+      else{clearInterval(timerInterval);timerRunning=false;document.getElementById('btn-tplay').textContent='▶';renderTimer();}
+    },1000);
+  }
+}
+function timerReset(){
+  clearInterval(timerInterval);timerRunning=false;
+  timerRemaining=timerSec;
+  document.getElementById('btn-tplay').textContent='▶';
+  renderTimer();
+}
+function startEditTimer(){
+  var disp=document.getElementById('timer-display');if(!disp)return;
+  if(timerRunning){timerToggle();}
+  var old=fmtTime(timerRemaining);
+  disp.contentEditable='true';disp.classList.add('editing');
+  disp.textContent=old;
+  disp.focus();
+  var range=document.createRange();range.selectNodeContents(disp);
+  var sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
+  function commit(){
+    disp.contentEditable='false';disp.classList.remove('editing');
+    var txt=disp.textContent.trim();
+    var parts=txt.split(':').map(Number);
+    var secs=0;
+    if(parts.length===3)secs=parts[0]*3600+parts[1]*60+parts[2];
+    else if(parts.length===2)secs=parts[0]*60+parts[1];
+    else if(parts.length===1)secs=parts[0]*60;
+    if(!isNaN(secs)&&secs>=0){timerSec=secs;timerRemaining=secs;saveLocal();}
+    renderTimer();
+  }
+  disp.addEventListener('blur',commit,{once:true});
+  disp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();disp.blur();}});
+}
+
+/* ── Helpers cid ── */
+function cidToQid(cid){return cid.replace(/^[AS]-/,'');}
+
+/* ── Teclado ── */
+function handleKey(e){
+  var tg=e.target.tagName;
+  if(tg==='INPUT'||tg==='TEXTAREA'||e.target.contentEditable==='true')return;
+  var k=e.key;
+  if(k>='1'&&k<='5'){
+    if(activeCid&&!state[cidToQid(activeCid)]){
+      var aqid=cidToQid(activeCid);
+      var pos=parseInt(k),q=findQ(aqid);
+      if(q&&pos<=q.o.length){e.preventDefault();answer(aqid,pos,getSecFromQid(aqid));}
+    }
+  }else if(k==='ArrowDown'||k==='ArrowUp'){
+    e.preventDefault();navigateQ(k==='ArrowDown'?1:-1);
+  }else if(k==='s'||k==='S'){
+    if(activeCid)toggleStar(cidToQid(activeCid));
+  }
+}
+function navigateQ(dir){
+  var cards=Array.from(document.querySelectorAll('.sec-panel.visible .qcard')).filter(function(c){return c.style.display!=='none'&&!c.classList.contains('search-hidden');});
+  var cids=cards.map(function(c){return c.id.replace('card-','');});
+  if(!cids.length)return;
+  var idx=activeCid?cids.indexOf(activeCid):-1;
+  var nidx=Math.max(0,Math.min(cids.length-1,idx+dir));
+  var ncid=cids[nidx];if(!ncid||ncid===activeCid)return;
+  if(activeCid){var ob=document.getElementById('b-'+activeCid);var oh=document.getElementById('h-'+activeCid);if(ob)ob.classList.remove('open');if(oh)oh.classList.remove('open');var oc=document.getElementById('card-'+activeCid);if(oc)oc.classList.remove('kb-focus');}
+  activeCid=ncid;
+  var nb=document.getElementById('b-'+ncid);var nh=document.getElementById('h-'+ncid);
+  if(nb)nb.classList.add('open');if(nh)nh.classList.add('open');
+  var nc2=document.getElementById('card-'+ncid);if(nc2){nc2.classList.add('kb-focus');nc2.scrollIntoView({behavior:'smooth',block:'nearest'});}
+}
+</script>
+</body>
+</html>

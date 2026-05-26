@@ -1,0 +1,898 @@
+<!--
+=============================================================
+  MOTOR BANCO MIR — v10
+  Novedades respecto a v9:
+  - Numeración correlativa fija por sección (no se mezcla)
+  - Badge neutro en pestaña "Todos" + mezcla real inter-secciones
+  - Temporizador sticky editable en header (play/pausa/reset)
+  - Buscador de texto en tiempo real
+  - Modo repaso rápido (muestra RC + explicación directamente)
+  - Estadísticas de errores recurrentes entre sesiones
+=============================================================
+-->
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title id="page-title">Banco MIR</title>
+<style>
+:root{
+  --bg:#f4f3ef;--surf:#fff;--bd:#e5e5e5;--bd2:#ddd;
+  --txt:#1a1a1a;--txt2:#555;--txt3:#999;--txt4:#666;
+  --hdr:#1a1a1a;--hdr-t:#fff;
+  --ok-bg:#e6f9ef;--ok-t:#0b6e52;--ok-bd:#2da060;
+  --ko-bg:#fdecea;--ko-t:#b91c1c;--ko-bd:#d94f45;
+  --sc-ok:#dcf5ed;--sc-ko:#fdecea;--sc-rem:#f0f0f0;--sc-rem-t:#666;
+  --exp:#fffbe6;--exp-bd:#f0c04a;--exp-t:#5a4500;
+  --prog:#e5e5e5;--prog-fill:#1a56db;
+  --star:#ccc;--star-on:#f59e0b;
+  --hint:#fafafa;--hint-bd:#eee;
+  --tab-bd:#ddd;--tab-t:#555;
+  --all-bg:#e8f0fe;--all-t:#1a56db;--all-bd:#1a56db;
+  --fab:#1a1a1a;--fab-t:#fff;
+  --nota-btn-t:#1a56db;--nota-btn-bd:#1a56db;--nota-btn-bg:var(--surf);
+  --timer-bg:#222;--timer-t:#fff;--timer-danger:#ef4444;
+}
+[data-theme="dark"]{
+  --bg:#0f0f1a;--surf:#1e1e30;--bd:#2a2a45;--bd2:#333355;
+  --txt:#e8e8f0;--txt2:#aaa;--txt3:#555;--txt4:#888;
+  --hdr:#0a0a14;--hdr-t:#e8e8f0;
+  --ok-bg:#0b3020;--ok-t:#4ade80;--ok-bd:#166534;
+  --ko-bg:#2d0a0a;--ko-t:#f87171;--ko-bd:#7f1d1d;
+  --sc-ok:#0b3020;--sc-ko:#2d0a0a;--sc-rem:#252540;--sc-rem-t:#aaa;
+  --exp:#1a1500;--exp-bd:#a37f10;--exp-t:#d4b84a;
+  --prog:#2a2a45;--prog-fill:#60a5fa;
+  --star:#444;--star-on:#f59e0b;
+  --hint:#1a1a2e;--hint-bd:#2a2a45;
+  --tab-bd:#2a2a45;--tab-t:#aaa;
+  --all-bg:#1a2a4a;--all-t:#60a5fa;--all-bd:#3b82f6;
+  --fab:#2a2a50;--fab-t:#e8e8f0;
+  --nota-btn-t:#60a5fa;--nota-btn-bd:#3b82f6;--nota-btn-bg:var(--surf);
+  --timer-bg:#1a1a2e;--timer-t:#e8e8f0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;transition:background .25s,color .25s}
+
+/* ── Header ── */
+header{background:var(--hdr);color:var(--hdr-t);padding:9px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;position:sticky;top:0;z-index:100}
+header h1{font-size:13.5px;font-weight:600;white-space:nowrap}
+.hright{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.hmeta{font-size:11px;color:#888}
+.hbtn{background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:3px 5px;border-radius:5px;transition:background .15s;color:var(--hdr-t)}
+.hbtn:hover{background:rgba(255,255,255,.12)}
+.sbadge{font-size:11px;padding:3px 9px;border-radius:5px;font-weight:500}
+.sbadge.ok{background:#15803d;color:#dcfce7}.sbadge.warn{background:#92400e;color:#fef3c7}
+
+/* ── Temporizador ── */
+#timer-wrap{display:flex;align-items:center;gap:4px;background:var(--timer-bg);border-radius:7px;padding:3px 8px;border:1px solid rgba(255,255,255,.1)}
+#timer-display{font-size:13px;font-weight:700;font-family:monospace;color:var(--timer-t);min-width:58px;text-align:center;cursor:pointer;border-radius:3px;padding:1px 3px}
+#timer-display:hover{background:rgba(255,255,255,.08)}
+#timer-display.editing{background:rgba(255,255,255,.15);outline:none;color:var(--timer-t)}
+#timer-display.danger{color:var(--timer-danger)}
+#timer-wrap button{background:none;border:none;cursor:pointer;color:rgba(255,255,255,.7);font-size:12px;padding:1px 3px;border-radius:3px;line-height:1}
+#timer-wrap button:hover{background:rgba(255,255,255,.12);color:#fff}
+
+/* ── Barra de progreso ── */
+#prog-wrap{height:3px;background:var(--prog);position:sticky;top:40px;z-index:99}
+#prog-bar{height:100%;background:var(--prog-fill);width:0%;transition:width .4s}
+
+/* ── Contenedor ── */
+.container{max-width:820px;margin:0 auto;padding:16px 12px}
+
+/* ── Buscador ── */
+.search-wrap{position:relative;margin-bottom:13px}
+.search-wrap input{width:100%;padding:8px 34px 8px 12px;border:1.5px solid var(--bd2);border-radius:8px;font-size:13px;background:var(--surf);color:var(--txt);outline:none;transition:border-color .15s}
+.search-wrap input:focus{border-color:var(--prog-fill)}
+.search-clear{position:absolute;right:9px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--txt3);font-size:16px;display:none;line-height:1}
+#search-count{font-size:11px;color:var(--txt3);margin-top:4px;display:none}
+
+/* ── Modo repaso ── */
+.mode-bar{display:flex;gap:6px;margin-bottom:12px;align-items:center}
+.mode-btn{padding:5px 12px;border:1.5px solid var(--bd2);border-radius:7px;cursor:pointer;font-size:12px;font-weight:500;background:var(--surf);color:var(--txt2);transition:all .15s}
+.mode-btn:hover{border-color:#999}
+.mode-btn.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Tabs ── */
+.tabs{display:flex;gap:7px;margin-bottom:13px;flex-wrap:wrap}
+.tab{padding:7px 14px;border:1.5px solid var(--tab-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;background:var(--surf);color:var(--tab-t);transition:all .15s}
+.tab:hover{border-color:#999;color:var(--txt)}
+.tab.t-all.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Score global ── */
+.ph-global{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 15px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-left:4px solid var(--prog-fill)}
+.score-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.sc{font-size:12px;font-weight:600;padding:3px 9px;border-radius:6px}
+.sc.ok{background:var(--sc-ok);color:var(--ok-t)}.sc.ko{background:var(--sc-ko);color:var(--ko-t)}.sc.rem{background:var(--sc-rem);color:var(--sc-rem-t)}
+
+/* ── Acciones ── */
+.global-actions{display:none;margin-bottom:10px;gap:7px;flex-wrap:wrap;align-items:center}
+.container[data-tab="all"] .global-actions{display:flex}
+.sec-actions{margin:6px 0 15px;display:flex;gap:7px;flex-wrap:wrap}
+.reset-btn{padding:7px 14px;background:var(--fab);color:var(--fab-t);border:none;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:opacity .15s}
+.reset-btn:hover{opacity:.82}
+.nota-btn{padding:7px 14px;background:var(--nota-btn-bg);color:var(--nota-btn-t);border:1.5px solid var(--nota-btn-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:background .15s}
+.nota-btn:hover{background:var(--all-bg)}
+
+/* ── Nota box ── */
+.nota-box,.global-nota-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:2px solid var(--bd2);font-size:13px;line-height:1.7;display:none}
+.nota-box.pass,.global-nota-box.pass{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t)}
+.nota-box.fail,.global-nota-box.fail{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t)}
+.nota-score{font-size:26px;font-weight:700;display:block;margin-bottom:4px}
+.nota-detail{font-size:12px;opacity:.85;font-family:monospace}
+
+/* ── Vista revisión ── */
+.review-list{margin-top:12px;border-top:1px solid var(--bd2);padding-top:10px}
+.review-title{font-size:12px;font-weight:700;margin-bottom:9px;color:var(--txt)}
+.review-sec-label{font-size:11.5px;font-weight:700;color:var(--txt3);margin:8px 0 5px;padding-top:6px;border-top:1px solid var(--bd)}
+.review-item{background:var(--surf);border-radius:8px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden}
+.review-item summary{padding:9px 12px;cursor:pointer;font-size:12.5px;color:var(--txt);list-style:none;display:flex;gap:8px;align-items:flex-start}
+.review-item summary::-webkit-details-marker{display:none}
+.review-item summary::before{content:'▶';font-size:9px;color:var(--txt3);flex-shrink:0;margin-top:4px;transition:transform .18s}
+details[open] summary::before{transform:rotate(90deg)}
+.review-body{padding:0 12px 11px}
+.review-ans{font-size:12px;color:var(--ok-t);margin-bottom:7px;font-weight:500}
+
+/* ── Estadísticas ── */
+.stats-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:1.5px solid var(--bd2);background:var(--surf);display:none}
+.stats-box.show{display:block}
+.stats-title{font-size:12px;font-weight:700;margin-bottom:10px;color:var(--txt)}
+.stats-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:12.5px}
+.stats-item:last-child{border-bottom:none}
+.stats-bar-wrap{flex:1;background:var(--sc-rem);border-radius:4px;height:6px;overflow:hidden}
+.stats-bar{height:100%;background:var(--ko-bd);border-radius:4px;transition:width .4s}
+.stats-n{font-size:11px;color:var(--txt3);white-space:nowrap}
+.stats-q{flex:2;color:var(--txt);font-size:12px;line-height:1.3}
+
+/* ── Panel secciones ── */
+.sec-panel{display:none}.sec-panel.visible{display:block}
+.ph{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ph-left{flex:1;display:flex;flex-direction:column;gap:5px}
+.ph-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt3);margin-bottom:1px}
+.ph-desc{font-size:12px;color:var(--txt4)}
+.fbtn{padding:6px 12px;font-size:12px;font-weight:500;border:1.5px solid var(--bd2);border-radius:8px;cursor:pointer;background:var(--surf);color:var(--txt2);transition:all .15s;white-space:nowrap}
+.fbtn:hover{border-color:#999;color:var(--txt)}.fbtn.on{background:var(--ko-bg);color:#b91c1c;border-color:#f87171}
+.no-failed{display:none;text-align:center;padding:16px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin-top:4px}
+.no-failed.show{display:block}
+.no-results{display:none;text-align:center;padding:20px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin:8px 0}
+
+/* ── Hint ── */
+.hint{font-size:11px;color:var(--txt3);margin-bottom:15px;padding:7px 11px;background:var(--hint);border-radius:6px;border:1px solid var(--hint-bd)}
+
+/* ── Tarjeta ── */
+.qcard{background:var(--surf);border-radius:10px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden;transition:box-shadow .15s}
+.qcard:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.qcard.kb-focus{outline:2px solid var(--prog-fill);outline-offset:-2px}
+.qcard.search-hidden{display:none}
+.qhead{padding:11px 13px;cursor:pointer;display:flex;align-items:flex-start;gap:9px}
+
+/* ── Badge numérico ── */
+.qnum{font-size:11px;font-weight:700;padding:3px 7px;border-radius:5px;white-space:nowrap;flex-shrink:0;margin-top:2px;background:var(--sc-rem);color:var(--sc-rem-t)}
+/* En pestaña "Todos" siempre neutro; en sección aplica color de sección */
+.qnum.sec-colored{background:var(--sec-dim);color:var(--sec-col)}
+
+.qtxt{font-size:13px;line-height:1.5;flex:1}
+.star-btn{background:none;border:none;cursor:pointer;font-size:15px;color:var(--star);padding:0 2px;flex-shrink:0;margin-top:2px;line-height:1;transition:color .15s,transform .15s}
+.star-btn:hover{transform:scale(1.2)}
+.star-btn .si{display:inline}.star-btn .sf{display:none}
+.star-btn.on .si{display:none}.star-btn.on .sf{display:inline;color:var(--star-on)}
+.chev{font-size:15px;color:var(--bd2);flex-shrink:0;margin-top:2px;transition:transform .2s}
+.qhead.open .chev{transform:rotate(180deg)}
+.qbody{display:none;padding:0 13px 13px}.qbody.open{display:block}
+
+/* ── Imagen ── */
+.clinimg-wrap{margin:9px 0 7px;background:#111;border-radius:8px;overflow:hidden;border:1px solid var(--bd2);text-align:center}
+.clinimg{max-width:100%;max-height:340px;object-fit:contain;display:block;margin:0 auto}
+.clinimg-cap{font-size:11px;color:var(--txt3);padding:4px 0 5px;background:var(--hint);border-top:1px solid var(--bd)}
+
+/* ── Opciones ── */
+.opts{list-style:none;margin-top:9px;display:flex;flex-direction:column;gap:5px}
+.opt{padding:9px 12px;border-radius:8px;border:1.5px solid var(--bd2);cursor:pointer;display:flex;align-items:flex-start;gap:9px;color:var(--txt);font-size:13px;line-height:1.45;transition:border-color .12s,background .12s;user-select:none}
+.opt:hover:not(.done){border-color:#999;background:var(--hint)}
+.opt.correct{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t);font-weight:500;cursor:default}
+.opt.wrong{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t);cursor:default}
+.opt.done:not(.correct):not(.wrong){cursor:default;opacity:.7}
+.onum{font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px;min-width:15px}
+
+/* ── Modo repaso rápido ── */
+.quick-card{padding:9px 12px;border-radius:8px;border:1.5px solid var(--ok-bd);background:var(--ok-bg);margin-top:8px}
+.quick-rc{font-size:12.5px;font-weight:600;color:var(--ok-t);margin-bottom:6px}
+
+/* ── Explicación ── */
+.expbox{margin-top:10px;padding:10px 12px;background:var(--exp);border-left:4px solid var(--exp-bd);border-radius:0 8px 8px 0;font-size:12.5px;color:var(--exp-t);line-height:1.65}
+.expbox b,.expbox strong{font-weight:600}
+.et{display:block;margin-bottom:4px;font-weight:600;font-size:13px}
+.atag{font-size:10px;padding:2px 6px;border-radius:4px;margin-left:5px;vertical-align:middle}
+.atag.ok{background:var(--sc-ok);color:var(--ok-t)}.atag.ko{background:var(--sc-ko);color:#c0392b}
+
+/* ── All-tab CSS ── */
+.container[data-tab="all"] .ph{display:none!important}
+.container[data-tab="all"] .sec-actions{display:none!important}
+.container[data-tab="all"] .no-failed{display:none!important}
+.container[data-tab="all"] .nota-box{display:none!important}
+.container:not([data-tab="all"]) .global-nota-box{display:none!important}
+.container:not([data-tab="all"]) #stats-global{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="h-tit">Banco MIR</h1>
+  <div class="hright">
+    <span class="hmeta" id="h-meta"></span>
+    <!-- Temporizador -->
+    <div id="timer-wrap" title="Haz clic en el tiempo para editar">
+      <span id="timer-display">0:00:00</span>
+      <button id="btn-tplay" onclick="timerToggle()" title="Play/Pausa">▶</button>
+      <button onclick="timerReset()" title="Reset">↺</button>
+    </div>
+    <button class="hbtn" id="btn-dark" onclick="toggleDark()" title="Modo oscuro">🌙</button>
+    <span id="save-badge" class="sbadge"></span>
+  </div>
+</header>
+<div id="prog-wrap"><div id="prog-bar"></div></div>
+
+<div class="container" id="main-cont" data-tab="all">
+  <!-- Buscador -->
+  <div class="search-wrap">
+    <input type="text" id="search-input" placeholder="🔍 Buscar en enunciados..." oninput="onSearch(this.value)">
+    <button class="search-clear" id="search-clear" onclick="clearSearch()">✕</button>
+  </div>
+  <div id="search-count"></div>
+
+  <!-- Modo -->
+  <div class="mode-bar">
+    <span style="font-size:11.5px;color:var(--txt3);font-weight:600">MODO:</span>
+    <button class="mode-btn on" id="mode-test" onclick="setMode('test')">📝 Test</button>
+    <button class="mode-btn" id="mode-quick" onclick="setMode('quick')">⚡ Repaso rápido</button>
+    <button class="mode-btn" id="btn-stars" onclick="filterStarred()" style="margin-left:auto;border-color:#f59e0b;color:#b45309">⭐ Marcadas</button>
+    <button class="mode-btn" id="btn-stats" onclick="toggleStats()">📊 Errores</button>
+  </div>
+
+  <!-- Stats globales -->
+  <div class="stats-box" id="stats-global"></div>
+
+  <!-- Tabs -->
+  <div class="tabs" id="tabs-wrap"></div>
+
+  <!-- Score global -->
+  <div class="ph-global">
+    <div class="ph-left">
+      <span class="ph-desc" id="ph-gdesc"></span>
+      <div class="score-row">
+        <span class="sc ok" id="sc-ok-all">✓ 0</span>
+        <span class="sc ko" id="sc-ko-all">✗ 0</span>
+        <span class="sc rem" id="sc-rem-all">○ 0</span>
+      </div>
+    </div>
+  </div>
+  <div class="global-actions">
+    <button class="reset-btn" onclick="resetAll()">↺ Reiniciar y mezclar</button>
+    <button class="nota-btn" onclick="calcNotaAll()">✎ Calcular nota global</button>
+  </div>
+  <div class="global-nota-box" id="nota-all"></div>
+  <p class="hint">💡 <b>1–5</b> responde · <b>↑↓</b> navega · <b>S</b> marca ⭐ · Progreso guardado automáticamente</p>
+
+  <div id="panels-wrap"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════ MOTOR v10 ═══════════════════════════════════════ */
+
+var KEY=/*__KEY__*/'infecciosas_apuntes_v10';
+var META=/*__META_JSON__*/{"titulo":"Infecciosas \u2014 Preguntas de Apuntes","subtitulo":"Epidemiolog\u00eda \u00b7 Antimicrobianos \u00b7 Bacterias \u00b7 TBC \u00b7 Rickettsias \u00b7 Virus \u00b7 Brucelosis \u00b7 S\u00edndromes","examen":"Infecciosas PDT \u00b7 Preguntas de Apuntes","secciones":{"intro_epi":{"label":"Introducci\u00f3n y Epidemiolog\u00eda","emoji":"\ud83d\udd17","color":"#0b6e52","colorDim":"#dcf5ed","desc":"Cadena epidemiol\u00f3gica \u00b7 Patogenia \u00b7 Defensa del hu\u00e9sped"},"antimicro":{"label":"Antimicrobianos","emoji":"\ud83d\udc8a","color":"#1a56db","colorDim":"#e8f0fe","desc":"Antibi\u00f3ticos \u00b7 Antivirales \u00b7 Ant\u00edfungicos \u00b7 Mecanismos de resistencia"},"bacterias":{"label":"Bacterias","emoji":"\ud83e\udda0","color":"#b91c1c","colorDim":"#fde8e8","desc":"Gram+ \u00b7 Gram\u2212 \u00b7 Espiroquetas \u00b7 Difteria \u00b7 Clostridium"},"tbc":{"label":"Tuberculosis","emoji":"\ud83e\udeaa","color":"#78350f","colorDim":"#fef9c3","desc":"Diagn\u00f3stico \u00b7 Tratamiento \u00b7 Latente \u00b7 Extrapulmonar"},"rickettsia_myco":{"label":"Rickettsias y Mycoplasma","emoji":"\ud83e\uddab","color":"#7c3aed","colorDim":"#ede9fe","desc":"Rickettsias \u00b7 Mycoplasma \u00b7 Clamidias \u00b7 Brucelosis"},"virus_hongos":{"label":"Virus y Hongos","emoji":"\ud83c\udf44","color":"#0f766e","colorDim":"#ccfbf1","desc":"Herpes \u00b7 VIH \u00b7 Hepatitis \u00b7 Hongos \u00b7 Par\u00e1sitos"},"caso_brucelosis":{"label":"Caso Brucelosis","emoji":"\ud83d\udc04","color":"#b45309","colorDim":"#fef3c7","desc":"Caso cl\u00ednico integrador \u00b7 Diagn\u00f3stico diferencial \u00b7 Tratamiento"},"sindromes":{"label":"S\u00edndromes Infecciosos","emoji":"\ud83c\udfe5","color":"#374151","colorDim":"#e2e8f0","desc":"Sepsis \u00b7 FOD \u00b7 ITU \u00b7 Respiratorio \u00b7 SNC \u00b7 Endocarditis \u00b7 ITS"}}};
+var D=/*__D_JSON__*/{"intro_epi":[{"n":"ie1","q":"Se\u00f1ale cu\u00e1l NO es un factor de riesgo del hospedador para adquirir Enfermedad Infecciosa:","o":["Edades extremas","Inmunosupresi\u00f3n","Mal estado nutricional","Vacunaci\u00f3n correcta"],"c":4,"e":"La vacunaci\u00f3n correcta es el principal MECANISMO DE PROTECCI\u00d3N frente a las enfermedades infecciosas, no un factor de riesgo. Los factores de riesgo del hospedador son: edades extremas, inmunosupresi\u00f3n y mal estado nutricional (deteriora la respuesta inmunitaria).","ai":false,"noShuffle":false,"img":null},{"n":"ie2","q":"Seg\u00fan Koch (1893), para afirmar que un microorganismo es un pat\u00f3geno estricto debe cumplir ciertos postulados. Indique cu\u00e1l es la respuesta FALSA:","o":["Que, obtenido de la infecci\u00f3n, no pueda cultivarse","Que la inoculaci\u00f3n del cultivo pueda reproducir la misma infecci\u00f3n","Encontrarse siempre en esa infecci\u00f3n","Que pueda aislarse en cultivo puro de las inoculaciones experimentales"],"c":1,"e":"Es FALSO que 'obtenido de la infecci\u00f3n no pueda cultivarse'. El postulado de Koch exige lo contrario: debe AISLARSE EN CULTIVO PURO a partir del tejido enfermo. Los 4 postulados: (1) encontrarse siempre en la enfermedad, (2) cultivarse en cultivo puro, (3) inoculado debe reproducir la enfermedad, y (4) re-aislarse del animal inoculado.","ai":false,"noShuffle":false,"img":null},{"n":"ie3","q":"El t\u00e9rmino 'colonizaci\u00f3n/inoculaci\u00f3n' dentro de la fisiopatolog\u00eda de cualquier enfermedad infecciosa se define como:","o":["La presencia y replicaci\u00f3n de un microorganismo en los tejidos de un hu\u00e9sped que se acompa\u00f1a de respuesta cl\u00ednica aunque no de respuesta inmunitaria","La presencia y replicaci\u00f3n de un microorganismo en los tejidos de un hu\u00e9sped que no se acompa\u00f1a de respuesta cl\u00ednica aunque s\u00ed de respuesta inmunitaria","La presencia de un microorganismo en un hu\u00e9sped que crece y se multiplica en \u00e9l pero que no induce invasi\u00f3n tisular ni da\u00f1o org\u00e1nico","La presencia de un microorganismo en un hu\u00e9sped que crece y se multiplica en \u00e9l induciendo invasi\u00f3n tisular y da\u00f1o org\u00e1nico"],"c":3,"e":"La colonizaci\u00f3n es la simple PRESENCIA del microorganismo en el hu\u00e9sped donde crece y se multiplica SIN invadir tejidos ni causar da\u00f1o org\u00e1nico. Diferente de INFECCI\u00d3N (respuesta inmunitaria sin s\u00edntomas) y ENFERMEDAD INFECCIOSA (s\u00edntomas cl\u00ednicos).","ai":false,"noShuffle":false,"img":null},{"n":"ie4","q":"Los eslabones de la cadena epidemiol\u00f3gica de una enfermedad transmisible son:","o":["Agente infeccioso, mecanismo de transmisi\u00f3n y hu\u00e9sped susceptible","Agente infeccioso, mecanismo de transmisi\u00f3n y medio ambiente","Hu\u00e9sped susceptible, agente infeccioso y mecanismo de transmisi\u00f3n","Agente infeccioso, fuente de infecci\u00f3n y mecanismo de transmisi\u00f3n"],"c":1,"e":"La cadena epidemiol\u00f3gica b\u00e1sica tiene 3 eslabones: (1) AGENTE INFECCIOSO, (2) MECANISMO DE TRANSMISI\u00d3N y (3) HU\u00c9SPED SUSCEPTIBLE. Las opciones A y C son equivalentes. El medio ambiente y la fuente de infecci\u00f3n forman parte del esquema extendido.","ai":false,"noShuffle":false,"img":null},{"n":"ie5","q":"El t\u00e9rmino acad\u00e9mico que define las enfermedades transmitidas por animales se denomina:","o":["Brucelosis","Humanosis","Animalosis","Zoonosis"],"c":4,"e":"Las ZOONOSIS son enfermedades infecciosas que se transmiten de manera natural entre animales vertebrados y el ser humano. Ejemplos: brucelosis (ganado bovino/ovino), leptospirosis (roedores), fiebre Q (ganado), rabia. La brucelosis es UN ejemplo espec\u00edfico de zoonosis, no el t\u00e9rmino gen\u00e9rico.","ai":false,"noShuffle":false,"img":null},{"n":"ie6","q":"Cuando se produce un aumento de la incidencia de una enfermedad superior al esperado para una poblaci\u00f3n o zona geogr\u00e1fica determinada y en un periodo de tiempo concreto, se define como:","o":["Endemia","Pandemia","Epidemia","Endoendemia"],"c":3,"e":"EPIDEMIA: aumento de la incidencia SUPERIOR al esperado para una poblaci\u00f3n/zona/per\u00edodo concreto. ENDEMIA = incidencia constante y esperada en una zona. PANDEMIA = extensi\u00f3n a gran parte del mundo.","ai":false,"noShuffle":false,"img":null},{"n":"ie7","q":"El t\u00e9rmino 'Colonizaci\u00f3n' dentro de la fisiopatolog\u00eda natural de cualquier enfermedad infecciosa se define ampliamente como:","o":["La presencia y replicaci\u00f3n de un microorganismo en los tejidos de un hu\u00e9sped que se acompa\u00f1a de respuesta cl\u00ednica aunque no de respuesta inmune","La presencia y replicaci\u00f3n de un microorganismo en los tejidos de un hu\u00e9sped que no se acompa\u00f1a de respuesta cl\u00ednica aunque s\u00ed de respuesta inmune","La presencia de un microorganismo en un hu\u00e9sped que crece y se multiplica en \u00e9l pero que no induce invasi\u00f3n tisular ni da\u00f1o org\u00e1nico","La presencia de un microorganismo en un hu\u00e9sped que crece y se multiplica en \u00e9l induciendo invasi\u00f3n tisular y da\u00f1o org\u00e1nico"],"c":3,"e":"COLONIZACI\u00d3N: microorganismo presente y multiplic\u00e1ndose en el hu\u00e9sped SIN invadir tejidos ni causar da\u00f1o org\u00e1nico, sin respuesta cl\u00ednica ni inmunol\u00f3gica significativa. Ejemplo: S. aureus coloniza las fosas nasales del 30% de la poblaci\u00f3n sana sin causar enfermedad.","ai":false,"noShuffle":false,"img":null},{"n":"ie8","q":"El t\u00e9rmino 'INFECCI\u00d3N' dentro de la fisiopatolog\u00eda de cualquier enfermedad infecciosa se define ampliamente como:","o":["La presencia de un microorganismo en un hu\u00e9sped que crece y se multiplica en \u00e9l pero no induce invasi\u00f3n tisular ni da\u00f1o org\u00e1nico","La presencia y replicaci\u00f3n de un microorganismo en los tejidos de un hu\u00e9sped que no se acompa\u00f1a de respuesta cl\u00ednica aunque s\u00ed de respuesta inmunitaria","La presencia y replicaci\u00f3n de un microorganismo en los tejidos de un hu\u00e9sped que se acompa\u00f1a de respuesta cl\u00ednica e inmunitaria","La presencia y replicaci\u00f3n de un microorganismo en los tejidos de un hu\u00e9sped que se acompa\u00f1a de respuesta cl\u00ednica aunque no d\u00e9 respuesta inmune"],"c":2,"e":"En terminolog\u00eda acad\u00e9mica estricta, INFECCI\u00d3N = replicaci\u00f3n del microorganismo en tejidos con respuesta INMUNITARIA pero SIN s\u00edntomas cl\u00ednicos (infecci\u00f3n subcl\u00ednica o latente). La ENFERMEDAD INFECCIOSA a\u00f1ade la respuesta cl\u00ednica (s\u00edntomas). La COLONIZACI\u00d3N no implica invasi\u00f3n tisular.","ai":false,"noShuffle":false,"img":null},{"n":"ie9","q":"Con respecto a la patogenia de las enfermedades infecciosas, cu\u00e1l de las siguientes afirmaciones es CORRECTA:","o":["El periodo de convalecencia comprende el tiempo transcurrido entre la colonizaci\u00f3n y la infecci\u00f3n","No existe una enfermedad infecciosa sin infecci\u00f3n previa pero s\u00ed puede existir infecci\u00f3n sin llegar a desarrollar una enfermedad","El aislamiento de E. coli en el tracto gastrointestinal de un paciente asintom\u00e1tico significa que tiene infecci\u00f3n y hay que tratarlo","Si un paciente est\u00e1 colonizado por S. aureus tendremos que iniciar tratamiento para evitar que origine una enfermedad infecciosa"],"c":2,"e":"Puede existir INFECCI\u00d3N (con respuesta inmune) SIN enfermedad cl\u00ednica. E. coli en colon es FLORA NORMAL (colonizaci\u00f3n), no infecci\u00f3n. La colonizaci\u00f3n por S. aureus nasal en sano NO requiere tratamiento salvo situaciones especiales.","ai":false,"noShuffle":false,"img":null},{"n":"ie10","q":"Se entiende por BACTERI\u00d3FAGOS (pregunta MIR 2006-2007):","o":["Bacterias que ingieren otras bacterias","Par\u00e1sitos que ingieren bacterias","Virus que se multiplican en bacterias","Bacterias que producen lisis en cultivos de tejidos celulares"],"c":3,"e":"Los BACTERI\u00d3FAGOS (fagos) son VIRUS que infectan y se replican en bacterias. En microbiolog\u00eda m\u00e9dica median la transferencia horizontal de genes (transducci\u00f3n), incluyendo genes de virulencia y resistencia antibi\u00f3tica. La toxina dift\u00e9rica, la toxina botul\u00ednica A y las exotoxinas pirog\u00e9nicas del estreptococo est\u00e1n codificadas por bacteri\u00f3fagos lisog\u00e9nicos.","ai":false,"noShuffle":false,"img":null}],"antimicro":[{"n":"am1","q":"Mujer de 45 a\u00f1os. En hemocultivos se a\u00edsla Listeria monocytogenes tras ingesta de fiambre contaminado. Cu\u00e1l es el tratamiento de elecci\u00f3n:","o":["Penicilina G benzatina","Ampicilina","Ceftriaxona","Amoxicilina-clavul\u00e1nico"],"c":2,"e":"Listeria monocytogenes es naturalmente RESISTENTE a las cefalosporinas (incluyendo ceftriaxona). El tratamiento de elecci\u00f3n es AMPICILINA IV. En pacientes graves o con meningitis se a\u00f1ade gentamicina por sinergia. TMP-SMX es la alternativa en al\u00e9rgicos a betalact\u00e1micos.","ai":false,"noShuffle":false,"img":null},{"n":"am2","q":"Var\u00f3n de 82 a\u00f1os con sepsis abdominal. En hemocultivos se a\u00edsla Pseudomonas aeruginosa en los 4 frascos. Cu\u00e1l de los siguientes antibi\u00f3ticos NO estar\u00eda indicado:","o":["Ertapenem","Doripenem","Imipenem","Meropenem"],"c":1,"e":"El ERTAPENEM es el \u00daNICO carbapen\u00e9mico sin actividad frente a Pseudomonas aeruginosa. Los otros tres carbapen\u00e9micos (imipenem, meropenem, doripenem) S\u00cd tienen actividad antipseudom\u00f3nica. Regla mnemot\u00e9cnica: Todos los carbapen\u00e9micos MENOS el ertapenem cubren Pseudomona. Cl\u00e1sico del MIR.","ai":false,"noShuffle":false,"img":null},{"n":"am3","q":"Var\u00f3n de 72 a\u00f1os con EPOC en cuyo \u00faltimo ingreso se aisl\u00f3 Pseudomonas aeruginosa en esputo. Ahora presenta agudizaci\u00f3n con fiebre y expectoraci\u00f3n verdosa. Cu\u00e1l f\u00e1rmaco es m\u00e1s adecuado emp\u00edricamente:","o":["Amoxicilina-clavul\u00e1nico","Ceftriaxona","Ceftazidima","Cefuroxima"],"c":3,"e":"Con antecedente de colonizaci\u00f3n por Pseudomonas aeruginosa en EPOC, el tratamiento emp\u00edrico debe cubrir este microorganismo. De las cefalosporinas listadas, solo la CEFTAZIDIMA tiene actividad antipseudom\u00f3nica. La amoxicilina-clavul\u00e1nico, ceftriaxona y cefuroxima no cubren Pseudomona.","ai":false,"noShuffle":false,"img":null},{"n":"am4","q":"Daptomicina podr\u00eda utilizarse para tratar los siguientes g\u00e9rmenes EXCEPTO:","o":["Enterobacter cloacae","Staphylococcus hominis","SAMR (S. aureus resistente a meticilina)","Enterococcus faecium"],"c":1,"e":"La daptomicina es un lipop\u00e9ptido c\u00edclico con espectro EXCLUSIVO frente a GRAMPOSITIVOS. Enterobacter cloacae es un bacilo GRAMNEGATIVO completamente resistente a daptomicina de forma intr\u00ednseca. La daptomicina S\u00cd cubre: S. aureus incluyendo SAMR, estafilococos coagulasa-negativos, Enterococcus spp. Adem\u00e1s, en neumon\u00edas se inactiva por el surfactante pulmonar.","ai":false,"noShuffle":false,"img":null},{"n":"am5","q":"Una de las siguientes asociaciones entre agente antibi\u00f3tico y espectro de actividad es INCORRECTA:","o":["Ceftarolina: Staphylococcus aureus resistente a la meticilina (SARM)","Amikacina: Pseudomona aeruginosa","Cefepime: Enterococcus faecalis","Doxiciclina: Rickettsia"],"c":3,"e":"El CEFEPIME (cefalosporina de 4a generaci\u00f3n) NO tiene actividad frente a Enterococcus faecalis. Ninguna cefalosporina cubre enterococos (resistencia intr\u00ednseca). La cobertura de enterococo requiere ampicilina, glucop\u00e9ptidos (vancomicina), linezolid o daptomicina. Ceftarolina S\u00cd cubre SARM (\u00fanica cefalosporina con esta propiedad). Amikacina S\u00cd cubre Pseudomona. Doxiciclina S\u00cd cubre Rickettsia.","ai":false,"noShuffle":false,"img":null},{"n":"am6","q":"Cu\u00e1l de los siguientes reg\u00edmenes antibi\u00f3ticos NO emplear\u00eda en el tratamiento emp\u00edrico de un absceso intraabdominal secundario a apendicitis perforada:","o":["Aztreonam m\u00e1s ciprofloxacino","Ertapenem","Tigeciclina","Ceftriaxona m\u00e1s metronidazol"],"c":1,"e":"Un absceso intraabdominal requiere cobertura de GRAMNEGATIVOS y ANAEROBIOS. Aztreonam m\u00e1s ciprofloxacino FALLA porque ninguno cubre anaerobios de forma eficaz. Ertapenem: cubre gramnegativos y anaerobios. Tigeciclina: amplio espectro incluyendo anaerobios. Ceftriaxona m\u00e1s metronidazol: cobertura completa.","ai":false,"noShuffle":false,"img":null},{"n":"am7","q":"Mujer de 47 a\u00f1os en UCI con neumon\u00eda asociada a VM. Cultivo aspirado endotraqueal: m\u00e1s de 100000 UCF/mL de SARM. Cu\u00e1l de los siguientes tratamientos NO ser\u00eda apropiado:","o":["Tigeciclina","Ceftarolina","Vancomicina","Daptomicina"],"c":4,"e":"La DAPTOMICINA est\u00e1 CONTRAINDICADA en neumon\u00edas porque el SURFACTANTE PULMONAR la INACTIVA, impidiendo su acci\u00f3n bactericida. Para SARM en neumon\u00eda las opciones son: vancomicina IV (de elecci\u00f3n), linezolid (mejor penetraci\u00f3n pulmonar), ceftarolina o tigeciclina. La daptomicina es de elecci\u00f3n para bacteriemia/endocarditis por S. aureus, pero NO para infecci\u00f3n pulmonar.","ai":false,"noShuffle":false,"img":null},{"n":"am8","q":"Var\u00f3n de 67 a\u00f1os con polimialgia reum\u00e1tica (prednisona 10 mg/dia) e insuficiencia renal cr\u00f3nica. Le prescriben un antibi\u00f3tico por fiebre y expectoraci\u00f3n purulenta. Una semana despu\u00e9s desarrolla dolor intenso en el tal\u00f3n e incapacidad para la dorsiflexi\u00f3n del tobillo. Que antibi\u00f3tico le habian prescrito:","o":["Cefditoren","Telitromicina","Moxifloxacino","Cefixima"],"c":3,"e":"El cuadro es una TENDINITIS/ROTURA DEL TEND\u00d3N DE AQUILES, efecto adverso caracter\u00edstico de las FLUOROQUINOLONAS. El MOXIFLOXACINO es una fluoroquinolona respiratoria. El riesgo de tendinopat\u00eda por fluoroquinolonas aumenta con: edad avanzada, uso concomitante de CORTICOIDES (prednisona) e insuficiencia renal.","ai":false,"noShuffle":false,"img":null},{"n":"am9","q":"Mujer de 25 a\u00f1os con pielonefritis inicia cefotaxima emp\u00edrica. A las 24h contin\u00faa con fiebre y se a\u00edsla E. coli productor de BLEE en hemocultivos. Que actitud tomar\u00eda:","o":["Sustituir\u00eda cefotaxima por ertapenem","Mantendr\u00eda cefotaxima","Sustituir\u00eda cefotaxima por tigeciclina","Sustituir\u00eda cefotaxima por ceftazidima"],"c":1,"e":"Las cepas de E. coli productoras de BLEE son RESISTENTES a TODAS las cefalosporinas. El tratamiento de elecci\u00f3n son los CARBAPEN\u00c9MICOS. Para infecciones urinarias por BLEE se usa ERTAPENEM (activo frente a enterobacterias BLEE, no antipseudom\u00f3nico). La tigeciclina tiene limitada excreci\u00f3n urinaria. La ceftazidima tambi\u00e9n es susceptible a las BLEE.","ai":false,"noShuffle":false,"img":null},{"n":"am10","q":"Una de las siguientes afirmaciones en relaci\u00f3n con el tratamiento de las infecciones estafiloc\u00f3cicas es FALSA:","o":["Oxacilina y cloxacilina son penicilinas resistentes a betalactamasas","Ning\u00fan beta-lact\u00e1mico presenta actividad frente a las cepas de SARM","Dentro de las indicaciones de los glucop\u00e9ptidos encontramos cocos grampositivos incluyendo listeria y estafilococo","Daptomicina tiene actividad bactericida frente a S. aureus incluyendo SARM"],"c":2,"e":"Es FALSO que ning\u00fan beta-lact\u00e1mico sea activo frente a SARM. La CEFTAROLINA (cefalosporina de 5a generaci\u00f3n) S\u00cd tiene actividad frente a SARM, pues tiene alta afinidad por la PBP2a alterada que confiere la resistencia. Tambi\u00e9n ceftobiprole. Afirmar que ning\u00fan beta-lact\u00e1mico cubre SARM es incorrecto con las nuevas cefalosporinas anti-SARM.","ai":false,"noShuffle":false,"img":null},{"n":"am11","q":"El antiv\u00edrico de elecci\u00f3n en la encefalitis aguda con afectaci\u00f3n de la regi\u00f3n basal de los l\u00f3bulos temporales cerebrales es:","o":["Arodutamidona","Ganciclovir","Aciclovir","Ribavirina"],"c":3,"e":"La afectaci\u00f3n de los L\u00d3BULOS TEMPORALES BASALES es el patr\u00f3n caracter\u00edstico de la ENCEFALITIS HERP\u00c9TICA por VHS-1. Es la encefalitis espor\u00e1dica m\u00e1s frecuente en pa\u00edses desarrollados. Tratamiento de elecci\u00f3n: ACICLOVIR IV (10 mg/kg/8h durante 14-21 dias). El ganciclovir se usa para CMV. Diagn\u00f3stico: PCR de VHS en LCR m\u00e1s RM.","ai":false,"noShuffle":false,"img":null},{"n":"am12","q":"Son an\u00e1logos de nucle\u00f3sidos, EXCEPTO:","o":["Foscarnet","Lamivudina","Entecavir","Aciclovir"],"c":1,"e":"El FOSCARNET (\u00e1cido fosfonof\u00f3rmico) es un AN\u00c1LOGO DEL PIROFOSFATO, no de un nucle\u00f3sido. Act\u00faa inhibiendo directamente la ADN-polimerasa viral y la transcriptasa inversa sin necesidad de fosforilaci\u00f3n celular previa. Es \u00fatil en infecciones por CMV resistente a ganciclovir. Lamivudina, entecavir y aciclovir S\u00cd son an\u00e1logos de nucle\u00f3sidos.","ai":false,"noShuffle":false,"img":null},{"n":"am13","q":"Se\u00f1ale la respuesta INCORRECTA sobre las equinocandinas:","o":["Las equinocandinas se utilizan para el tratamiento de la aspergilosis invasora","La caspofungina es eficaz en la candidiasis esof\u00e1gica","Las equinocandinas se utilizan en combinaci\u00f3n para el tratamiento de los hongos resistentes","La caspofungina es eficaz en la mucormicosis"],"c":4,"e":"Las equinocandinas (caspofungina, micafungina, anidulafungina) NO tienen actividad frente a MUCORMICOSIS. Su tratamiento requiere anfotericina B liposomal m\u00e1s posaconazol o isavuconazol. Las equinocandinas S\u00cd son activas frente a Aspergillus (segunda l\u00ednea tras voriconazol) y son de primera l\u00ednea para candidiasis incluyendo esof\u00e1gica grave.","ai":false,"noShuffle":false,"img":null},{"n":"am14","q":"Se\u00f1ale la incorrecta sobre los antif\u00fangicos:","o":["Las equinocandinas son activas contra las c\u00e1ndidas resistentes a azoles","El fluconazol puede utilizarse por v\u00eda oral o IV","La anfotericina actualmente se utiliza en forma de presentaci\u00f3n lip\u00eddica","El fluconazol es eficaz para tratar las infecciones por Candida auris"],"c":4,"e":"FALSO: el fluconazol NO es eficaz para Candida auris. Esta levadura emergente se caracteriza por su resistencia intr\u00ednseca al fluconazol (m\u00e1s del 90% de cepas resistentes) y frecuente multirresistencia. Las equinocandinas son el tratamiento de elecci\u00f3n para C. auris.","ai":false,"noShuffle":false,"img":null},{"n":"am15","q":"Se\u00f1ale la incorrecta respecto a los antif\u00fangicos:","o":["El fluconazol puede utilizarse por v\u00eda oral o IV","La anfotericina actualmente se utiliza en forma de presentaci\u00f3n lip\u00eddica","Las equinocandinas son efectivas para aspergilosis pulmonar","El voriconazol es eficaz contra mucormicosis"],"c":4,"e":"El VORICONAZOL no es eficaz contra la mucormicosis y puede ser perjudicial. El tratamiento de la mucormicosis es anfotericina B liposomal m\u00e1s posaconazol o isavuconazol. Las equinocandinas tienen cierta actividad frente a Aspergillus (segunda l\u00ednea) pero no son el primer escal\u00f3n.","ai":false,"noShuffle":false,"img":null},{"n":"am16","q":"Cu\u00e1l de las siguientes combinaciones entre micosis y tratamiento antif\u00fangico es INCORRECTA:","o":["Aspergilosis pulmonar invasora: voriconazol","Mucormicosis en paciente con toxicidad por anfotericina B: posaconazol","Esofagitis por Candida krusei: fluconazol","Histoplasmosis diseminada: anfotericina B"],"c":3,"e":"INCORRECTA: Candida krusei (Pichia kudriavzevii) es INTR\u00cdNSECAMENTE RESISTENTE al fluconazol. El tratamiento de la candidiasis por C. krusei requiere equinocandinas o voriconazol. Las otras opciones son correctas: voriconazol = primera l\u00ednea aspergilosis invasora; posaconazol = alternativa en mucormicosis; anfotericina B = de elecci\u00f3n en histoplasmosis diseminada grave.","ai":false,"noShuffle":false,"img":null}],"bacterias":[{"n":"ba1","q":"Respecto a la epidemiolog\u00eda de la tularemia, se\u00f1ale la respuesta CORRECTA:","o":["Es t\u00edpica de los pa\u00edses mediterr\u00e1neos","Afecta con especial frecuencia al ganado vacuno","Se transmite por inhalaci\u00f3n exclusivamente","Es producida por el germen Brucella melitensis","Es una zoonosis poco frecuente en Espa\u00f1a"],"c":5,"e":"La tularemia (Francisella tularensis) es una zoonosis poco frecuente en Espa\u00f1a. Es m\u00e1s t\u00edpica de pa\u00edses escandinavos y Am\u00e9rica del Norte (no mediterr\u00e1neos). Afecta principalmente a animales SILVESTRES (liebres, conejos, roedores), no al ganado vacuno. El agente causal es F. tularensis, no Brucella.","ai":false,"noShuffle":false,"img":null},{"n":"ba2","q":"Respecto a la tularemia, se\u00f1ale la respuesta FALSA:","o":["Es t\u00edpica de pa\u00edses escandinavos","La transmiten insectos hemat\u00f3fagos como los t\u00e1banos","Suele afectar mayoritariamente a animales silvestres","El germen causante apenas vive unas pocas horas a la intemperie","El germen pertenece al G\u00e9nero Francisella"],"c":4,"e":"Es FALSO que F. tularensis viva solo unas pocas horas a la intemperie. Al contrario, es MUY RESISTENTE en el ambiente: puede sobrevivir semanas en agua fr\u00eda, en cad\u00e1veres de animales y en el hielo. Esta alta resistencia ambiental la hace peligrosa como potencial agente de bioterrorismo (clasificada como agente Categor\u00eda A por el CDC).","ai":false,"noShuffle":false,"img":null},{"n":"ba3","q":"Respecto a la epidemiolog\u00eda de la PESTE, se\u00f1ale la respuesta FALSA:","o":["La peste es una zoonosis","Los vectores suelen ser roedores y pulgas","La bacteria causante es Yersinia pestis","Es una enfermedad t\u00edpica de las zonas del Norte de Europa","La peste es potencialmente letal"],"c":4,"e":"FALSO: la peste NO es t\u00edpica del Norte de Europa. Y. pestis afecta principalmente a Asia Central, \u00c1frica subsahariana (especialmente Madagascar), y focos en Am\u00e9rica del Sur. Las pulgas de las ratas (Xenopsylla cheopis) son el vector cl\u00e1sico de la forma bub\u00f3nica.","ai":false,"noShuffle":false,"img":null},{"n":"ba4","q":"Respecto al CARBUNCO, se\u00f1ale la respuesta FALSA:","o":["El carbunco es producido por Bacillus anthracis","Representa el t\u00edpico germen utilizado por el bioterrorismo","No produce esporas","Es extremadamente infeccioso","Las manifestaciones iniciales son generales"],"c":3,"e":"Es FALSO que B. anthracis no produzca esporas. La ESPOROG\u00c9NESIS es la caracter\u00edstica m\u00e1s importante: las esporas son extremadamente resistentes (sobreviven d\u00e9cadas en el suelo), pueden aerosolizarse (carbunco inhalatorio, la forma m\u00e1s mortal con mortalidad mayor del 80% sin tratamiento), y son la base de su uso como arma biol\u00f3gica.","ai":false,"noShuffle":false,"img":null},{"n":"ba5","q":"Respecto al T\u00c9TANOS, se\u00f1ale la FALSA:","o":["Es una enfermedad neuroparalizante","Est\u00e1 producida por una toxina del bacilo Clostridium botulinum","Provoca una par\u00e1lisis esp\u00e1stica ascendente sin manifestaciones sensitivas","Se inicia como neuropat\u00eda craneal bilateral"],"c":2,"e":"FALSO: el t\u00e9tanos est\u00e1 producido por la TETANOSPASMINA de Clostridium TETANI, NO de C. botulinum. C. botulinum produce la toxina botul\u00ednica. La cl\u00ednica es opuesta: el t\u00e9tanos causa espasmos ESP\u00c1STICOS (trismus, opist\u00f3tonos), mientras que el botulismo causa par\u00e1lisis FL\u00c1CCIDA DESCENDENTE.","ai":false,"noShuffle":false,"img":null},{"n":"ba6","q":"La Difteria es una enfermedad infecto-contagiosa reemergente. Se\u00f1ale la FALSA (sobre la notificaci\u00f3n):","o":["El germen responsable es Corynebacterium diphtheriae, bacilo grampositivo","La notificaci\u00f3n de la enfermedad es necesaria pero no debe ser urgente ni individualizada","El signo caracter\u00edstico es la membrana espesa gris que cubre la parte posterior de la garganta","En la actualidad ya disponemos de vacuna"],"c":2,"e":"FALSO: la notificaci\u00f3n de la difteria S\u00cd debe ser URGENTE e INDIVIDUALIZADA. Es una EDO de notificaci\u00f3n urgente en Espa\u00f1a. Un caso obliga a: notificaci\u00f3n inmediata a Salud P\u00fablica, investigaci\u00f3n de contactos, quimioprofilaxis a contactos (eritromicina o penicilina) y verificaci\u00f3n del estado vacunal.","ai":false,"noShuffle":false,"img":null},{"n":"ba7","q":"La Difteria es una enfermedad infecto-contagiosa reemergente. Se\u00f1ale la FALSA (sobre el agente causal):","o":["El reservorio es el hombre","El germen responsable es el Corynebacterium diphtheriae","El signo caracter\u00edstico es la membrana espesa gris que cubre la parte posterior de la garganta","Es un bacilo gramnegativo aerobio facultativo"],"c":4,"e":"FALSO: Corynebacterium diphtheriae es un bacilo GRAMPOSITIVO (no gramnegativo). Se caracteriza por morfolog\u00eda en letras chinas o empalizada en la tinci\u00f3n de Gram, aerobio, no esporulado, no m\u00f3vil. La patogenicidad se debe a la TOXINA DIFT\u00c9RICA (codificada por un bacteri\u00f3fago lisog\u00e9nico) que inhibe la s\u00edntesis proteica por ADP-ribosilaci\u00f3n del factor de elongaci\u00f3n EF-2.","ai":false,"noShuffle":false,"img":null},{"n":"ba8","q":"Se\u00f1ale la FALSA respecto al BOTULISMO transmitido por alimentos:","o":["Es una enfermedad neuroparalizante","La toxina afecta a la uni\u00f3n neuromuscular a nivel presin\u00e1ptico inhibiendo la liberaci\u00f3n de acetilcolina","Provoca midriasis arreactiva, visi\u00f3n borrosa y sequedad bucofar\u00edngea","La debilidad es descendente y ASIM\u00c9TRICA"],"c":4,"e":"FALSO: la debilidad en el botulismo es DESCENDENTE pero SIM\u00c9TRICA (bilateral). Comienza en la musculatura craneal (diplopia, ptosis, disfagia, disartria) y desciende sim\u00e9tricamente hasta el paro respiratorio. La ASIMETR\u00cdA no es caracter\u00edstica del botulismo. La toxina botul\u00ednica bloquea la exocitosis de acetilcolina en la placa neuromuscular de forma irreversible.","ai":false,"noShuffle":false,"img":null},{"n":"ba9","q":"Se entiende por bacteri\u00f3fagos (pregunta MIR 2006-2007):","o":["Bacterias que ingieren otras bacterias","Par\u00e1sitos que ingieren bacterias","Virus que se multiplican en bacterias","Bacterias que producen lisis en cultivos de tejidos celulares"],"c":3,"e":"Los BACTERI\u00d3FAGOS (fagos) son VIRUS que infectan y se replican en bacterias. Son los organismos m\u00e1s abundantes en la Tierra. En microbiolog\u00eda m\u00e9dica median la transferencia horizontal de genes (transducci\u00f3n), incluyendo genes de virulencia y resistencia antibi\u00f3tica. La toxina dift\u00e9rica, la toxina botul\u00ednica A y las exotoxinas pirog\u00e9nicas del estreptococo est\u00e1n codificadas por bacteri\u00f3fagos.","ai":false,"noShuffle":false,"img":null},{"n":"ba10","q":"El vector que transmite el paludismo o la malaria es:","o":["Flebotomos","Vinchuca","Mosca tse-tse","Mosquito Anopheles"],"c":4,"e":"El MOSQUITO ANOPHELES (hembra) es el \u00fanico vector del paludismo. Otros vectores: Flebotomos a leishmaniasis; Vinchuca a enfermedad de Chagas; Mosca tse-tse a tripanosomiasis africana; Mosquito Aedes a dengue, Zika, fiebre amarilla; Garrapata Ixodes a enfermedad de Lyme; Rhipicephalus sanguineus a fiebre botonosa mediterr\u00e1nea.","ai":false,"noShuffle":false,"img":null},{"n":"ba11","q":"Hemocultivos positivos para cocos gram positivos en racimo coagulasa negativos. De cu\u00e1l de los siguientes microorganismos es m\u00e1s probable:","o":["S. pyogenes","S. pneumoniae","S. epidermidis","S. aureus"],"c":3,"e":"Los estafilococos coagulasa-NEGATIVOS (SCN) m\u00e1s frecuentes en hemocultivos son S. epidermidis, S. haemolyticus y S. hominis. S. epidermidis es el m\u00e1s frecuente. S. aureus es coagulasa-POSITIVO. S. pyogenes y S. pneumoniae son estreptococos. Los SCN son causa frecuente de bacteriemia relacionada con cat\u00e9ter e infecci\u00f3n de pr\u00f3tesis.","ai":false,"noShuffle":false,"img":null},{"n":"ba12","q":"Qu\u00e9 no se considera zona est\u00e9ril del organismo:","o":["Sangre","Est\u00f3mago","L\u00edquido cefalorraqu\u00eddeo","Vejiga"],"c":2,"e":"El EST\u00d3MAGO no es una zona est\u00e9ril: aunque el \u00e1cido g\u00e1strico reduce la carga bacteriana, alberga Helicobacter pylori, lactobacilos, etc. Zonas normalmente EST\u00c9RILES: sangre, LCR, orina vesical, l\u00edquido pleural, peritoneal y sinovial. El aislamiento de microorganismos en cualquiera de estas zonas est\u00e9riles es siempre patol\u00f3gico.","ai":false,"noShuffle":false,"img":null},{"n":"ba13","q":"Respecto a las bacterias GRAM NEGATIVAS, se\u00f1ale la asociaci\u00f3n INCORRECTA:","o":["Fermentadores en Agar MacConkey - Klebsiella","Diplococos - Neisseria","No fermentadores en Agar MacConkey - E. coli","Cocobacilos - H. influenzae"],"c":3,"e":"INCORRECTA: E. coli es una bacteria FERMENTADORA de la lactosa y produce colonias ROSAS en agar MacConkey. Las bacterias no-fermentadoras en MacConkey (colonias incoloras) incluyen: Pseudomonas aeruginosa, Acinetobacter. Klebsiella S\u00cd es fermentadora (colonias mucosas rosas). Neisseria = diplococos gramnegativos. H. influenzae = cocobacilos gramnegativos pleom\u00f3rficos.","ai":false,"noShuffle":false,"img":null},{"n":"ba14","q":"Cu\u00e1l de los siguientes es un estreptococo ALFA-HEMOL\u00cdTICO:","o":["S. pneumoniae","S. pyogenes","S. agalactiae","E. faecalis"],"c":1,"e":"S. pneumoniae es ALFA-HEMOL\u00cdTICO: produce hem\u00f3lisis parcial con halo verdoso en agar sangre. Tambi\u00e9n son alfa-hemol\u00edticos los Streptococcus del grupo viridans. BETA-HEMOL\u00cdTICOS (hem\u00f3lisis completa, halo claro): S. pyogenes (grupo A) y S. agalactiae (grupo B). GAMMA-HEMOL\u00cdTICOS (sin hem\u00f3lisis): Enterococcus faecalis/faecium. Mnemot\u00e9cnica: alfa=verde, beta=completa, gamma=nada.","ai":false,"noShuffle":false,"img":null}],"tbc":[{"n":"tb1","q":"Cu\u00e1l es la primera opci\u00f3n de tratamiento en paciente con TBC pulmonar sin conocer las resistencias:","o":["HP x 2 meses y HPRE x 4 meses","HR x 2 meses y HPRE x 4 meses","PEH x 2 meses y HPR x 4 meses","HRZE x 2 meses y HR x 4 meses"],"c":4,"e":"El tratamiento est\u00e1ndar de la TBC pulmonar es HRZE (Isoniazida m\u00e1s Rifampicina m\u00e1s Pirazinamida m\u00e1s Etambutol) durante 2 meses de fase intensiva m\u00e1s HR (Isoniazida m\u00e1s Rifampicina) durante 4 meses de fase de consolidaci\u00f3n. Total 6 meses. El etambutol se incluye en la fase intensiva para prevenir la selecci\u00f3n de mutantes resistentes hasta conocer el antibiograma.","ai":false,"noShuffle":false,"img":null},{"n":"tb2","q":"Respecto a la tuberculosis, es FALSO que:","o":["Puede acompa\u00f1arse de monocitosis sangu\u00ednea","En la pleuritis la prueba de Mantoux es negativa con frecuencia","Una forma de tuberculosis cut\u00e1nea es el lupus vulgaris","La manifestaci\u00f3n m\u00e1s frecuente de los tuberculomas cerebrales es la epilepsia","El derrame pleural tuberculoso presenta abundancia de c\u00e9lulas mesoteliales"],"c":5,"e":"FALSO: el derrame pleural tuberculoso se caracteriza por la AUSENCIA de c\u00e9lulas mesoteliales (caracter\u00edstica diagn\u00f3stica importante). El l\u00edquido pleural en la TBC es un EXUDADO LINFOCITARIO (m\u00e1s del 70% linfocitos) con ADA (adenosina desaminasa) elevada. La PRESENCIA de c\u00e9lulas mesoteliales orienta hacia otras etiolog\u00edas (maligna, cardiaca).","ai":false,"noShuffle":false,"img":null},{"n":"tb3","q":"Respecto a la tuberculosis MILIAR, NO es cierto que:","o":["La prueba Mantoux suele ser negativa","Los tub\u00e9rculos coroideos son frecuentes","La radiograf\u00eda de t\u00f3rax con frecuencia es normal","Es m\u00e1s frecuente en inmunodeprimidos","Es poco contagiosa"],"c":3,"e":"NO ES CIERTO que la Rx de t\u00f3rax sea normal en la TBC miliar. La TBC miliar se caracteriza por el PATR\u00d3N MILIAR cl\u00e1sico: m\u00faltiples micron\u00f3dulos de 1-3mm de distribuci\u00f3n difusa bilateral (imagen en grano de mijo). El Mantoux S\u00cd puede ser negativo (anergia). La TBC miliar es POCO CONTAGIOSA porque no produce cavernas pulmonares (principal fuente de transmisi\u00f3n a\u00e9rea).","ai":false,"noShuffle":false,"img":null},{"n":"tb4","q":"Respecto a las distintas formas cl\u00ednicas de tuberculosis, se\u00f1ale la respuesta FALSA:","o":["La meningitis cursa de forma subaguda y con lesi\u00f3n de pares craneales como complicaci\u00f3n","La tuberculosis vertebral es m\u00e1s frecuentemente dorsal","La forma urinaria cursa con piuria est\u00e9ril","Las adenopat\u00edas no son dolorosas","La afecci\u00f3n intestinal m\u00e1s frecuente es duodeno-yeyunal"],"c":5,"e":"FALSO: la afecci\u00f3n intestinal m\u00e1s frecuente en la tuberculosis es el \u00cdLEON DISTAL y el CIEGO (zona ileocecal), no el duodeno-yeyuno. En esa zona hay mayor concentraci\u00f3n de tejido linfoide (placas de Peyer) y mayor absorci\u00f3n de bacilos. La TBC duodeno-yeyunal existe pero es poco frecuente.","ai":false,"noShuffle":false,"img":null},{"n":"tb5","q":"El diagn\u00f3stico de INFECCI\u00d3N tuberculosa latente (no enfermedad activa) se establece principalmente mediante:","o":["Prueba de tuberculina (Mantoux) o IGRA","Radiograf\u00eda de t\u00f3rax","Estudio histol\u00f3gico de material de biopsia","Estudio microbiol\u00f3gico de muestra cl\u00ednica","Cultivo de BAAR en orina si no hay lesi\u00f3n localizada"],"c":1,"e":"El diagn\u00f3stico de INFECCI\u00d3N TUBERCULOSA LATENTE (ITL) se establece mediante la PRUEBA DE TUBERCULINA (Mantoux/PPD) o los IGRA (QuantiFERON-TB Gold Plus o T-SPOT.TB). Estas pruebas detectan la respuesta inmune celular pero NO distinguen infecci\u00f3n activa de latente. La Rx de t\u00f3rax, biopsia y microbiolog\u00eda son para diagnosticar ENFERMEDAD tuberculosa activa.","ai":false,"noShuffle":false,"img":null},{"n":"tb6","q":"Entre las causas de falsos negativos en la prueba de Mantoux se encuentran todas EXCEPTO:","o":["Fase preal\u00e9rgica de la primoinfecci\u00f3n","Tratamiento antituberculoso correcto con curaci\u00f3n","Edad avanzada","Uso de esteroides","Enfermedad de Hodgkin"],"c":2,"e":"El tratamiento antituberculoso correcto con curaci\u00f3n NO provoca falso negativo en el Mantoux: los pacientes curados MANTIENEN la positividad del Mantoux durante a\u00f1os o d\u00e9cadas. Causas de falso negativo del Mantoux: fase preal\u00e9rgica (primeras 2-10 semanas), inmunosupresi\u00f3n (esteroides, VIH, linfomas como Hodgkin, desnutrici\u00f3n), edad avanzada (anergia), infecciones agudas graves (sarampi\u00f3n), t\u00e9cnica incorrecta.","ai":false,"noShuffle":false,"img":null},{"n":"tb7","q":"Paciente de 45 a\u00f1os con TBC pulmonar, segundo episodio, resistencia a isoniazida identificada. El mejor tratamiento es:","o":["Rifampicina, isoniazida, pirazinamida y etambutol durante 18 meses","Rifampicina, pirazinamida, etambutol y levofloxacino durante 6 meses","Rifampicina, bedaquilina y proteonamida durante 12 meses","Rifampicina, etambutol, pirazinamida y linezolid durante 3 meses"],"c":2,"e":"Con RESISTENCIA A ISONIAZIDA, el r\u00e9gimen debe excluir la isoniazida y a\u00f1adir una FLUOROQUINOLONA. La opci\u00f3n B (rifampicina m\u00e1s pirazinamida m\u00e1s etambutol m\u00e1s LEVOFLOXACINO durante 6 meses) es el esquema recomendado por OMS para TBC mono-resistente a isoniazida. Mantener isoniazida cuando hay resistencia comprobada seleccionar\u00eda m\u00e1s resistencias.","ai":false,"noShuffle":false,"img":null},{"n":"tb8","q":"Paciente con VIH (CD4 40 cel/uL) inicia TARV. A las 3 semanas desarrolla fiebre, adenopat\u00edas cervicales y mediast\u00ednicas. CD4 sube a 77, carga viral baja. Mantoux negativo. Cu\u00e1l es el diagn\u00f3stico m\u00e1s probable:","o":["Tuberculosis ganglionar como s\u00edndrome de reconstituci\u00f3n inmune","Linfoma de alto grado","Reacci\u00f3n adversa al tratamiento antirretroviral","Criptococosis sist\u00e9mica","Infecci\u00f3n por Pneumocystis jirovecii"],"c":1,"e":"El cuadro es cl\u00e1sico del S\u00cdNDROME DE RECONSTITUCI\u00d3N INMUNE (SRI): el TARV produce aumento de CD4 y reducci\u00f3n de la carga viral, desencadenando respuesta inflamatoria exagerada frente a infecciones latentes previas (en este caso TB ganglionar). Es la causa m\u00e1s frecuente de SRI. Aparece en las 4-8 semanas tras inicio del TARV.","ai":false,"noShuffle":false,"img":null},{"n":"tb9","q":"En el diagn\u00f3stico de la espondilodiscitis infecciosa, se\u00f1ale la INCORRECTA:","o":["La RMN es de elecci\u00f3n sobre todo en las fases iniciales","Se objetiva erosi\u00f3n y destrucci\u00f3n de los cuerpos vertebrales","La espondilodiscitis tuberculosa (Mal de Pott) afecta sobre todo la v\u00e9rtebra anterosuperior","Es la afectaci\u00f3n m\u00e1s frecuente de la tuberculosis osteoarticular","La RMN vertebral eval\u00faa adem\u00e1s el componente neurol\u00f3gico"],"c":3,"e":"INCORRECTA: el Mal de Pott (TBC vertebral) afecta preferentemente la REGI\u00d3N ANTEROINFERIOR del cuerpo vertebral (\u00e1ngulo anteroinferior), no la anterosuperior. La infecci\u00f3n se origina en la regi\u00f3n subligamentosa anterior y se extiende al disco intervertebral. La columna DORSAL es la m\u00e1s afectada. La RMN es la prueba de imagen de elecci\u00f3n.","ai":false,"noShuffle":false,"img":null},{"n":"tb10","q":"Cu\u00e1l es el tratamiento inicial m\u00e1s adecuado de la tuberculosis pulmonar en paciente inmunocompetente sin conocer resistencias:","o":["Isoniazida, pirazinamida, rifampicina y etambutol los primeros 2 meses m\u00e1s isoniazida y rifampicina 4 meses m\u00e1s","Isoniazida, pirazinamida y rifampicina durante 4 meses m\u00e1s pirazinamida y etambutol 2 meses m\u00e1s","Isoniazida, pirazinamida, rifampicina y etambutol los primeros 4 meses m\u00e1s isoniazida y rifampicina 2 meses m\u00e1s","Isoniazida y rifampicina durante 2 meses m\u00e1s isoniazida, pirazinamida y etambutol 4 meses m\u00e1s"],"c":1,"e":"El tratamiento est\u00e1ndar es HRZE durante 2 meses de fase INTENSIVA m\u00e1s HR durante 4 meses de fase de CONSOLIDACI\u00d3N. Total: 6 meses. El etambutol se incluye en la fase intensiva para cubrir la posibilidad de resistencia inicial no conocida a isoniazida. En meningitis TBC la duraci\u00f3n es 12 meses.","ai":false,"noShuffle":false,"img":null},{"n":"tb11","q":"Hombre de 25 a\u00f1os, ADVP, sale de la c\u00e1rcel. PPD con 10mm de induraci\u00f3n, hace un a\u00f1o era negativo. Asintom\u00e1tico, VIH negativo, Rx t\u00f3rax normal. Qu\u00e9 actitud es m\u00e1s adecuada:","o":["No realizar tratamiento y control anual de Radiograf\u00eda","Cultivo de esputo para micobacterias y tratar solo si son positivos","Isoniazida durante 6 meses","Tratamiento con 4 drogas 4 meses"],"c":3,"e":"Este paciente tiene CONVERSI\u00d3N tubercul\u00ednica reciente (de negativo a 10mm en 1 a\u00f1o) y es ADVP, grupo de riesgo para TBC. Conversi\u00f3n reciente m\u00e1s grupo de riesgo es indicaci\u00f3n de tratamiento de la INFECCI\u00d3N TUBERCULOSA LATENTE con ISONIAZIDA durante 6-9 meses. Con Rx t\u00f3rax normal no hay enfermedad activa: no se necesitan 4 f\u00e1rmacos.","ai":true,"imp":true,"noShuffle":false,"img":null},{"n":"tb12","q":"Paciente de 23 a\u00f1os con tuberculosis miliar. Uno de los siguientes asertos NO es correcto:","o":["Es m\u00e1s frecuente en pacientes inmunodeprimidos","Con frecuencia cursa con un Mantoux negativo","El riesgo de transmisi\u00f3n es muy elevado","La Rx de t\u00f3rax puede ser normal en fases iniciales precoces"],"c":3,"e":"NO es correcto que el riesgo de transmisi\u00f3n sea muy elevado. La TBC miliar es POCO CONTAGIOSA porque no suele producir cavernas pulmonares (fuente principal de transmisi\u00f3n a\u00e9rea). El Mantoux S\u00cd puede ser negativo (anergia). La Rx de t\u00f3rax con patr\u00f3n miliar puede tardar en hacerse visible.","ai":false,"noShuffle":false,"img":null},{"n":"tb13","q":"Se\u00f1ale cu\u00e1l de las siguientes afirmaciones en relaci\u00f3n con la tuberculosis es FALSA:","o":["Durante la enfermedad activa en el interior de los macr\u00f3fagos los bacilos se replican lentamente por el medio anaerobio y pH \u00e1cido","El PPD empleado en el Mantoux presenta ant\u00edgenos compartidos por distintas especies de Mycobacterium","Una respuesta de la inmunidad celular con s\u00edntesis predominante de IL-4 e IL-10 es protectora frente al desarrollo de la enfermedad","El m\u00e1ximo riesgo de reactivaci\u00f3n de una infecci\u00f3n tuberculosa latente tiene lugar durante los dos primeros a\u00f1os tras la primoinfecci\u00f3n"],"c":3,"e":"FALSA: la respuesta Th2 (IL-4, IL-10, IL-13) NO es protectora frente a la TBC, sino que FAVORECE la susceptibilidad y progresi\u00f3n de la enfermedad. La respuesta PROTECTORA es la Th1 (IFN-gamma, IL-12, TNF-alfa), que activa la micobacteri\u00f3lisis en los macr\u00f3fagos.","ai":false,"noShuffle":false,"img":null},{"n":"tb14","q":"Uno de los siguientes escenarios NO estar\u00eda indicado en el tratamiento de la infecci\u00f3n tuberculosa latente (IGRA positivo):","o":["Paciente con enfermedad renal cr\u00f3nica","Paciente con enfermedad de Crohn que va a iniciar golimumab (anti-TNF)","Paciente con 85 a\u00f1os con una caverna residual estable en la Rx de t\u00f3rax","Sujeto de 56 a\u00f1os sin antecedentes que hace 4 a\u00f1os presentaba un Mantoux negativo"],"c":4,"e":"El sujeto de 56 a\u00f1os sin factores de riesgo espec\u00edficos, IGRA positivo pero sin conversi\u00f3n reciente documentada ni inmunosupresi\u00f3n planificada, no tiene indicaci\u00f3n clara de tratar la ITL: el balance riesgo-beneficio de la isoniazida (hepatotoxicidad) puede no ser favorable. Las otras opciones S\u00cd son indicaciones: IRC, anti-TNF (inmunosupresor mayor) y caverna residual.","ai":false,"noShuffle":false,"img":null},{"n":"tb15","q":"Padre con TBC pulmonar activa (baciloscopia positiva). Su hija de 7 a\u00f1os tiene Mantoux de 2mm (negativo). Qu\u00e9 conducta seguir\u00eda:","o":["Tranquilizar\u00eda al padre: con Mantoux negativo el riesgo es remoto","No administrar\u00eda isoniazida y repetir\u00eda el Mantoux a los 2 meses. Si positivo: placa y baciloscopia y si negativas isoniazida 9 meses","No administrar\u00eda isoniazida y repetir\u00eda el Mantoux a los 2 meses. Si positivo: isoniazida 9 meses","Comenzar\u00eda isoniazida y repetir\u00eda el Mantoux a los 2 meses. Si negativo: suspender. Si positivo: descartar enfermedad activa y mantener isoniazida hasta completar 9 meses"],"c":4,"e":"En ni\u00f1os peque\u00f1os menores de 5 a\u00f1os contactos \u00edntimos de caso \u00edndice bacil\u00edfero, se INICIA PROFILAXIS CON ISONIAZIDA aunque el Mantoux sea negativo inicialmente (per\u00edodo ventana de 2-10 semanas). A los 2 meses se repite: si NEGATIVO, suspender; si POSITIVO, descartar enfermedad activa (Rx t\u00f3rax, baciloscopia) y si negativas mantener isoniazida hasta completar 9 meses. Conducta de las gu\u00edas espa\u00f1olas.","ai":false,"noShuffle":false,"img":null}],"rickettsia_myco":[{"n":"ri1","q":"Mujer de 28 a\u00f1os con fiebre, cefalea, escara negra con halo eritematoso y exantema con afectaci\u00f3n palmoplantar. La etiolog\u00eda m\u00e1s probable es:","o":["Sepsis meningoc\u00f3cica","Rickettsia conorii","Sarampi\u00f3n","Primoinfecci\u00f3n por VIH"],"c":2,"e":"La TR\u00cdADA cl\u00e1sica de la fiebre botonosa mediterr\u00e1nea (R. conorii) es: (1) FIEBRE elevada, (2) ESCARA de inoculaci\u00f3n (tache noire) en la zona de picadura de garrapata y (3) EXANTEMA maculopapular que afecta a palmas y plantas. La sepsis meningoc\u00f3cica produce petequias/p\u00farpura. El sarampi\u00f3n no tiene escara. La primoinfecci\u00f3n VIH da exantema sin escara.","ai":false,"noShuffle":false,"img":null},{"n":"ri2","q":"En cu\u00e1l de las siguientes entidades cl\u00ednicas el hospedador es el ser humano:","o":["Tifus epid\u00e9mico","Tifus murino","Tifus de los matorrales","Fiebre botonosa"],"c":1,"e":"En el TIFUS EPID\u00c9MICO (Rickettsia prowazekii), el SER HUMANO es tanto el RESERVORIO como el hospedador. El vector es el piojo del cuerpo (Pediculus humanus corporis). En el tifus murino, el reservorio es la rata y el vector la pulga de rata. En la fiebre botonosa, el reservorio es el perro y el vector R. sanguineus.","ai":false,"noShuffle":false,"img":null},{"n":"ri3","q":"Cu\u00e1l es el artr\u00f3podo que act\u00faa como vector de la fiebre botonosa mediterr\u00e1nea:","o":["Rhipicephalus sanguineus","Ixodes ricinus","Dermacentor spp","Amblyomma americanum"],"c":1,"e":"El RHIPICEPHALUS SANGUINEUS (garrapata parda del perro) es el vector de la fiebre botonosa mediterr\u00e1nea (Rickettsia conorii). Ixodes ricinus transmite la enfermedad de Lyme (Borrelia burgdorferi). Dermacentor spp transmite la fiebre de las Monta\u00f1as Rocosas en Am\u00e9rica. Amblyomma americanum transmite erliquiosis en EE.UU.","ai":false,"noShuffle":false,"img":null},{"n":"ri4","q":"Mujer de 46 a\u00f1os de La Mancha, agosto, con lesiones cut\u00e1neas que tambi\u00e9n afectan a palmas y plantas, y m\u00e1cula necr\u00f3tica negruzca. Cu\u00e1l es el agente etiol\u00f3gico m\u00e1s probable:","o":["Treponema pallidum","Bartonella henselae","Borrelia burgdorferi","Rickettsia conorii"],"c":4,"e":"RICKETTSIA CONORII: el contexto epidemiol\u00f3gico (Espa\u00f1a mediterr\u00e1nea, agosto = pico de actividad de garrapatas) m\u00e1s exantema con afectaci\u00f3n palmoplantar m\u00e1s escara negra (tache noire) es diagn\u00f3stico de fiebre botonosa mediterr\u00e1nea. La s\u00edfilis secundaria da exantema palmoplantar pero sin escara. Borrelia produce eritema migratorio anular, no exantema difuso con escara.","ai":false,"noShuffle":false,"img":null},{"n":"ri5","q":"Cu\u00e1l de las siguientes entidades NO tiene un exantema con afectaci\u00f3n PALMOPLANTAR:","o":["Sarampi\u00f3n","Tifus murino","S\u00edfilis secundaria","Fiebre botonosa mediterr\u00e1nea"],"c":2,"e":"El TIFUS MURINO (Rickettsia typhi) produce un exantema maculopapular que RESPETA palmas y plantas. Exantemas CON afectaci\u00f3n palmoplantar: s\u00edfilis secundaria, fiebre botonosa mediterr\u00e1nea (R. conorii), fiebre de las Monta\u00f1as Rocosas, eritema multiforme, s\u00edndrome de Stevens-Johnson.","ai":false,"noShuffle":false,"img":null},{"n":"ri6","q":"Paciente de 35 a\u00f1os sin antecedentes, fiebre 38 grados de 3 d\u00edas, tos seca y mialgias. Rx de t\u00f3rax: infiltrado intersticial bilateral. Cu\u00e1l es el diagn\u00f3stico m\u00e1s probable:","o":["Neumon\u00eda por Streptococcus pneumoniae","Neumon\u00eda por Mycoplasma pneumoniae","Neumon\u00eda por Haemophilus influenzae","Bronquitis aguda"],"c":2,"e":"La neumon\u00eda AT\u00cdPICA por MYCOPLASMA PNEUMONIAE es la m\u00e1s probable: paciente joven sin comorbilidades, inicio insidioso, tos seca, fiebre moderada, mialgias (s\u00edntomas extrapulmonares), infiltrado INTERSTICIAL bilateral (disociaci\u00f3n cl\u00ednico-radiol\u00f3gica). La neumon\u00eda por S. pneumoniae es t\u00edpica (inicio brusco, fiebre alta, escalofr\u00edos, esputo purulento, condensaci\u00f3n lobar). Mycoplasma es la causa m\u00e1s frecuente de NAC at\u00edpica en j\u00f3venes.","ai":false,"noShuffle":false,"img":null},{"n":"ri7","q":"Cu\u00e1l de las siguientes NO es una caracter\u00edstica de las neumon\u00edas at\u00edpicas:","o":["Comienzo gradual","Cefalea","Mialgia","Auscultaci\u00f3n de crepitantes focales","Tos seca"],"c":4,"e":"La DISOCIACI\u00d3N CL\u00cdNICO-RADIOL\u00d3GICA es la caracter\u00edstica clave de las neumon\u00edas at\u00edpicas: a pesar de los infiltrados radiol\u00f3gicos, la AUSCULTACI\u00d3N es NORMAL o m\u00ednimamente alterada (sin crepitantes focales t\u00edpicos). La inflamaci\u00f3n es intersticial/peribronquiolar, no alveolar. Las otras caracter\u00edsticas S\u00cd son propias de las neumon\u00edas at\u00edpicas: inicio gradual, s\u00edntomas extrapulmonares (cefalea, mialgias) y tos seca.","ai":false,"noShuffle":false,"img":null},{"n":"ri8","q":"Cu\u00e1l de los siguientes pat\u00f3genos NO se manifiesta con un patr\u00f3n pulmonar de NEUMON\u00cdA T\u00cdPICA:","o":["Streptococcus pneumoniae","Haemophilus influenzae","Mycoplasma pneumoniae","Klebsiella pneumoniae","Moraxella catarrhalis"],"c":3,"e":"MYCOPLASMA PNEUMONIAE produce neumon\u00eda AT\u00cdPICA (infiltrado intersticial, s\u00edntomas extrapulmonares, disociaci\u00f3n cl\u00ednico-radiol\u00f3gica), no patr\u00f3n t\u00edpico de condensaci\u00f3n lobar. Los otros pat\u00f3genos S\u00cd producen patr\u00f3n t\u00edpico: S. pneumoniae (consolidaci\u00f3n lobar), H. influenzae (bronconeumon\u00eda), Klebsiella pneumoniae (neumon\u00eda lobar densa), Moraxella catarrhalis (bronconeumon\u00eda en EPOC).","ai":false,"noShuffle":false,"img":null},{"n":"ri9","q":"Estudiante de 24 a\u00f1os sano, con febr\u00edcula, artromialgias, tos seca y astenia de 2 semanas. Sus 2 hermanos presentaron un cuadro similar un mes antes que se autolimit\u00f3. Rx de t\u00f3rax: neumon\u00eda at\u00edpica. Cu\u00e1l es el agente etiol\u00f3gico m\u00e1s probable:","o":["Haemophilus influenzae","Coxiella burnetii (fiebre Q)","Mycoplasma pneumoniae","Legionella pneumophila"],"c":3,"e":"MYCOPLASMA PNEUMONIAE: la afectaci\u00f3n FAMILIAR por contacto \u00edntimo es muy caracter\u00edstica (se transmite por gotitas respiratorias entre convivientes). Presentaci\u00f3n con tos seca persistente durante semanas, s\u00edntomas extrapulmonares, inicio gradual y propagaci\u00f3n intrafamiliar es el cuadro cl\u00e1sico. Legionella se asocia a sistemas de agua/climatizaci\u00f3n. Fiebre Q a animales dom\u00e9sticos.","ai":false,"noShuffle":false,"img":null}],"virus_hongos":[{"n":"vh1","q":"Cu\u00e1l de los serotipos de la familia Herpesviridae se corresponde con el CITOMEGALOVIRUS:","o":["HHV-1","HHV-2","HHV-3","HHV-5"],"c":4,"e":"Los 8 herpesvirus humanos: HHV-1 es VHS-1 (herpes oral), HHV-2 es VHS-2 (herpes genital), HHV-3 es VVZ (varicela/z\u00f3ster), HHV-4 es VEB (Epstein-Barr/mononucleosis), HHV-5 es CMV (citomegalovirus), HHV-6 es roseolovirus (exantema s\u00fabito), HHV-7 es relacionado, HHV-8 es KSHV (sarcoma de Kaposi). Mnemot\u00e9cnica: CMV es el 5 igual a Cin-Co-Mega-Virus.","ai":false,"noShuffle":false,"img":null},{"n":"vh2","q":"Algunos g\u00e9rmenes infecciosos son responsables de enfermedades no infecciosas. Cu\u00e1l es la respuesta FALSA:","o":["VPH a c\u00e1ncer de cuello uterino infiltrante","Helicobacter pylori a \u00falcera p\u00e9ptica","Herpesvirus humano tipo 8 a sarcoma de Kaposi","Virus Epstein-Barr (VEB) a meningioma"],"c":4,"e":"FALSA: el VEB NO se asocia a meningioma. El VEB (HHV-4) s\u00ed se asocia a: linfoma de Burkitt (\u00c1frica), carcinoma nasofar\u00edngeo (Asia), linfomas de Hodgkin y no-Hodgkin en inmunodeprimidos, leucoplasia oral vellosa (VIH). Los meningiomas son tumores men\u00edngeos de origen aracnoideo SIN relaci\u00f3n establecida con el VEB.","ai":false,"noShuffle":false,"img":null},{"n":"vh3","q":"Cu\u00e1l de las siguientes afirmaciones es VERDADERA respecto a la infecci\u00f3n por citomegalovirus (CMV):","o":["Es un virus de transmisi\u00f3n especialmente respiratoria ya que solo suele aislarse en secreciones respiratorias","La infecci\u00f3n por CMV puede ser el resultado del contacto con una cepa externa o la reactivaci\u00f3n del virus latente en el organismo","Los anticuerpos generados confieren protecci\u00f3n permanente y pueden ser utilizados para el diagn\u00f3stico","Los s\u00edntomas apenas dependen del estado inmunol\u00f3gico del paciente"],"c":2,"e":"VERDADERA: el CMV puede causar INFECCI\u00d3N PRIMARIA (por saliva, orina, sangre, leche materna o contacto sexual) o REACTIVACI\u00d3N de la infecci\u00f3n latente (especialmente en inmunodeprimidos). Los anticuerpos NO confieren protecci\u00f3n permanente. Los s\u00edntomas DEPENDEN MUCHO del estado inmunol\u00f3gico (grave en inmunodeprimidos, leve en inmunocompetentes).","ai":false,"noShuffle":false,"img":null},{"n":"vh4","q":"Respecto al virus VIH, se\u00f1ale la respuesta INCORRECTA:","o":["Es un retrovirus","Destruye fundamentalmente los linfocitos CD4","Afecta sobre todo a la inmunidad humoral","Actualmente no se puede curar pero s\u00ed controlar"],"c":3,"e":"INCORRECTA: el VIH afecta principalmente a la INMUNIDAD CELULAR (no humoral). Infecta y destruye los linfocitos T CD4+ (helper), que coordinan la respuesta inmune celular. La p\u00e9rdida de CD4+ conduce a susceptibilidad a infecciones oportunistas que explotan la inmunidad celular deficiente (toxoplasmosis, PCP, CMV, MAC, criptococosis).","ai":false,"noShuffle":false,"img":null},{"n":"vh5","q":"El omeprazol est\u00e1 contraindicado por interacci\u00f3n medicamentosa con:","o":["Darunavir","Atazanavir","Lopinavir","Saquinavir"],"c":2,"e":"El ATAZANAVIR (inhibidor de la proteasa) requiere pH \u00c1CIDO g\u00e1strico para su absorci\u00f3n intestinal. Los inhibidores de la bomba de protones (omeprazol, pantoprazol) aumentan el pH g\u00e1strico y REDUCEN SIGNIFICATIVAMENTE los niveles plasm\u00e1ticos de atazanavir hasta hacerlo ineficaz. Esta interacci\u00f3n es la m\u00e1s importante entre IBPs y antirretrovirales.","ai":false,"noShuffle":false,"img":null},{"n":"vh6","q":"Del siguiente perfil serol\u00f3gico del VHB (HBsAg positivo, Anti-HBs negativo, transaminasas alteradas), el paciente presenta:","o":["Infecci\u00f3n aguda por VHB","Portador sano","Infecci\u00f3n cr\u00f3nica con replicaci\u00f3n viral activa","Infecci\u00f3n cr\u00f3nica sin replicaci\u00f3n viral"],"c":3,"e":"HBsAg positivo = virus presente / Anti-HBs negativo = no eliminado ni vacunado / Transaminasas ALTERADAS = da\u00f1o hep\u00e1tico activo por replicaci\u00f3n. Corresponde a INFECCI\u00d3N CR\u00d3NICA CON REPLICACI\u00d3N. Portador sano tiene HBsAg positivo pero transaminasas NORMALES. Curaci\u00f3n = Anti-HBs positivo m\u00e1s HBsAg negativo.","ai":false,"noShuffle":false,"img":null},{"n":"vh7","q":"Cu\u00e1l de las siguientes combinaciones entre micosis y tratamiento antif\u00fangico es INCORRECTA:","o":["Aspergilosis pulmonar invasora: voriconazol","Mucormicosis en paciente con toxicidad por anfotericina B: posaconazol","Esofagitis por Candida krusei: fluconazol","Histoplasmosis diseminada: anfotericina B"],"c":3,"e":"INCORRECTA: Candida krusei (Pichia kudriavzevii) es INTR\u00cdNSECAMENTE RESISTENTE al fluconazol. El tratamiento de la candidiasis por C. krusei requiere equinocandinas o voriconazol. Las otras opciones son correctas: voriconazol = primera l\u00ednea aspergilosis invasora; posaconazol = alternativa en mucormicosis; anfotericina B = de elecci\u00f3n en histoplasmosis diseminada grave.","ai":false,"noShuffle":false,"img":null},{"n":"vh8","q":"Cu\u00e1l de los siguientes par\u00e1sitos es el causante m\u00e1s com\u00fan de la leishmaniasis visceral en la cuenca mediterr\u00e1nea:","o":["Leishmania braziliensis","Leishmania mexicana","Leishmania infantum","Leishmania tropica"],"c":3,"e":"LEISHMANIA INFANTUM (= L. chagasi en Am\u00e9rica) es el agente de la leishmaniasis visceral en la cuenca mediterr\u00e1nea, incluyendo Espa\u00f1a. Vector: fleb\u00f3tomo (Phlebotomus perniciosus). Reservorio principal: el PERRO. En Espa\u00f1a hay focos end\u00e9micos (destacado el brote de Fuenlabrada/Madrid en 2010).","ai":false,"noShuffle":false,"img":null},{"n":"vh9","q":"En la toxoplasmosis cong\u00e9nita, cu\u00e1l de las siguientes alteraciones forma parte de la cl\u00e1sica t\u00e9trada cl\u00ednica:","o":["Hipotiroidismo","Microtia","Retinocoroiditis bilateral","Cardiomegalia"],"c":3,"e":"La T\u00c9TRADA CL\u00c1SICA de la toxoplasmosis cong\u00e9nita (t\u00e9trada de Sabin): (1) RETINOCOROIDITIS bilateral (la m\u00e1s frecuente y caracter\u00edstica), (2) HIDROCEFALIA, (3) CALCIFICACIONES intracraneales periventriculares y (4) CONVULSIONES. La retinocoroiditis puede aparecer m\u00e1s tarde, incluso en infecciones inicialmente asintom\u00e1ticas.","ai":false,"noShuffle":false,"img":null},{"n":"vh10","q":"Cu\u00e1l es el tratamiento de elecci\u00f3n para un paciente inmunocompetente con leishmaniasis visceral:","o":["Metronidazol oral m\u00e1s paromomicina","Miltefosina durante 4 semanas","Anfotericina B liposomal 3 mg/kg/dia d\u00edas 1-5, 14 y 21","Trimetoprim/sulfametoxazol 800/160 mg"],"c":3,"e":"La ANFOTERICINA B LIPOSOMAL es el tratamiento de elecci\u00f3n de la leishmaniasis visceral en Europa. La formulaci\u00f3n liposomal reduce la nefrotoxicidad. La pauta OMS es 3 mg/kg/d\u00eda los d\u00edas 1-5, 14 y 21 (total 21 mg/kg). La miltefosina es una alternativa oral eficaz. El metronidazol y TMP-SMX no tienen actividad frente a Leishmania.","ai":false,"noShuffle":false,"img":null},{"n":"vh11","q":"Qu\u00e9 par\u00e1sito intestinal produce diarrea acuosa f\u00e9tida, distensi\u00f3n abdominal y puede asociar intolerancia a la lactosa:","o":["Entamoeba histolytica","Cryptosporidium parvum","Giardia lamblia","Isospora belli"],"c":3,"e":"GIARDIA LAMBLIA (G. intestinalis) produce giardiasis: diarrea acuosa F\u00c9TIDA (signo caracter\u00edstico), distensi\u00f3n abdominal, flatulencia, dolor epig\u00e1strico, y puede causar S\u00cdNDROME DE MALABSORCI\u00d3N con intolerancia a la lactosa secundaria por da\u00f1o de la mucosa del intestino delgado proximal. E. histolytica produce disenter\u00eda (heces con moco y sangre).","ai":false,"noShuffle":false,"img":null},{"n":"vh12","q":"Qu\u00e9 forma del Toxoplasma gondii es responsable de la reactivaci\u00f3n en pacientes inmunodeprimidos:","o":["Oocisto","Bradizo\u00edto","Quiste fecal","Taquizo\u00edto"],"c":2,"e":"Los BRADIZO\u00cdTOS forman los QUISTES TISULARES (en m\u00fasculo y cerebro) durante la fase cr\u00f3nica/latente. En pacientes inmunodeprimidos (especialmente CD4 menor de 100 cel/uL en VIH), los bradizo\u00edtos se reactivan transform\u00e1ndose en TAQUIZO\u00cdTOS (forma proliferativa e invasiva), causando encefalitis toxopl\u00e1smica. El oocisto es la forma infecciosa en las heces de gatos.","ai":false,"noShuffle":false,"img":null},{"n":"vh13","q":"Cu\u00e1l es la forma cl\u00ednica m\u00e1s grave de la amebiasis intestinal:","o":["Ameboma","Colitis ulcerada fulminante con megacolon t\u00f3xico","Diarrea intermitente","Disenter\u00eda amebiana leve"],"c":2,"e":"La COLITIS ULCERADA FULMINANTE CON MEGACOLON T\u00d3XICO es la forma m\u00e1s grave de amebiasis intestinal. Presenta: dilataci\u00f3n col\u00f3nica masiva, perforaci\u00f3n intestinal inminente, sepsis, peritonitis y alta mortalidad (mayor del 40%). Requiere tratamiento m\u00e9dico intensivo y frecuentemente colectom\u00eda urgente.","ai":false,"noShuffle":false,"img":null},{"n":"vh14","q":"Un paciente que tras regresar de un viaje al tr\u00f3pico presenta diarrea cr\u00f3nica y eosinofilia nos debe sugerir:","o":["Infecci\u00f3n por Salmonella","Amebiasis","Helmintiasis","C\u00f3lera"],"c":3,"e":"La EOSINOFILIA en el viajero que regresa del tr\u00f3pico con diarrea cr\u00f3nica sugiere HELMINTIASIS. La eosinofilia es una respuesta inmune caracter\u00edstica frente a par\u00e1sitos multicelulares (helmintos). La amebiasis, salmonelosis y c\u00f3lera NO producen eosinofilia significativa.","ai":false,"noShuffle":false,"img":null},{"n":"vh15","q":"Cu\u00e1l es la causa infecciosa que ocasiona la SEGUNDA CAUSA DE CEGUERA INFECCIOSA en el mundo, extendida por pa\u00edses de clima c\u00e1lido y h\u00famedo de \u00c1frica, Am\u00e9rica central y Sudam\u00e9rica:","o":["Wuchereria bancrofti","Trichinella spiralis","Schistosoma mansoni","Onchocerca volvulus"],"c":4,"e":"ONCHOCERCA VOLVULUS causa la oncocercosis (ceguera de los r\u00edos), la segunda causa de ceguera infecciosa en el mundo (despu\u00e9s del tracoma). Las microfilarias migran al ojo y causan queratitis cr\u00f3nica que lleva a la ceguera. End\u00e9mica de \u00c1frica subsahariana, Yemen y Am\u00e9rica central/Sudam\u00e9rica. Vector: mosca negra (Simulium). W. bancrofti produce filariasis linf\u00e1tica (elefantiasis).","ai":false,"noShuffle":false,"img":null},{"n":"vh16","q":"El s\u00edndrome de Loeffler se encuentra causado por:","o":["Ascaris lumbricoides","Uncinarias/tricoc\u00e9falos","Oxiuros","Onchocerca volvulus"],"c":1,"e":"El S\u00cdNDROME DE LOEFFLER es una neumonitis eosinof\u00edlica transitoria producida por el paso de las larvas de ASCARIS LUMBRICOIDES a trav\u00e9s de los pulmones (migraci\u00f3n larvaria). Las larvas penetran en el intestino delgado, migran por sangre hasta los pulmones, rompen los capilares alveolares, ascienden por la tr\u00e1quea y son deglutidas. Cl\u00ednica: tos, disnea, fiebre, eosinofilia y opacidades pulmonares transitorias.","ai":false,"noShuffle":false,"img":null},{"n":"vh17","q":"La SARNA NORUEGA es una variedad de escabiosis m\u00e1s frecuente en inmunodeprimidos, predispuesta por los siguientes factores con EXCEPCI\u00d3N de uno. Indique cu\u00e1l:","o":["Demencia senil","S\u00edndrome de Down","Hipervitaminosis A","Higiene deficiente"],"c":3,"e":"La HIPERVITAMINOSIS A no es un factor predisponente para la sarna noruega. Los factores predisponentes reconocidos son: inmunosupresi\u00f3n (VIH, corticoides, quimioterapia), enfermedades neurol\u00f3gicas (demencia, S\u00edndrome de Down) que impiden el rascado normal, e higiene deficiente. La sarna noruega tiene millones de \u00e1caros (vs. decenas en la sarna com\u00fan) y es altamente contagiosa.","ai":false,"noShuffle":false,"img":null}],"caso_brucelosis":[{"n":"cc1","q":"CASO CL\u00cdNICO BRUCELOSIS. Paciente de 35 a\u00f1os, 5 meses en India, fiebre de predominio vespertino (m\u00e1x. 39 grados), artromialgias, tos seca, p\u00e9rdida de 7 kg, astenia. Hepatoesplenomegalia y n\u00f3dulo pulmonar (posible granuloma) en imagen. Anal\u00edtica normal salvo PCR=32.\n\nSUB-PREGUNTA 1: Con los antecedentes cl\u00ednicos descritos, cu\u00e1l es el agente etiol\u00f3gico m\u00e1s probable inicialmente:","o":["Mycobacterium tuberculosis","Salmonella enterica serovar Typhi","Virus del Dengue","Ninguna de las anteriores"],"c":1,"e":"Con fiebre cr\u00f3nica vespertina, p\u00e9rdida de peso, tos seca, hepatoesplenomegalia y granuloma pulmonar en un paciente proveniente de India, el primer diagn\u00f3stico a considerar es TUBERCULOSIS. La TB produce fiebre de predominio vespertino, p\u00e9rdida de peso y granulomas pulmonares/hep\u00e1ticos. La Salmonella typhi provoca fiebre tifoidea m\u00e1s aguda y autolimitada. El dengue es autolimitado y no produce granulomas.","ai":false,"noShuffle":false,"img":null},{"n":"cc2","q":"CASO CL\u00cdNICO BRUCELOSIS - continuaci\u00f3n. El paciente ha estado en contacto directo con ganado (cordero, vaca, b\u00fafalo) y consum\u00eda leche reci\u00e9n orde\u00f1ada sin calentar. La familia se dedica a la extracci\u00f3n de leche. Ning\u00fan familiar presenta cl\u00ednica.\n\nSUB-PREGUNTA 2: Con esta nueva informaci\u00f3n, cambiar\u00edas la orientaci\u00f3n diagn\u00f3stica:","o":["No, sigo pensando que se trata de una Tuberculosis","Podr\u00eda tratarse de una Brucelosis","Buscar\u00eda otras causas de hepatoesplenomegalia y granulomas","Podr\u00eda tratarse de una Listeriosis"],"c":2,"e":"El contacto con ganado rumiante (vacas, ovejas, cabras, b\u00fafalos) y la ingesta de leche cruda sin pasteurizar son los factores de riesgo cl\u00e1sicos de la BRUCELOSIS. Brucella melitensis (ovino/caprino) y B. abortus (bovino) son las especies m\u00e1s frecuentes. La brucelosis produce FOD con hepatoesplenomegalia y granulomas, y fiebre ondulante. Esto cambia completamente la orientaci\u00f3n diagn\u00f3stica.","ai":false,"noShuffle":false,"img":null},{"n":"cc3","q":"CASO CL\u00cdNICO BRUCELOSIS - continuaci\u00f3n. Serolog\u00eda FOD: Rosa de Bengala POSITIVO. Brucellacapt (test inmunocaptura) POSITIVO. T\u00edtulo: 1/1280.\n\nSUB-PREGUNTA 3: Qu\u00e9 t\u00edtulo de anticuerpos se considerar\u00eda SIGNIFICATIVO en la prueba de Brucellacapt:","o":["Menor de 1/80","Menor de 1/320","Igual a 1/1280","Mayor o igual a 1/320"],"c":4,"e":"El t\u00edtulo SIGNIFICATIVO (positivo) en la prueba de Brucellacapt (inmunocaptura) es mayor o igual a 1/320. Un t\u00edtulo de 1/1280 como en el caso supera ampliamente este umbral y confirma el diagn\u00f3stico de brucelosis. El test de Rosa de Bengala es una prueba de cribado (alta sensibilidad, baja especificidad) y el Brucellacapt o la SAW (seroaglutinaci\u00f3n de Wright con t\u00edtulo mayor o igual a 1/160) confirman el diagn\u00f3stico.","ai":false,"noShuffle":false,"img":null},{"n":"cc4","q":"CASO CL\u00cdNICO BRUCELOSIS - continuaci\u00f3n. Hemocultivos a los 15 d\u00edas: crecimiento de Brucella melitensis. Antibiograma: sensible a cotrimoxazol, gentamicina, ciprofloxacino, doxiciclina y rifampicina.\n\nSUB-PREGUNTA 4: Qu\u00e9 tratamiento antimicrobiano pautar\u00edas:","o":["Imipenem 1g/8h iv, 4-6 semanas","Ceftriaxona 2g/dia iv, 4 semanas","Ampicilina 2g/6h iv m\u00e1s gentamicina 7mg/kg/dia iv, 3 semanas","Gentamicina 5mg/kg/dia iv 1-2 semanas m\u00e1s doxiciclina 100mg/12h vo 6 semanas"],"c":4,"e":"El tratamiento de elecci\u00f3n de la brucelosis es DOXICICLINA 100mg/12h durante 6 semanas m\u00e1s GENTAMICINA IV durante las primeras 1-2 semanas (pauta OMS). La combinaci\u00f3n doxiciclina m\u00e1s gentamicina tiene menor tasa de reca\u00eddas que doxiciclina m\u00e1s rifampicina. Los betalact\u00e1micos (ampicilina, ceftriaxona) NO son de elecci\u00f3n en brucelosis porque las tasas de reca\u00edda son altas.","ai":false,"noShuffle":false,"img":null},{"n":"cc5","q":"CASO CL\u00cdNICO BRUCELOSIS - continuaci\u00f3n.\n\nSUB-PREGUNTA 5: Cu\u00e1l de las siguientes complicaciones es la m\u00e1s FRECUENTE en la brucelosis:","o":["Endocarditis (la m\u00e1s grave)","Espondilitis","Meningitis","Glomerulonefritis"],"c":2,"e":"La ESPONDILITIS es la complicaci\u00f3n localizada m\u00e1s FRECUENTE de la brucelosis (afecta especialmente a la columna lumbar, L4-L5). La ENDOCARDITIS es la m\u00e1s GRAVE (aunque poco frecuente, con alta mortalidad) y la principal causa de muerte en la brucelosis. La artritis perif\u00e9rica tambi\u00e9n es frecuente. El diagn\u00f3stico diferencial de espondilodiscitis siempre debe incluir brucelosis en zonas ganaderas.","ai":false,"noShuffle":false,"img":null},{"n":"br1","q":"El diagnostico de brucelosis mas rapido y efectivo se realiza con:","o":["Test Coombs antibrucella","Seroaglutinacion de Wright","Hemocultivos","El test de Rosa de Bengala"],"c":4,"e":"El TEST DE ROSA DE BENGALA es la prueba de CRIBADO mas rapida para el diagnostico de brucelosis: aglutinacion en portaobjetos, resultado en minutos, sensibilidad superior al 99% en infeccion aguda. Es el test de eleccion para el cribado inicial. La seroaglutinacion de Wright confirma el diagnostico con titulos mayores o iguales a 1/160. Los hemocultivos tienen mayor especificidad pero tardan hasta 15 dias en crecer y requieren incubacion prolongada.","ai":false,"noShuffle":false,"img":null},{"n":"br2","q":"La complicacion mas tipica y frecuente de la brucelosis es:","o":["Endocarditis","Orquitis","Meningoencefalitis","Espondilodiscitis"],"c":4,"e":"La ESPONDILODISCITIS es la complicacion localizada mas FRECUENTE de la brucelosis, afectando especialmente la columna lumbar (L4-L5). La ENDOCARDITIS es la mas GRAVE (alta mortalidad, principal causa de muerte) pero es poco frecuente. La orquitis es frecuente en varones (30-40%) pero no la mas frecuente en general. La meningoencefalitis es una complicacion rara. El diagnostico diferencial de espondilodiscitis siempre debe incluir brucelosis en zonas ganaderas.","ai":false,"noShuffle":false,"img":null},{"n":"br3","q":"Respecto al germen de la brucelosis, senale la respuesta FALSA:","o":["Su virulencia depende de factores geneticos","Son extremadamente resistentes a la intemperie porque producen esporas","El germen que la produce es del genero Brucella","El genero Brucella se divide en 3 cepas diferentes"],"c":2,"e":"FALSA: Brucella NO produce ESPORAS. Es un coco-bacilo gramnegativo intracelular facultativo que NO tiene capacidad esporuladora. Su resistencia ambiental se debe a su lipopolisacarido (LPS) atipico y a otros factores de su membrana externa, no a esporas. B. anthracis (carbunco) si produce esporas, pero Brucella no. Las otras opciones son correctas: la virulencia depende de factores geneticos (genes virB, bvrS, bvrR), el genero es Brucella, y las especies de mayor interes medico son B. melitensis (ovinos/caprinos), B. abortus (bovinos) y B. suis (porcinos).","ai":false,"noShuffle":false,"img":null},{"n":"br4","q":"Respecto a las manifestaciones clinicas de la brucelosis, senale la respuesta FALSA:","o":["La Brucelosis es una enfermedad infecciosa de caracteristicas principalmente agudas","Las manifestaciones organicas reflejan la formacion de granulomas en diversos organos","El estadio de generalizacion es sinonimo de bacteriemia","Los sintomas tipicos del estadio de generalizacion son la hepatoesplenomegalia y la fiebre"],"c":1,"e":"FALSA: la brucelosis NO es una enfermedad de caracteristicas principalmente agudas. Al contrario, es una enfermedad de curso SUBAGUDO O CRONICO con inicio insidioso (semanas-meses de evolucion antes del diagnostico). Es precisamente la cronificacion una de sus caracteristicas mas importantes. Las otras opciones son correctas: los granulomas explican las manifestaciones organicas (hepatoesplenomegalia, espondilodiscitis), el estadio de generalizacion equivale a bacteriemia, y la fiebre ondulante con hepatoesplenomegalia es la presentacion tipica.","ai":false,"noShuffle":false,"img":null}],"sindromes":[{"n":"si1","q":"Cu\u00e1l de los siguientes NO es un criterio de qSOFA:","o":["L\u00e1ctico mayor de 2 mmol/L","Frecuencia respiratoria mayor de 22 respiraciones por minuto","Alteraci\u00f3n del sensorio (GCS menor de 15)","Presi\u00f3n arterial sist\u00f3lica menor de 100 mmHg"],"c":1,"e":"El L\u00c1CTICO mayor de 2 mmol/L es criterio de SHOCK S\u00c9PTICO (Sepsis-3), NO del qSOFA. Los 3 criterios del qSOFA son: (1) FR mayor o igual a 22 rpm, (2) Alteraci\u00f3n del nivel de conciencia (GCS menor de 15), (3) PAS menor o igual a 100 mmHg. El qSOFA se usa fuera de UCI para identificar pacientes con sospecha de sepsis.","ai":false,"noShuffle":false,"img":null},{"n":"si2","q":"Cu\u00e1l de los siguientes conceptos NO se incluye para identificar a un paciente con SEPSIS en las nuevas definiciones (Sepsis-3, 2016):","o":["Disfunci\u00f3n org\u00e1nica potencialmente mortal","Aumento en la escala SOFA de 2 o m\u00e1s puntos respecto al basal","Respuesta inapropiada del hu\u00e9sped a la infecci\u00f3n","S\u00edndrome de respuesta inflamatoria sist\u00e9mica (SIRS)"],"c":4,"e":"El SIRS fue ELIMINADO de la definici\u00f3n de sepsis en Sepsis-3 (2016). La nueva definici\u00f3n es: DISFUNCI\u00d3N ORG\u00c1NICA (SOFA mayor o igual a 2 puntos) potencialmente mortal causada por una RESPUESTA INAPROPIADA DEL HU\u00c9SPED a la infecci\u00f3n. El SIRS era muy inespec\u00edfico (tambi\u00e9n en trauma, quemaduras, pancreatitis).","ai":false,"noShuffle":false,"img":null},{"n":"si3","q":"Un paciente con infecci\u00f3n de partes blandas, l\u00e1ctico 4 mmol/L, TAS 60 mmHg. Tras 100ml de suero salino isot\u00f3nico la presi\u00f3n arterial no sufre cambios y se mantiene en 60 mmHg. El paciente tiene:","o":["SIRS","Sepsis grave","Shock s\u00e9ptico","Shock s\u00e9ptico refractario"],"c":3,"e":"SHOCK S\u00c9PTICO (Sepsis-3): sepsis con hipotensi\u00f3n persistente que REQUIERE VASOPRESORES para mantener PAM mayor de 65 mmHg m\u00e1s l\u00e1ctico mayor de 2 mmol/L a pesar de reposici\u00f3n de volumen adecuada. En este caso: sepsis m\u00e1s l\u00e1ctico 4 m\u00e1s hipotensi\u00f3n refractaria a volumen = SHOCK S\u00c9PTICO. La mortalidad supera el 40%. Sepsis grave ya no existe en la terminolog\u00eda Sepsis-3.","ai":false,"noShuffle":false,"img":null},{"n":"si4","q":"La FOD Cl\u00e1sica del adulto se define seg\u00fan la clasificaci\u00f3n modificada de Durack y Street con excepci\u00f3n de una de ellas. Indique cu\u00e1l:","o":["Duraci\u00f3n de la fiebre superior a 3 semanas","Fiebre de 38,3 grados objetivada en m\u00e1s de 3 determinaciones","Ausencia de diagn\u00f3stico tras las investigaciones oportunas realizadas despu\u00e9s de al menos 3 consultas","Ausencia de diagn\u00f3stico tras 3 d\u00edas de investigaci\u00f3n intrahospitalaria"],"c":4,"e":"La definici\u00f3n cl\u00e1sica de FOD modificada (Durack y Street) requiere: fiebre mayor de 38.3 grados en m\u00e1s de 3 ocasiones m\u00e1s duraci\u00f3n mayor de 3 semanas m\u00e1s ausencia de diagn\u00f3stico tras AL MENOS 3 CONSULTAS AMBULATORIAS o 3 d\u00edas de hospitalizaci\u00f3n con investigaciones adecuadas. La opci\u00f3n D no representa fielmente el criterio completo de la definici\u00f3n cl\u00e1sica.","ai":false,"noShuffle":false,"img":null},{"n":"si5","q":"La infecci\u00f3n de piel y partes blandas que comporta de MAYOR GRAVEDAD es:","o":["For\u00fanculo","Imp\u00e9tigo","Fascitis necrotizante","Erisipela","\u00c1ntrax"],"c":3,"e":"La FASCITIS NECROTIZANTE es la infecci\u00f3n de partes blandas m\u00e1s grave. Produce necrosis del tejido subcut\u00e1neo y fascia, mortalidad del 20-40% incluso con tratamiento. Requiere DESBRIDAMIENTO QUIR\u00daRGICO AGRESIVO urgente m\u00e1s antibioterapia de amplio espectro m\u00e1s soporte UCI. El diagn\u00f3stico tard\u00edo es catastr\u00f3fico. Erisipela y celulitis son graves pero no al nivel de la fascitis.","ai":false,"noShuffle":false,"img":null},{"n":"si6","q":"Cu\u00e1l de las siguientes NO es indicaci\u00f3n de tratamiento de la bacteriuria asintom\u00e1tica:","o":["Mujer embarazada","Paciente inmunodeprimido","Bacteriuria persistente tras intervenci\u00f3n urol\u00f3gica","Paciente portador de sonda vesical"],"c":4,"e":"El paciente PORTADOR DE SONDA VESICAL con bacteriuria asintom\u00e1tica NO debe tratarse con antibi\u00f3ticos: aumenta la resistencia sin beneficio cl\u00ednico. Indicaciones de tratar la bacteriuria asintom\u00e1tica: (1) EMBARAZADAS, (2) PREVIA A MANIPULACI\u00d3N UROL\u00d3GICA con riesgo de sangrado, (3) Trasplante renal reciente. El inmunodeprimido TAMPOCO es indicaci\u00f3n est\u00e1ndar a menos que haya otros factores.","ai":false,"noShuffle":false,"img":null},{"n":"si7","q":"Cu\u00e1l es el microorganismo que m\u00e1s frecuentemente causa infecci\u00f3n en el tracto urinario en la comunidad:","o":["Proteus mirabilis","Klebsiella pneumoniae","E. coli","Pseudomonas aeruginosa"],"c":3,"e":"E. COLI es el agente causal del 70-85% de las infecciones urinarias en la comunidad. Otros agentes comunes: Klebsiella (5-10%), Proteus mirabilis (ureasa positivo, litiasis de estruvita), Staphylococcus saprophyticus (IU en mujeres j\u00f3venes). Pseudomonas es m\u00e1s frecuente en infecciones nosocomiales y pacientes con cat\u00e9ter.","ai":false,"noShuffle":false,"img":null},{"n":"si8","q":"Cu\u00e1l de las siguientes medidas en la prevenci\u00f3n de infecciones urinarias relacionadas con la asistencia sanitaria NO se ha mostrado eficaz:","o":["Limitaci\u00f3n del periodo del uso de la sonda urinaria","Mantenimiento de un sistema de drenaje urinario cerrado","Uso de antibi\u00f3ticos de acci\u00f3n sist\u00e9mica previo al sondaje urinario","T\u00e9cnica de asepsia en la inserci\u00f3n"],"c":3,"e":"El uso de ANTIBI\u00d3TICOS SIST\u00c9MICOS PREVIOS al sondaje urinario NO se ha demostrado eficaz en la prevenci\u00f3n de ITU relacionada con la asistencia sanitaria. Adem\u00e1s, promueve la selecci\u00f3n de microorganismos resistentes. Las medidas eficaces son: retirada precoz de la sonda, sistema de drenaje CERRADO, t\u00e9cnica as\u00e9ptica en la inserci\u00f3n.","ai":false,"noShuffle":false,"img":null},{"n":"si9","q":"En qu\u00e9 patr\u00f3n radiol\u00f3gico neum\u00f3nico es caracter\u00edstico el BRONCOGRAMA A\u00c9REO:","o":["Bronconeumon\u00eda","Neumon\u00eda alveolar","Neumon\u00eda intersticial","Neumon\u00eda necrotizante"],"c":2,"e":"El BRONCOGRAMA A\u00c9REO (visualizaci\u00f3n de los bronquios rellenos de aire sobre un fondo de par\u00e9nquima opacificado) es caracter\u00edstico de la NEUMON\u00cdA ALVEOLAR (o lobar). En la neumon\u00eda alveolar, el exudado inflamatorio llena los alv\u00e9olos pero los bronquios permanecen permeables. En la bronconeumon\u00eda el patr\u00f3n es parcheado. En la neumon\u00eda intersticial el patr\u00f3n es de vidrio esmerilado bilateral sin broncograma.","ai":false,"noShuffle":false,"img":null},{"n":"si10","q":"Relaci\u00f3n verdadera entre pat\u00f3geno y fuente de exposici\u00f3n en neumon\u00edas:","o":["Aparatos de refrigeraci\u00f3n a Legionella pneumophila","Ahogamiento en agua dulce a Streptococcus pneumoniae","Exposici\u00f3n a ganado a Haemophilus influenzae","Diabetes a Pseudomonas aeruginosa"],"c":1,"e":"CORRECTA: Legionella pneumophila se asocia a sistemas de agua y climatizaci\u00f3n (torres de refrigeraci\u00f3n, conducciones de agua caliente, jacuzzis). Otras asociaciones: Coxiella burnetii a ganado ovino (partos); Pseudomonas a inmunodeprimidos, ventilaci\u00f3n mec\u00e1nica, EPOC. La Legionella causa brotes epid\u00e9micos en hoteles, hospitales y centros de trabajo.","ai":false,"noShuffle":false,"img":null},{"n":"si11","q":"Se\u00f1ale la FALSA: Pneumocystis jirovecii produce neumon\u00eda de patr\u00f3n alveolar.","o":["Esta afirmaci\u00f3n es FALSA: PCP produce patr\u00f3n intersticial/en vidrio esmerilado bilateral","Esta afirmaci\u00f3n es VERDADERA: PCP puede producir consolidaci\u00f3n alveolar t\u00edpica","Esta afirmaci\u00f3n es VERDADERA: PCP produce condensaci\u00f3n lobar cl\u00e1sica","Esta afirmaci\u00f3n es VERDADERA: PCP puede confundirse con una neumon\u00eda bacteriana lobar"],"c":1,"e":"FALSA: Pneumocystis jirovecii produce NEUMON\u00cdA INTERSTICIAL (no alveolar), con patr\u00f3n en VIDRIO ESMERILADO bilateral y perihiliar en la TC/Rx de t\u00f3rax. Es caracter\u00edstica la imagen en alas de mariposa. La neumon\u00eda alveolar (consolidaci\u00f3n, broncograma a\u00e9reo) es caracter\u00edstica de bacterias como S. pneumoniae. La PCP es la infecci\u00f3n oportunista m\u00e1s frecuente en pacientes con VIH y CD4 menor de 200 cel/uL.","ai":false,"noShuffle":false,"img":null},{"n":"si12","q":"Las 5 rutas a trav\u00e9s de las cuales los g\u00e9rmenes penetran en la articulaci\u00f3n y pueden provocar artritis s\u00e9ptica son:","o":["Diseminaci\u00f3n hemat\u00f3gena, osteomielitis, por propagaci\u00f3n, tras procedimientos terap\u00e9uticos, por inoculaci\u00f3n directa","Diseminaci\u00f3n linf\u00e1tica, osteomielitis, por propagaci\u00f3n, tras procedimientos terap\u00e9uticos, por inoculaci\u00f3n directa","Diseminaci\u00f3n hemat\u00f3gena, cistitis, por propagaci\u00f3n, tras procedimientos terap\u00e9uticos, por inoculaci\u00f3n directa","Diseminaci\u00f3n linf\u00e1tica, osteomielitis, por propagaci\u00f3n, tras procedimientos terap\u00e9uticos, por inoculaci\u00f3n de vacunas"],"c":1,"e":"Las 5 rutas de entrada de g\u00e9rmenes en la articulaci\u00f3n son: (1) DISEMINACI\u00d3N HEMAT\u00d3GENA (la m\u00e1s frecuente), (2) EXTENSI\u00d3N DESDE OSTEOMIELITIS adyacente, (3) PROPAGACI\u00d3N POR CONTIG\u00dcIDAD desde tejidos blandos periarticulares, (4) TRAS PROCEDIMIENTOS TERAP\u00c9UTICOS (artrocentesis, infiltraciones, artroscopia, pr\u00f3tesis) y (5) INOCULACI\u00d3N DIRECTA (traumatismo penetrante, mordedura). La diseminaci\u00f3n linf\u00e1tica no es una ruta reconocida.","ai":false,"noShuffle":false,"img":null},{"n":"si13","q":"La artritis s\u00e9ptica no gonoc\u00f3cica: la localizaci\u00f3n m\u00e1s frecuente es:","o":["Hombro","Mu\u00f1eca","Rodilla","Esternoclavicular","Cadera"],"c":3,"e":"La RODILLA es la localizaci\u00f3n m\u00e1s frecuente de la artritis s\u00e9ptica no gonoc\u00f3cica (30-50% de los casos). Le siguen la cadera, el hombro, la mu\u00f1eca y el tobillo. En ADVP son frecuentes la sacroil\u00edaca y esternoclavicular. En neonatos, la cadera es la m\u00e1s afectada. La artritis gonoc\u00f3cica afecta preferentemente articulaciones peque\u00f1as de las manos y mu\u00f1ecas.","ai":false,"noShuffle":false,"img":null},{"n":"si14","q":"Mujer de 58 a\u00f1os con DM2 y gonartrosis derecha. Tras infiltraci\u00f3n con corticoides hace 6 d\u00edas, presenta dolor intenso, inflamaci\u00f3n progresiva, fiebre y derrame articular purulento en la artrocentesis. Cu\u00e1l es la conducta diagn\u00f3stica y terap\u00e9utica m\u00e1s correcta:","o":["Antibioterapia emp\u00edrica IV con cobertura para S. aureus y espec\u00edfica cuando se disponga de cultivo y antibiograma","An\u00e1lisis del l\u00edquido y cultivo. Si confirma artritis s\u00e9ptica realizar drenaje quir\u00fargico y antibioterapia espec\u00edfica","Punci\u00f3n articular guiada por ECO para desbridamiento y antibioterapia local intrarticular","Artrocentesis de repetici\u00f3n hasta lograr la reducci\u00f3n de los s\u00edntomas inflamatorios","Drenaje quir\u00fargico urgente y antibioterapia IV emp\u00edrica hasta disponer del antibiograma"],"c":1,"e":"La artritis s\u00e9ptica es una urgencia m\u00e9dica. La conducta correcta es iniciar ANTIBIOTERAPIA EMP\u00cdRICA IV con cobertura para S. aureus (el germen m\u00e1s frecuente) de forma INMEDIATA, sin esperar al cultivo, combinada con drenaje articular. S. aureus es el agente m\u00e1s frecuente y en el contexto de una infiltraci\u00f3n reciente con corticoides, la sospecha es a\u00fan mayor.","ai":false,"noShuffle":false,"img":null},{"n":"si15","q":"Respecto a la artritis s\u00e9ptica, cu\u00e1l de las siguientes respuestas es CORRECTA:","o":["S. aureus y S. pneumoniae son microorganismos frecuentemente implicados y poco lesivos","La artritis gonoc\u00f3cica es la forma habitualmente m\u00e1s destructiva de la articulaci\u00f3n","La artritis s\u00e9ptica es un proceso infeccioso local de curso habitualmente benigno y con pocas complicaciones","Debemos realizar artrocentesis e iniciar tratamiento antibi\u00f3tico emp\u00edrico ante sospecha cl\u00ednica"],"c":4,"e":"CORRECTA: ante sospecha cl\u00ednica de artritis s\u00e9ptica, la conducta es realizar ARTROCENTESIS (para an\u00e1lisis y cultivo del l\u00edquido sinovial) e iniciar de forma inmediata ANTIBIOTERAPIA EMP\u00cdRICA IV. S. aureus es extremadamente lesivo (destruye el cart\u00edlago articular en horas-d\u00edas). La artritis gonoc\u00f3cica es la MENOS destructiva entre las artritis s\u00e9pticas.","ai":false,"noShuffle":false,"img":null},{"n":"si16","q":"Var\u00f3n de 58 a\u00f1os con pr\u00f3tesis articular en rodilla derecha hace 3 meses. Consulta por dolor intenso, inflamaci\u00f3n y fiebre de 2 d\u00edas. Derrame articular a tensi\u00f3n. Cu\u00e1l es la conducta m\u00e1s correcta:","o":["Inmovilizaci\u00f3n de la articulaci\u00f3n con analgesia y drenajes diarios hasta resoluci\u00f3n","Artrocentesis, hemocultivos e iniciar antibioterapia IV emp\u00edrica para S. aureus con limpieza quir\u00fargica local precoz","Hemocultivos e iniciar antibioterapia emp\u00edrica para Pseudomona sin limpieza quir\u00fargica","Hemocultivos, retirada de pr\u00f3tesis e iniciar antibioterapia IV emp\u00edrica con nueva pr\u00f3tesis tras 12 d\u00edas de ATB"],"c":2,"e":"En la INFECCI\u00d3N PRECOZ de pr\u00f3tesis articular (menos de 3 meses) con pr\u00f3tesis estable: artrocentesis m\u00e1s hemocultivos m\u00e1s antibioterapia IV emp\u00edrica con cobertura de S. aureus m\u00e1s DESBRIDAMIENTO QUIR\u00daRGICO PRECOZ con retenci\u00f3n de la pr\u00f3tesis si es estable (DAIR: Desbridamiento, Antibioterapia, Irrigaci\u00f3n, Retenci\u00f3n). La retirada se reserva para pr\u00f3tesis inestables o fracaso del DAIR.","ai":false,"noShuffle":false,"img":null},{"n":"si17","q":"Uno de los siguientes microorganismos est\u00e1 frecuentemente implicado en los cuadros de artritis s\u00e9ptica de la articulaci\u00f3n sacroil\u00edaca en el paciente ADVP:","o":["Candida albicans","Staphylococcus aureus","Streptococcus pyogenes","Pseudomonas aeruginosa"],"c":2,"e":"STAPHYLOCOCCUS AUREUS es el microorganismo m\u00e1s frecuente en la artritis s\u00e9ptica sacroil\u00edaca del paciente ADVP (aunque Pseudomonas aeruginosa es el segundo m\u00e1s frecuente en este contexto). En los ADVP, las artritis s\u00e9pticas tienen preferencia por articulaciones axiales (sacroil\u00edaca, esternoclavicular).","ai":false,"noShuffle":false,"img":null},{"n":"si18","q":"Se consideran criterios de infecci\u00f3n \u00f3sea prot\u00e9sica todos los siguientes EXCEPTO:","o":["Presencia de f\u00edstulas cut\u00e1neas","Crecimiento de un microorganismo en cultivo del LS o en tejido periprot\u00e9sico","Cualquier cultivo positivo para Brucella spp, Salmonella spp o Mycobacterium tuberculosis","Inflamaci\u00f3n aguda en histopatolog\u00eda de tejido periprot\u00e9sico sin otra causa"],"c":2,"e":"El crecimiento de un microorganismo en UN SOLO cultivo del l\u00edquido sinovial o tejido periprot\u00e9sico puede representar contaminaci\u00f3n de la muestra. Los criterios mayores requieren 2 o m\u00e1s cultivos del mismo microorganismo. La opci\u00f3n B por tanto puede no cumplirse por s\u00ed sola. Esta pregunta puede considerarse impugnada seg\u00fan la versi\u00f3n de los criterios de infecci\u00f3n prot\u00e9sica utilizada.","ai":true,"imp":true,"noShuffle":false,"img":null},{"n":"si19","q":"El diagn\u00f3stico de brucelosis m\u00e1s r\u00e1pido y efectivo se realiza con:","o":["El test Coombs antibrucella","La seroaglutinaci\u00f3n de Wright","Los hemocultivos","El test de Rosa de Bengala"],"c":4,"e":"El TEST DE ROSA DE BENGALA es la prueba de cribado de MAYOR RAPIDEZ para el diagn\u00f3stico de brucelosis: prueba de aglutinaci\u00f3n en portaobjetos que da resultado en minutos, con alta sensibilidad (mayor del 99%) en infecci\u00f3n aguda. Es el test de elecci\u00f3n para cribado inicial. La seroaglutinaci\u00f3n de Wright confirma el diagn\u00f3stico con t\u00edtulos mayor o igual a 1/160.","ai":false,"noShuffle":false,"img":null},{"n":"si20","q":"Se\u00f1ala la causa m\u00e1s frecuente de URETRITIS:","o":["Neisseria gonorrhoeae","Mycoplasma genitalium","Chlamydia trachomatis","Tricomonas vaginalis"],"c":3,"e":"CHLAMYDIA TRACHOMATIS es la causa m\u00e1s frecuente de uretritis NO GONOC\u00d3CICA (UNG), que es a su vez m\u00e1s frecuente que la gonoc\u00f3cica. Causas de UNG en orden de frecuencia: Chlamydia trachomatis (40-50%), Mycoplasma genitalium (15-20%), Ureaplasma urealyticum (10-15%). La uretritis gonoc\u00f3cica (N. gonorrhoeae) es m\u00e1s sintom\u00e1tica pero menos frecuente que la no gonoc\u00f3cica en pa\u00edses desarrollados.","ai":false,"noShuffle":false,"img":null},{"n":"si21","q":"Cu\u00e1l de estas NO se considera una Infecci\u00f3n de Transmisi\u00f3n Sexual (ITS):","o":["Linfogranuloma ven\u00e9reo","Linfogranuloma inguinal (chancroide)","Vaginosis bacteriana","Chancroide"],"c":3,"e":"La VAGINOSIS BACTERIANA no se considera cl\u00e1sicamente una ITS aunque se asocia con la actividad sexual. Es un s\u00edndrome por disbiosis vaginal (predominio de Gardnerella vaginalis y anaerobios sobre Lactobacillus) sin un \u00fanico pat\u00f3geno causante. No se recomienda tratamiento del compa\u00f1ero sexual. Las ITS cl\u00e1sicas incluyen: gonorrea, s\u00edfilis, clamidiasis, linfogranuloma ven\u00e9reo, chancroide, herpes genital, VPH, VIH, tricomoniasis.","ai":false,"noShuffle":false,"img":null},{"n":"si22","q":"Mujer de 34 a\u00f1os con fiebre elevada, cefalea intensa y disminuci\u00f3n del nivel de conciencia de menos de 12h de evoluci\u00f3n. TA 97/56 mmHg, FC 110 lpm, GCS 10/15, T 38,6 grados, estuporosa, rigidez de nuca, signo de Kernig. Ausencia de petequias. Qu\u00e9 tratamiento indicar\u00eda de forma emp\u00edrica:","o":["Cefotaxima, vancomicina, ampicilina y dexametasona","Meropenem, vancomicina y dexametasona","Cefotaxima, vancomicina y dexametasona","Cefotaxima y vancomicina"],"c":3,"e":"Meningitis bacteriana aguda en adulto joven sin factores de riesgo especiales: tratamiento emp\u00edrico = CEFOTAXIMA (o ceftriaxona) + VANCOMICINA + DEXAMETASONA. La cefotaxima cubre S. pneumoniae y N. meningitidis (los m\u00e1s frecuentes). La vancomicina se a\u00f1ade por el riesgo de S. pneumoniae resistente a penicilina. La dexametasona reduce las complicaciones (sordera). La ampicilina solo se a\u00f1ade si hay riesgo de Listeria (mayor de 50 a\u00f1os, inmunodeprimidos, embarazo). Aqu\u00ed no est\u00e1 indicada.","ai":false,"noShuffle":false,"img":null},{"n":"si23","q":"Paciente de 34 a\u00f1os con sospecha de meningitis bacteriana. Cu\u00e1l ser\u00eda la secuencia correcta de procedimientos a realizar:","o":["Hemocultivos, antibi\u00f3tico emp\u00edrico (ceftriaxona), fondo de ojo y punci\u00f3n lumbar","Hemocultivos, fondo de ojo, punci\u00f3n lumbar y antibi\u00f3tico emp\u00edrico con cefotaxima y esteroides","Antibi\u00f3tico emp\u00edrico, TC craneal y punci\u00f3n lumbar","Hemocultivos, antibi\u00f3tico emp\u00edrico (ceftriaxona m\u00e1s vancomicina) y esteroides, fondo de ojo y punci\u00f3n lumbar"],"c":4,"e":"Secuencia correcta: (1) HEMOCULTIVOS, (2) ANTIBI\u00d3TICO EMP\u00cdRICO + DEXAMETASONA inmediatamente (sin esperar la PL), (3) FONDO DE OJO para descartar hipertensi\u00f3n intracraneal antes de la PL, (4) TC craneal si hay datos de HTIC o d\u00e9ficit focal, (5) PUNCI\u00d3N LUMBAR. El antibi\u00f3tico NUNCA debe retrasarse por esperar la PL o el TC.","ai":false,"noShuffle":false,"img":null},{"n":"si24","q":"Cu\u00e1l de estas medidas NO favorece la prevenci\u00f3n de infecci\u00f3n nosocomial de bacterias en cat\u00e9ter (BRC):","o":["Colocar v\u00edas de pocas luces","Colocaci\u00f3n de v\u00eda subclavia","Aportaci\u00f3n de soluciones lip\u00eddicas endovenosas","Lavado de manos antes de colocar la v\u00eda","Uso de medidas barrera antes de colocar la v\u00eda"],"c":3,"e":"La aportaci\u00f3n de SOLUCIONES LIP\u00cdDICAS ENDOVENOSAS (nutrici\u00f3n parenteral con l\u00edpidos) FAVORECE la infecci\u00f3n del cat\u00e9ter: las emulsiones lip\u00eddicas son un excelente medio de cultivo para hongos (especialmente Candida y Malassezia furfur) y bacterias. NO es una medida preventiva. Las medidas que S\u00cd previenen la BRC: pocas luces, v\u00eda subclavia, lavado de manos (la m\u00e1s eficaz), m\u00e1ximas medidas barrera y clorhexidina.","ai":false,"noShuffle":false,"img":null},{"n":"si25","q":"Tratamiento antibi\u00f3tico emp\u00edrico en paciente con bacteriemia relacionada con cat\u00e9ter (BRC) y estabilidad hemodin\u00e1mica:","o":["Vancomicina y gentamicina","Penicilina G y cloxacilina","Daptomicina y cefepima","Fluconazol y vancomicina"],"c":3,"e":"El tratamiento emp\u00edrico de la BRC en paciente estable es DAPTOMICINA + CEFEPIMA: la daptomicina cubre grampositivos (incluyendo S. coagulasa-negativo y SARM, los agentes m\u00e1s frecuentes de BRC), y la cefepima cubre gramnegativos (incluyendo Pseudomona). La vancomicina es alternativa a la daptomicina para gram positivos.","ai":false,"noShuffle":false,"img":null},{"n":"si26","q":"La etiolog\u00eda m\u00e1s frecuente en la bacteriemia relacionada con los cat\u00e9teres (BRC) es:","o":["Pseudomonas aeruginosa","Staphylococcus coagulasa-negativos (SCN)","Enterococcus","Estreptococos"],"c":2,"e":"Los ESTAFILOCOCOS COAGULASA-NEGATIVOS (S. epidermidis principalmente) son la causa m\u00e1s frecuente de BRC (30-40% de los casos). Le siguen: S. aureus (el m\u00e1s grave, con alta mortalidad), Candida spp, gramnegativos. Los SCN forman biofilm sobre el cat\u00e9ter y son resistentes a muchos antibi\u00f3ticos.","ai":false,"noShuffle":false,"img":null},{"n":"si27","q":"Paciente de 65 a\u00f1os ingresado por ictus, cat\u00e9ter venoso perif\u00e9rico. A las 48h desarrolla fiebre 38,5 grados y signos flog\u00f3ticos con supuraci\u00f3n franca en el punto de inserci\u00f3n del cat\u00e9ter. Tras obtener hemocultivos, qu\u00e9 har\u00eda a continuaci\u00f3n:","o":["Retirar\u00eda el cat\u00e9ter e iniciar\u00eda de forma emp\u00edrica vancomicina","Mantendr\u00eda el cat\u00e9ter ya que no presenta repercusi\u00f3n hemodin\u00e1mica e iniciar\u00eda cloxacilina","Retirar\u00eda el cat\u00e9ter y esperar\u00eda al resultado de los hemocultivos antes de iniciar ATB","Retirar\u00eda el cat\u00e9ter e iniciar\u00eda de forma emp\u00edrica Linezolid"],"c":1,"e":"La conducta correcta es: RETIRADA INMEDIATA DEL CAT\u00c9TER (especialmente con signos locales de infecci\u00f3n como la supuraci\u00f3n franca) + inicio de VANCOMICINA EMP\u00cdRICA (cobertura de S. coagulasa-negativos y SARM, los agentes m\u00e1s frecuentes de infecci\u00f3n de cat\u00e9ter perif\u00e9rico). No se debe esperar al cultivo cuando hay signos claros de infecci\u00f3n del cat\u00e9ter.","ai":false,"noShuffle":false,"img":null},{"n":"si28","q":"Cu\u00e1l de las siguientes NO es una indicaci\u00f3n en s\u00ed misma de cirug\u00eda en un paciente con endocarditis:","o":["Desarrollo de un absceso intramioc\u00e1rdico con bloqueo aur\u00edculo-ventricular asociado","Desarrollo de insuficiencia card\u00edaca aguda por rotura valvular","Endocarditis sobre v\u00e1lvula nativa por Aggregatibacter actinomycetemcomitans","Persistencia de hemocultivos positivos tras 7 d\u00edas de tratamiento antibi\u00f3tico correcto"],"c":3,"e":"La endocarditis por AGGREGATIBACTER ACTINOMYCETEMCOMITANS (organismo HACEK) generalmente responde bien al tratamiento antibi\u00f3tico (ceftriaxona o amoxicilina-clavul\u00e1nico) sin necesidad de cirug\u00eda en la mayor\u00eda de los casos. No es una indicaci\u00f3n quir\u00fargica por s\u00ed misma. Las otras opciones S\u00cd son indicaciones quir\u00fargicas: absceso perianular con BAV (indica extensi\u00f3n de la infecci\u00f3n), IC aguda por rotura valvular (emergencia) y hemocultivos positivos persistentes.","ai":false,"noShuffle":false,"img":null},{"n":"si29","q":"En relaci\u00f3n con la epidemiolog\u00eda de la endocarditis infecciosa, se\u00f1ale la asociaci\u00f3n INCORRECTA:","o":["Enterococo es la causa m\u00e1s frecuente en relaci\u00f3n a manipulaciones genitourinarias","S. gallolyticus causa m\u00e1s frecuente relacionada con el c\u00e1ncer de colon","Staphylococcus aureus: causa m\u00e1s frecuente en v\u00e1lvula nativa","Staphylococcus aureus: causa m\u00e1s frecuente en v\u00e1lvula prot\u00e9sica precoz (menos de 2 meses)"],"c":4,"e":"INCORRECTA: la causa m\u00e1s frecuente de endocarditis sobre V\u00c1LVULA PROT\u00c9SICA PRECOZ (menos de 2 meses) NO es S. aureus sino S. EPIDERMIDIS (y otros SCN). Los SCN contaminan la pr\u00f3tesis durante la cirug\u00eda card\u00edaca y forman biofilm. S. aureus es la causa m\u00e1s frecuente en v\u00e1lvula nativa. En la v\u00e1lvula prot\u00e9sica tard\u00eda (m\u00e1s de 12 meses), el espectro se asemeja a la v\u00e1lvula nativa.","ai":false,"noShuffle":false,"img":null},{"n":"si30","q":"Var\u00f3n de 84 a\u00f1os con marcapasos bicameral, mal estado general de varios d\u00edas y sensaci\u00f3n dist\u00e9rmica. En la exploraci\u00f3n f\u00edsica destacan lesiones ungueales (hemorragias en astilla). Qu\u00e9 sospecha cl\u00ednica y exploraciones solicitar\u00edas:","o":["S\u00edndrome paraneopl\u00e1sico. PET-TAC","Onicomicosis. Biopsia ungueal","Endocarditis. Hemocultivos","Melanoma. Biopsia de la lesi\u00f3n"],"c":3,"e":"Las HEMORRAGIAS EN ASTILLA subungueales son uno de los signos perif\u00e9ricos cl\u00e1sicos de la ENDOCARDITIS INFECCIOSA (junto con los n\u00f3dulos de Osler, manchas de Janeway, manchas de Roth, petequias conjuntivales). En un paciente con marcapasos (factor de riesgo de infecci\u00f3n de dispositivo card\u00edaco), mal estado general y fiebre, la endocarditis es la primera sospecha. Los HEMOCULTIVOS son la exploraci\u00f3n m\u00e1s importante y deben extraerse ANTES del antibi\u00f3tico.","ai":false,"noShuffle":false,"img":null},{"n":"si31","q":"La endocarditis del paciente ADVP: entre sus caracter\u00edsticas particulares, todas figuran EXCEPTO:","o":["Ausencia de insuficiencia card\u00edaca","Implicaci\u00f3n frecuente de Staphylococcus aureus meticil\u00edn-resistente (SARM)","Excepcional necesidad de tratamiento quir\u00fargico","Posibilidad de limitar la duraci\u00f3n de tratamiento antibi\u00f3tico a 2 semanas"],"c":2,"e":"La endocarditis sobre v\u00e1lvula TRIC\u00daSPIDE en ADVP se caracteriza por: afecta al coraz\u00f3n derecho, causa embolia PULMONAR (no sist\u00e9mica), AUSENCIA de IC (el VD compensa), excepcional necesidad de cirug\u00eda, y puede tratarse con pautas cortas (2 semanas con beta-lact\u00e1mico si S. aureus sensible a meticilina). El agente m\u00e1s frecuente es S. aureus pero habitualmente SENSIBLE a meticilina (SASM), NO SARM.","ai":false,"noShuffle":false,"img":null},{"n":"si32","q":"Respecto a las infecciones relacionadas con la asistencia sanitaria, se\u00f1ale la FALSA:","o":["El principal factor de riesgo de infecci\u00f3n nosocomial quir\u00fargica es el grado de contaminaci\u00f3n durante el procedimiento","La aparici\u00f3n de sistemas urinarios cerrados ha AUMENTADO las infecciones urinarias nosocomiales","Es la que adquiere el enfermo durante su estancia en el hospital aunque los s\u00edntomas aparezcan en su domicilio tras 7 d\u00edas del alta","El lavado de manos en los 5 pasos conocidos previene la infecci\u00f3n nosocomial"],"c":2,"e":"FALSA: los sistemas de drenaje urinario CERRADOS han REDUCIDO significativamente las infecciones urinarias nosocomiales (hasta un 50% de reducci\u00f3n). Con sistemas abiertos, casi el 100% de los pacientes con sonda desarrollaban bacteriuria en 30 d\u00edas. Con sistema cerrado se reduce dr\u00e1sticamente la incidencia.","ai":false,"noShuffle":false,"img":null},{"n":"si33","q":"Respecto a las pautas de antibi\u00f3ticos en profilaxis quir\u00fargica, se\u00f1ale la FALSA:","o":["Se aconseja repetir la dosis si la duraci\u00f3n de la intervenci\u00f3n es MENOR que la vida media del antimicrobiano","La primera dosis se recomienda administrarla en las 2 horas antes de la intervenci\u00f3n","Se aconseja repetir dosis si hay sangrado importante en la intervenci\u00f3n","Se aconseja repetir dosis si se ha producido isquemia importante durante la intervenci\u00f3n"],"c":1,"e":"FALSA: se aconseja repetir la dosis si la duraci\u00f3n de la intervenci\u00f3n es MAYOR (no menor) que la vida media del antimicrobiano, para mantener niveles s\u00e9ricos adecuados durante toda la intervenci\u00f3n. Tambi\u00e9n se repite si hay sangrado mayor de 1.5 litros. La primera dosis se administra 30-60 minutos antes de la incisi\u00f3n (no m\u00e1s de 2h antes).","ai":false,"noShuffle":false,"img":null},{"n":"si34","q":"Qu\u00e9 es la profilaxis quir\u00fargica:","o":["Supone la administraci\u00f3n de ATB sin que exista una infecci\u00f3n con la intenci\u00f3n de evitar la aparici\u00f3n de \u00e9sta","Es la administraci\u00f3n de ATB cuando exista una infecci\u00f3n quir\u00fargica previa a la intervenci\u00f3n","Es la administraci\u00f3n de antibi\u00f3ticos en un paciente quir\u00fargico con Neumon\u00eda","Es la administraci\u00f3n de antibi\u00f3ticos previos a una intervenci\u00f3n para evitar infecci\u00f3n nosocomial postoperatoria"],"c":1,"e":"La PROFILAXIS ANTIBI\u00d3TICA QUIR\u00daRGICA es la administraci\u00f3n de antibi\u00f3ticos en AUSENCIA DE INFECCI\u00d3N con el objetivo de prevenir la infecci\u00f3n del sitio quir\u00fargico (ISQ). Se administra antes y durante la cirug\u00eda (no despu\u00e9s). Se dirige a los microorganismos m\u00e1s probables de contaminar el campo quir\u00fargico seg\u00fan el tipo de cirug\u00eda.","ai":false,"noShuffle":false,"img":null},{"n":"si35","q":"Paciente politraumatizado: ingres\u00f3 el 1/3, intubado y ventilado el mismo d\u00eda, extubado el 11/3, alta el 18/3. S\u00edntomas de neumon\u00eda iniciados el 19/3. Diagnosticado de neumon\u00eda el 21/3. Es una neumon\u00eda nosocomial (healthcare-associated):","o":["No, porque la infecci\u00f3n comenz\u00f3 despu\u00e9s de que el paciente dejara el hospital","No, porque la infecci\u00f3n comenz\u00f3 m\u00e1s de 48h despu\u00e9s de la extubaci\u00f3n","No, porque no se identific\u00f3 el agente infeccioso","No, porque la neumon\u00eda fue diagnosticada m\u00e1s de 48h tras el alta hospitalaria","S\u00ed, porque la infecci\u00f3n ocurri\u00f3 dentro de las 48h tras el alta hospitalaria"],"c":5,"e":"S\u00cd es una neumon\u00eda asociada a la asistencia sanitaria (NAAS/HCAP). La definici\u00f3n incluye la infecci\u00f3n que se inicia en las 48h POSTERIORES AL ALTA hospitalaria. El paciente fue dado de alta el 18/3 y los s\u00edntomas comenzaron el 19/3 (dentro de las 48h post-alta), por lo que es una NAAS. Tambi\u00e9n incluye pacientes hospitalizados m\u00e1s de 2 d\u00edas en los 90 d\u00edas previos.","ai":false,"noShuffle":false,"img":null},{"n":"si36","q":"Respecto a la toma de hemocultivos en una sospecha de sepsis grave, cu\u00e1l ser\u00eda la actitud M\u00c1S CORRECTA:","o":["Se deben extraer los hemocultivos ANTES de iniciar el tratamiento antibi\u00f3tico","Los hemocultivos se han de extraer coincidiendo con la fiebre","Se deben extraer los hemocultivos antes de iniciar el tratamiento antit\u00e9rmico","Los hemocultivos no son \u00fatiles en casos con inmunogenicidad antig\u00e9nica alterada"],"c":1,"e":"Los hemocultivos SIEMPRE deben extraerse ANTES de iniciar la antibioterapia. Extraer los hemocultivos primero no retrasa significativamente el tratamiento (2-3 minutos). Se recomienda extraer 2-3 sets de venas diferentes para aumentar la sensibilidad. No es necesario esperar al pico febril: los hemocultivos pueden extraerse en cualquier momento de la bacteriemia.","ai":false,"noShuffle":false,"img":null},{"n":"si37","q":"Mujer con leucemia mieloide aguda, neutr\u00f3filos 290 cel/uL, cat\u00e9ter venoso central, en profilaxis con ciprofloxacino. Fiebre 38,7 grados sin focalidad aparente. Mucositis importante. Qu\u00e9 actitud seguir\u00eda tras extraer hemocultivos:","o":["Iniciar\u00eda amoxicilina/clavul\u00e1nico de forma emp\u00edrica","Iniciar\u00eda piperacilina/tazobactam de forma emp\u00edrica","Iniciar\u00eda cefepime y vancomicina de forma emp\u00edrica","Esperar\u00eda el resultado de los hemocultivos ya que est\u00e1 hemodin\u00e1micamente estable"],"c":3,"e":"NEUTROPENIA FEBRIL con cat\u00e9ter venoso central y mucositis: tratamiento emp\u00edrico = CEFEPIME (cobertura de gramnegativos incluyendo Pseudomona) + VANCOMICINA (cobertura de grampositivos: cat\u00e9ter central m\u00e1s mucositis con riesgo de estreptococos viridans, especialmente con profilaxis previa con ciprofloxacino que puede seleccionar organismos resistentes). NO se debe esperar al cultivo en neutropenia febril.","ai":false,"noShuffle":false,"img":null},{"n":"si38","q":"Cu\u00e1l es el pat\u00f3geno involucrado m\u00e1s frecuentemente en las diarreas del viajero:","o":["Salmonella","Campylobacter","Escherichia coli","Giardia lamblia"],"c":3,"e":"ESCHERICHIA COLI enterotoxig\u00e9nico (ETEC) es la causa m\u00e1s frecuente de diarrea del viajero (30-70% de los casos), seguido de Campylobacter jejuni y Salmonella. El ETEC produce toxinas (LT y ST) que causan diarrea acuosa sin sangre en las primeras 1-2 semanas del viaje. El tratamiento es azitromicina o rifaximina m\u00e1s hidrataci\u00f3n.","ai":false,"noShuffle":false,"img":null},{"n":"si39","q":"La infecci\u00f3n m\u00e1s habitual del viajero al tr\u00f3pico es:","o":["Dengue","Diarrea del viajero","Neumon\u00eda","Malaria"],"c":2,"e":"La DIARREA DEL VIAJERO es la infecci\u00f3n m\u00e1s frecuente en viajeros al tr\u00f3pico: afecta al 20-50% de los viajeros a pa\u00edses en v\u00edas de desarrollo. El agente m\u00e1s frecuente es E. coli enterotoxig\u00e9nico (ETEC). La malaria y el dengue son las causas de fiebre m\u00e1s importantes en el viajero, pero la diarrea es la infecci\u00f3n m\u00e1s FRECUENTE en t\u00e9rminos absolutos.","ai":false,"noShuffle":false,"img":null}]};
+var IMGS=/*__IMGS_JSON__*/{};
+
+/* ── Estado ── */
+var canSave=typeof localStorage!=='undefined';
+var saved={};try{saved=JSON.parse(localStorage.getItem(KEY)||'null')||{};}catch(e){}
+var state   =saved.state   ||{};
+var qOrd    =saved.qOrd    ||{};
+var oOrd    =saved.oOrd    ||{};
+var starred =saved.starred ||{};
+var failHist=saved.failHist||{};  // {qid: count} entre sesiones
+var darkMode=saved.dark    ||false;
+var timerSec=saved.timerSec||0;   // segundos configurados
+var SECS=Object.keys(META.secciones||{});
+var fFailed={};
+var qIdx={};           // {sec: {n: q}}
+var qNums={};          // {sec: {n: numero_correlativo}}
+var allOrder=null;     // orden mezclado inter-secciones para pestaña Todos
+var activeCid=null;
+var currentTab='all';
+var currentMode='test';
+var saveTimer=null;
+var starsFilter=false;
+var statsVisible=false;
+var timerRunning=false;
+var timerRemaining=timerSec;
+var timerInterval=null;
+
+/* ── INIT ── */
+(function init(){
+  SECS.forEach(function(s){fFailed[s]=false;});
+  injectSecCSS();
+  buildHeader();
+  buildTabs();
+  buildPanels();
+  buildIdx();
+  buildNums();
+  buildAllOrder();
+  SECS.forEach(render);
+  renderAll();
+  updateScores();
+  updateProg();
+  applyTheme();
+  initTimer();
+  setBadge(canSave?'Guardado':'Sin guardado',canSave?'ok':'warn');
+  document.addEventListener('keydown',handleKey);
+  var si=document.getElementById('search-input');
+  if(si)si.addEventListener('keydown',function(e){if(e.key==='Escape'){clearSearch();}});
+})();
+
+/* ── CSS dinámico ── */
+function injectSecCSS(){
+  var css='';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{};
+    var c=m.color||'#1a56db',cd=m.colorDim||'#e8f0fe';
+    css+='.tab.t-'+s+'.on{background:'+cd+';color:'+c+';border-color:'+c+'}\n';
+    css+='.ph.s-'+s+'{border-left:4px solid '+c+'}\n';
+    // Variables CSS por sección para el badge coloreado
+    css+='#panel-'+s+' .qnum.sec-colored{background:'+cd+';color:'+c+'}\n';
+  });
+  var st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+}
+
+/* ── Header ── */
+function buildHeader(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var t=document.getElementById('h-tit');if(t)t.textContent=META.titulo||'Banco MIR';
+  var pt=document.getElementById('page-title');if(pt)pt.textContent=META.titulo||'Banco MIR';
+  var m=document.getElementById('h-meta');
+  if(m){var p=[];if(total)p.push(total+' preguntas');if(META.examen)p.push(META.examen);m.textContent=p.join(' · ');}
+  var d=document.getElementById('ph-gdesc');if(d)d.textContent=META.subtitulo||'';
+  var r=document.getElementById('sc-rem-all');if(r)r.textContent='○ '+total;
+}
+
+/* ── Tabs ── */
+function buildTabs(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var h='<button class="tab t-all on" onclick="showTab(\'all\')">📋 Todos ('+total+')</button>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<button class="tab t-'+s+'" onclick="showTab(\''+s+'\')">'+(m.emoji?m.emoji+' ':'')+escH(m.label||s)+' ('+cnt+')</button>';
+  });
+  var w=document.getElementById('tabs-wrap');if(w)w.innerHTML=h;
+}
+
+/* ── Paneles ── */
+function buildPanels(){
+  var h='<div id="panel-all" class="sec-panel visible"><div id="qs-all"></div><div class="no-results" id="nr-all">No se encontraron preguntas</div></div>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<div id="panel-'+s+'" class="sec-panel">';
+    h+='<div class="ph s-'+s+'">';
+    h+='<div class="ph-left">';
+    h+='<span class="ph-label">'+(m.emoji?m.emoji+'&nbsp;':'')+escH(m.label||s)+'</span>';
+    if(m.desc)h+='<span class="ph-desc">'+escH(m.desc)+'</span>';
+    h+='<div class="score-row">';
+    h+='<span class="sc ok" id="sc-ok-'+s+'">✓ 0</span>';
+    h+='<span class="sc ko" id="sc-ko-'+s+'">✗ 0</span>';
+    h+='<span class="sc rem" id="sc-rem-'+s+'">○ '+cnt+'</span>';
+    h+='</div></div>';
+    h+='<button class="fbtn" id="fb-'+s+'" onclick="toggleFail(\''+s+'\')">Solo falladas</button>';
+    h+='</div>';
+    h+='<div id="qs-'+s+'"></div>';
+    h+='<div class="no-failed" id="nf-'+s+'">Aún no has fallado ninguna 🎉</div>';
+    h+='<div class="no-results" id="nr-'+s+'">No se encontraron preguntas</div>';
+    h+='<div class="sec-actions">';
+    h+='<button class="reset-btn" onclick="resetSec(\''+s+'\')">↺ Reiniciar</button>';
+    h+='<button class="nota-btn" onclick="calcNota(\''+s+'\')">✎ Calcular nota</button>';
+    h+='</div>';
+    h+='<div class="nota-box" id="nota-'+s+'"></div>';
+    h+='</div>';
+  });
+  var pw=document.getElementById('panels-wrap');if(pw)pw.innerHTML=h;
+}
+
+/* ── Índice O(1) + numeración fija ── */
+function buildIdx(){
+  SECS.forEach(function(s){
+    qIdx[s]={};
+    if(D[s])D[s].forEach(function(q){qIdx[s][q.n]=q;});
+  });
+}
+function buildNums(){
+  // Numeración correlativa fija: 1, 2, 3... por sección
+  SECS.forEach(function(s){
+    qNums[s]={};
+    if(D[s])D[s].forEach(function(q,i){qNums[s][q.n]=i+1;});
+  });
+}
+function getNum(sec,n){return qNums[sec]?qNums[sec][n]||n:n;}
+function findQ(qid){
+  var d=qid.indexOf('-'),s=qid.substring(0,d),n=qid.substring(d+1);
+  return(qIdx[s]&&qIdx[s][n])||null;
+}
+function getSecFromQid(qid){return qid.substring(0,qid.indexOf('-'));}
+function getNFromQid(qid){return qid.substring(qid.indexOf('-')+1);}
+
+/* ── Orden inter-secciones para Todos ── */
+function buildAllOrder(){
+  var all=[];
+  SECS.forEach(function(s){if(D[s])D[s].forEach(function(q){all.push({sec:s,n:q.n});});});
+  if(!qOrd['__all__'])qOrd['__all__']=shuffle(all.map(function(x){return x.sec+'|'+x.n;}));
+  allOrder=qOrd['__all__'].map(function(key){
+    var p=key.indexOf('|'),sec=key.substring(0,p),n=key.substring(p+1);
+    return{sec:sec,n:n,q:qIdx[sec]&&qIdx[sec][n]};
+  }).filter(function(x){return x.q;});
+}
+
+/* ── Utilidades ── */
+function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function shuffle(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=b[i];b[i]=b[j];b[j]=t;}return b;}
+function getQOrd(s,qs){if(!qOrd[s])qOrd[s]=shuffle(qs.map(function(q){return q.n;}));return qOrd[s];}
+function getOOrd(qid){
+  var q=findQ(qid);var n=q&&q.o?q.o.length:4;
+  if(q&&q.noShuffle){var a=[];for(var i=0;i<n;i++)a.push(i);return a;}
+  if(!oOrd[qid]){var a=[];for(var i=0;i<n;i++)a.push(i);oOrd[qid]=shuffle(a);}
+  return oOrd[qid];
+}
+function imgHtml(key){
+  if(!IMGS[key]){console.warn('IMGS: clave no encontrada →',key);return'';}
+  return'<div class="clinimg-wrap"><img src="'+IMGS[key]+'" class="clinimg" alt="Imagen clínica" loading="lazy"><div class="clinimg-cap">Imagen clínica</div></div>';
+}
+
+/* ── localStorage debounce ── */
+function saveLocal(){
+  if(!canSave)return;
+  if(saveTimer)clearTimeout(saveTimer);
+  saveTimer=setTimeout(function(){
+    try{
+      localStorage.setItem(KEY,JSON.stringify({state:state,qOrd:qOrd,oOrd:oOrd,starred:starred,failHist:failHist,dark:darkMode,timerSec:timerSec}));
+      setBadge('Guardado','ok');
+    }catch(e){setBadge('Sin guardado','warn');}
+  },300);
+}
+function setBadge(t,c){var b=document.getElementById('save-badge');if(b){b.textContent=t;b.className='sbadge '+c;}}
+
+/* ── Construcción de tarjeta ── */
+function buildCard(q,sec,inAll,allPos){
+  var qid=sec+'-'+q.n;
+  var cid=(inAll?'A-':'S-')+qid;
+  var num=inAll?(allPos+1):getNum(sec,q.n);
+  var oo=getOOrd(qid);
+  var sOpts=oo.map(function(i){return q.o[i];});
+  var nc=oo.indexOf(q.c-1)+1;
+  var ans=state[qid];
+  var cc=ans?(ans.r?' answered-ok':' answered-wrong'):'';
+  var badgeCls='qnum'+(inAll?'':' sec-colored');
+  var h='<div class="qcard s-'+sec+cc+'" id="card-'+cid+'">';
+  h+='<div class="qhead" id="h-'+cid+'" data-cid="'+cid+'" data-qid="'+qid+'" data-sec="'+sec+'" onclick="tog(this.dataset.cid)">';
+  h+='<span class="'+badgeCls+'">'+num+'</span>';
+  h+='<span class="qtxt">'+q.q+(ans?'<span class="atag '+(ans.r?'ok':'ko')+'">'+(ans.r?'✓ acertada':'✗ fallada')+'</span>':'')+'</span>';
+  h+='<button class="star-btn'+(starred[qid]?' on':'')+'\" id="star-'+cid+'" onclick="event.stopPropagation();toggleStar(\''+qid+'\')" title="Marcar (S)"><span class="si">\u2606</span><span class="sf">\u2605</span></button>';
+  h+='<span class="chev">▾</span>';
+  h+='</div>';
+  h+='<div class="qbody" id="b-'+cid+'">';
+  if(q.img)h+=imgHtml(q.img);
+  if(currentMode==='quick'){
+    h+='<div class="quick-card"><div class="quick-rc">✓ Respuesta correcta: opción '+nc+' — '+escH(q.o[q.c-1])+'</div><div class="expbox">'+q.e+'</div></div>';
+  } else {
+    h+='<ul class="opts" id="opts-'+cid+'">';
+    h+=sOpts.map(function(o,i){
+      var p=i+1,oc='opt';
+      if(ans){oc+=' done';if(p===nc)oc+=' correct';else if(p===ans.c&&!ans.r)oc+=' wrong';}
+      return'<li class="'+oc+'" data-qid="'+qid+'" data-pos="'+p+'" data-sec="'+sec+'" onclick="answer(this.dataset.qid,+this.dataset.pos,this.dataset.sec)"><span class="onum">'+p+'.</span><span>'+o+'</span></li>';
+    }).join('');
+    h+='</ul>';
+    if(ans){h+='<div class="expbox"><span class="et">'+(ans.r?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e+'</div>';}
+  }
+  h+='</div></div>';
+  return h;
+}
+
+/* ── Render sección ── */
+function render(sec){
+  var qs=D[sec];if(!qs)return;
+  var ord=getQOrd(sec,qs);
+  var sorted=ord.map(function(n){return qIdx[sec]&&qIdx[sec][n];}).filter(Boolean);
+  var el=document.getElementById('qs-'+sec);
+  if(el)el.innerHTML=sorted.map(function(q){return buildCard(q,sec,false,0);}).join('');
+}
+
+/* ── Render Todos (mezcla inter-secciones) ── */
+function renderAll(){
+  if(!allOrder)buildAllOrder();
+  var el=document.getElementById('qs-all');
+  if(el)el.innerHTML=allOrder.map(function(x,i){return buildCard(x.q,x.sec,true,i);}).join('');
+}
+
+/* ── Toggle open/close ── */
+function tog(cid){
+  var b=document.getElementById('b-'+cid),h=document.getElementById('h-'+cid);
+  if(!b||!h)return;
+  var opening=!b.classList.contains('open');
+  b.classList.toggle('open');h.classList.toggle('open');
+  if(opening){
+    if(activeCid&&activeCid!==cid){var pc=document.getElementById('card-'+activeCid);if(pc)pc.classList.remove('kb-focus');}
+    activeCid=cid;
+    var card=document.getElementById('card-'+cid);if(card)card.classList.add('kb-focus');
+  }else{
+    if(activeCid===cid){activeCid=null;var card=document.getElementById('card-'+cid);if(card)card.classList.remove('kb-focus');}
+  }
+}
+
+/* ── Responder ── */
+function answer(qid,pos,sec){
+  if(state[qid])return;
+  var q=findQ(qid);if(!q)return;
+  var oo=getOOrd(qid);
+  var nc=oo.indexOf(q.c-1)+1;
+  var isRight=pos===nc;
+  state[qid]={c:pos,r:isRight};
+  // Registro de errores
+  if(!isRight){failHist[qid]=(failHist[qid]||0)+1;}
+  saveLocal();
+  // Actualizar todas las instancias del card (panel sección + panel all)
+  // Actualizar opciones en todas las instancias del card
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var optsEl=document.querySelectorAll('#opts-'+cid+' .opt');
+    optsEl.forEach(function(el,i){
+      el.classList.add('done');
+      if(i+1===nc)el.classList.add('correct');
+      else if(i+1===pos&&!isRight)el.classList.add('wrong');
+    });
+    var bdy=document.getElementById('b-'+cid);
+    if(bdy){
+      var eb=bdy.querySelector('.expbox');
+      if(!eb){eb=document.createElement('div');eb.className='expbox';bdy.appendChild(eb);}
+      eb.innerHTML='<span class="et">'+(isRight?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e;
+    }
+    var hd=document.getElementById('h-'+cid);
+    if(hd){var qt=hd.querySelector('.qtxt');if(qt&&!qt.querySelector('.atag')){var at=document.createElement('span');at.className='atag '+(isRight?'ok':'ko');at.innerHTML=isRight?'✓ acertada':'✗ fallada';qt.appendChild(at);}}
+    var card=document.getElementById('card-'+cid);
+    if(card)card.classList.add(isRight?'answered-ok':'answered-wrong');
+  });
+  updateScores();updateProg();
+  if(fFailed[sec]&&isRight){
+    var fcard=document.getElementById('card-S-'+qid);
+    if(fcard)fcard.style.display='none';
+    refreshNF(sec);
+  }
+}
+
+/* ── Estrella ── */
+function toggleStar(qid){
+  starred[qid]=!starred[qid];
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var btn=document.getElementById('star-'+cid);
+    if(btn)btn.classList.toggle('on',starred[qid]);
+  });
+  saveLocal();
+}
+function filterStarred(){
+  starsFilter=!starsFilter;
+  var btn=document.getElementById('btn-stars');
+  if(btn){btn.style.background=starsFilter?'#fef3c7':'';btn.style.fontWeight=starsFilter?'700':'';}
+  document.querySelectorAll('.qcard').forEach(function(card){
+    if(starsFilter){
+      var hd=card.querySelector('.qhead');
+      var qid=hd?hd.dataset.qid:'';
+      card.style.display=starred[qid]?'':'none';
+    }else{card.style.display='';}
+  });
+}
+
+/* ── Filtro falladas ── */
+function refreshNF(sec){
+  var c=document.getElementById('qs-'+sec);if(!c||!fFailed[sec])return;
+  var n=c.querySelectorAll('.qcard.answered-wrong').length;
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',n===0);
+}
+function toggleFail(sec){
+  fFailed[sec]=!fFailed[sec];
+  var btn=document.getElementById('fb-'+sec);
+  if(btn){btn.classList.toggle('on',fFailed[sec]);btn.textContent=fFailed[sec]?'← Ver todas':'Solo falladas';}
+  var c=document.getElementById('qs-'+sec);if(!c)return;
+  var nf=0;
+  c.querySelectorAll('.qcard').forEach(function(card){
+    if(fFailed[sec]){var show=card.classList.contains('answered-wrong');card.style.display=show?'':'none';if(show)nf++;}
+    else{card.style.display='';}
+  });
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',fFailed[sec]&&nf===0);
+}
+
+/* ── Scores y progreso ── */
+function updateScores(){
+  var tok=0,tok2=0,tok3=0;
+  SECS.forEach(function(sec){
+    var ok=0,ko=0;
+    if(D[sec])D[sec].forEach(function(q){var a=state[sec+'-'+q.n];if(a){if(a.r)ok++;else ko++;}});
+    var tot=D[sec]?D[sec].length:0,rem=tot-ok-ko;
+    tok+=ok;tok2+=ko;tok3+=rem;
+    var eok=document.getElementById('sc-ok-'+sec),eko=document.getElementById('sc-ko-'+sec),erm=document.getElementById('sc-rem-'+sec);
+    if(eok)eok.textContent='✓ '+ok;if(eko)eko.textContent='✗ '+ko;if(erm)erm.textContent='○ '+rem;
+  });
+  var eok=document.getElementById('sc-ok-all'),eko=document.getElementById('sc-ko-all'),erm=document.getElementById('sc-rem-all');
+  if(eok)eok.textContent='✓ '+tok;if(eko)eko.textContent='✗ '+tok2;if(erm)erm.textContent='○ '+tok3;
+}
+function updateProg(){
+  var total=0,done=Object.keys(state).length;
+  SECS.forEach(function(s){if(D[s])total+=D[s].length;});
+  var pct=total>0?Math.round(done/total*100):0;
+  var bar=document.getElementById('prog-bar');if(bar)bar.style.width=pct+'%';
+}
+
+/* ── Tabs ── */
+function showTab(t){
+  currentTab=t;
+  document.querySelectorAll('.tab').forEach(function(b){b.classList.remove('on');});
+  var tb=document.querySelector('.tab.t-'+t);if(tb)tb.classList.add('on');
+  var mc=document.getElementById('main-cont');if(mc)mc.setAttribute('data-tab',t);
+  var panelAll=document.getElementById('panel-all');
+  if(panelAll)panelAll.classList.toggle('visible',t==='all');
+  SECS.forEach(function(s){
+    var p=document.getElementById('panel-'+s);
+    if(p)p.classList.toggle('visible',t===s);
+  });
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  clearSearch();
+}
+
+/* ── Reset ── */
+function resetSec(sec){
+  if(D[sec])D[sec].forEach(function(q){var qid=sec+'-'+q.n;delete state[qid];delete oOrd[qid];});
+  delete qOrd[sec];fFailed[sec]=false;activeCid=null;
+  var btn=document.getElementById('fb-'+sec);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+  var nb=document.getElementById('nota-'+sec);if(nb){nb.style.display='none';nb.className='nota-box';}
+  saveLocal();render(sec);
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.remove('show');
+  updateScores();updateProg();
+  // Reconstruir panel all para reflejar cambios
+  buildAllOrder();renderAll();
+}
+function resetAll(){
+  Object.keys(state).forEach(function(k){delete state[k];});
+  Object.keys(oOrd).forEach(function(k){delete oOrd[k];});
+  Object.keys(qOrd).forEach(function(k){delete qOrd[k];});
+  activeCid=null;starsFilter=false;allOrder=null;
+  var bs=document.getElementById('btn-stars');if(bs){bs.style.background='';bs.style.fontWeight='';}
+  SECS.forEach(function(s){
+    fFailed[s]=false;
+    var btn=document.getElementById('fb-'+s);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+    var nb=document.getElementById('nota-'+s);if(nb){nb.style.display='none';nb.className='nota-box';}
+  });
+  saveLocal();
+  SECS.forEach(render);
+  buildAllOrder();renderAll();
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  updateScores();updateProg();
+}
+
+/* ── Nota y revisión ── */
+function buildRevList(sec){
+  var qs=D[sec];if(!qs)return'';
+  var failed=qs.filter(function(q){var a=state[sec+'-'+q.n];return a&&!a.r;});
+  if(!failed.length)return'';
+  var html='<div class="review-list"><div class="review-title">📋 '+failed.length+' pregunta'+(failed.length>1?'s':'')+' fallada'+(failed.length>1?'s':'')+' — repasa aquí:</div>';
+  failed.forEach(function(q){
+    var qid=sec+'-'+q.n;var oo=getOOrd(qid);var nc=oo.indexOf(q.c-1)+1;
+    html+='<details class="review-item"><summary><span><b>'+getNum(sec,q.n)+'.</b> '+q.q+'</span></summary>';
+    html+='<div class="review-body"><div class="review-ans">✓ Opción '+nc+': '+escH(q.o[q.c-1]||'')+'</div>';
+    html+='<div class="expbox">'+q.e+'</div></div></details>';
+  });
+  return html+'</div>';
+}
+function calcNota(sec){
+  var qs=D[sec];if(!qs)return;
+  var total=qs.length,ok=0,ko=0,skip=0;
+  qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-'+sec);if(!box)return;
+  box.className='nota-box '+(pass?'pass':'fail');
+  box.innerHTML='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>'
+    +buildRevList(sec);
+  box.style.display='block';
+}
+function calcNotaAll(){
+  var total=0,ok=0,ko=0,skip=0;
+  SECS.forEach(function(sec){
+    var qs=D[sec];if(!qs)return;
+    total+=qs.length;
+    qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  });
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-all');if(!box)return;
+  box.className='global-nota-box '+(pass?'pass':'fail');
+  var html='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10 (global)</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>';
+  SECS.forEach(function(sec){
+    var rv=buildRevList(sec);
+    if(rv){var m=META.secciones[sec]||{};html+='<div class="review-sec-label">'+(m.emoji?m.emoji+' ':'')+escH(m.label||sec)+'</div>'+rv;}
+  });
+  box.innerHTML=html;box.style.display='block';
+}
+
+/* ── Estadísticas de errores ── */
+function toggleStats(){
+  statsVisible=!statsVisible;
+  var btn=document.getElementById('btn-stats');
+  if(btn){btn.style.background=statsVisible?'var(--ko-bg)':'';btn.style.color=statsVisible?'var(--ko-t)':'';}
+  var box=document.getElementById('stats-global');
+  if(!box)return;
+  if(!statsVisible){box.classList.remove('show');return;}
+  var entries=Object.entries(failHist).filter(function(e){return e[1]>0;});
+  if(!entries.length){box.innerHTML='<div class="stats-title">📊 Sin errores registrados todavía</div>';box.classList.add('show');return;}
+  entries.sort(function(a,b){return b[1]-a[1];});
+  var top=entries.slice(0,10);
+  var maxV=top[0][1];
+  var html='<div class="stats-title">📊 Preguntas más falladas (acumulado entre sesiones)</div>';
+  top.forEach(function(e,i){
+    var qid=e[0],count=e[1];
+    var q=findQ(qid);if(!q)return;
+    var sec=getSecFromQid(qid),n=getNFromQid(qid);
+    var m=META.secciones[sec]||{};
+    var pct=Math.round(count/maxV*100);
+    html+='<div class="stats-item">';
+    html+='<span class="stats-n" style="min-width:18px;color:var(--ko-t);font-weight:700">'+(i+1)+'.</span>';
+    html+='<span class="stats-q">'+(m.emoji?m.emoji+' ':'')+getNum(sec,n)+'. '+q.q.substring(0,60)+(q.q.length>60?'…':'')+'</span>';
+    html+='<div class="stats-bar-wrap"><div class="stats-bar" style="width:'+pct+'%"></div></div>';
+    html+='<span class="stats-n">'+count+'✗</span>';
+    html+='</div>';
+  });
+  box.innerHTML=html;box.classList.add('show');
+}
+
+/* ── Buscador ── */
+function onSearch(val){
+  var v=val.trim().toLowerCase();
+  var clr=document.getElementById('search-clear');
+  var cnt=document.getElementById('search-count');
+  if(clr)clr.style.display=v?'block':'none';
+  var found=0,total=0;
+  document.querySelectorAll('.qcard').forEach(function(card){
+    total++;
+    if(!v){card.classList.remove('search-hidden');found++;}
+    else{
+      var qtxt=card.querySelector('.qtxt');
+      var match=qtxt&&qtxt.textContent.toLowerCase().indexOf(v)!==-1;
+      card.classList.toggle('search-hidden',!match);
+      if(match)found++;
+    }
+  });
+  if(cnt){
+    if(v){cnt.textContent=found+' de '+total+' preguntas';cnt.style.display='block';}
+    else{cnt.style.display='none';}
+  }
+  // Mostrar "sin resultados" por panel
+  ['all'].concat(SECS).forEach(function(s){
+    var panel=document.getElementById('panel-'+s);if(!panel||!panel.classList.contains('visible'))return;
+    var cards=panel.querySelectorAll('.qcard:not(.search-hidden)');
+    var nr=document.getElementById('nr-'+s);if(nr)nr.style.display=cards.length===0&&v?'block':'none';
+  });
+}
+function clearSearch(){
+  var si=document.getElementById('search-input');if(si)si.value='';
+  onSearch('');
+}
+
+/* ── Modo ── */
+function setMode(mode){
+  currentMode=mode;
+  document.getElementById('mode-test').classList.toggle('on',mode==='test');
+  document.getElementById('mode-quick').classList.toggle('on',mode==='quick');
+  // Rerenderizar todo
+  SECS.forEach(render);renderAll();
+}
+
+/* ── Modo oscuro ── */
+function applyTheme(){
+  document.documentElement.setAttribute('data-theme',darkMode?'dark':'light');
+  var btn=document.getElementById('btn-dark');if(btn)btn.textContent=darkMode?'☀️':'🌙';
+}
+function toggleDark(){darkMode=!darkMode;applyTheme();saveLocal();}
+
+/* ── Temporizador ── */
+function initTimer(){
+  timerRemaining=timerSec;
+  renderTimer();
+  var disp=document.getElementById('timer-display');
+  if(disp){
+    disp.addEventListener('click',function(){startEditTimer();});
+  }
+}
+function fmtTime(s){
+  var h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60;
+  return h+':'+(m<10?'0':'')+m+':'+(ss<10?'0':'')+ss;
+}
+function renderTimer(){
+  var disp=document.getElementById('timer-display');
+  if(!disp)return;
+  disp.textContent=fmtTime(timerRemaining);
+  disp.classList.toggle('danger',timerSec>0&&timerRemaining===0);
+}
+function timerToggle(){
+  if(timerRunning){
+    clearInterval(timerInterval);timerRunning=false;
+    document.getElementById('btn-tplay').textContent='▶';
+  }else{
+    if(timerRemaining<=0&&timerSec>0)timerRemaining=timerSec;
+    timerRunning=true;
+    document.getElementById('btn-tplay').textContent='⏸';
+    timerInterval=setInterval(function(){
+      if(timerRemaining>0){timerRemaining--;renderTimer();}
+      else{clearInterval(timerInterval);timerRunning=false;document.getElementById('btn-tplay').textContent='▶';renderTimer();}
+    },1000);
+  }
+}
+function timerReset(){
+  clearInterval(timerInterval);timerRunning=false;
+  timerRemaining=timerSec;
+  document.getElementById('btn-tplay').textContent='▶';
+  renderTimer();
+}
+function startEditTimer(){
+  var disp=document.getElementById('timer-display');if(!disp)return;
+  if(timerRunning){timerToggle();}
+  var old=fmtTime(timerRemaining);
+  disp.contentEditable='true';disp.classList.add('editing');
+  disp.textContent=old;
+  disp.focus();
+  var range=document.createRange();range.selectNodeContents(disp);
+  var sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
+  function commit(){
+    disp.contentEditable='false';disp.classList.remove('editing');
+    var txt=disp.textContent.trim();
+    var parts=txt.split(':').map(Number);
+    var secs=0;
+    if(parts.length===3)secs=parts[0]*3600+parts[1]*60+parts[2];
+    else if(parts.length===2)secs=parts[0]*60+parts[1];
+    else if(parts.length===1)secs=parts[0]*60;
+    if(!isNaN(secs)&&secs>=0){timerSec=secs;timerRemaining=secs;saveLocal();}
+    renderTimer();
+  }
+  disp.addEventListener('blur',commit,{once:true});
+  disp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();disp.blur();}});
+}
+
+/* ── Helpers cid ── */
+function cidToQid(cid){return cid.replace(/^[AS]-/,'');}
+
+/* ── Teclado ── */
+function handleKey(e){
+  var tg=e.target.tagName;
+  if(tg==='INPUT'||tg==='TEXTAREA'||e.target.contentEditable==='true')return;
+  var k=e.key;
+  if(k>='1'&&k<='5'){
+    if(activeCid&&!state[cidToQid(activeCid)]){
+      var aqid=cidToQid(activeCid);
+      var pos=parseInt(k),q=findQ(aqid);
+      if(q&&pos<=q.o.length){e.preventDefault();answer(aqid,pos,getSecFromQid(aqid));}
+    }
+  }else if(k==='ArrowDown'||k==='ArrowUp'){
+    e.preventDefault();navigateQ(k==='ArrowDown'?1:-1);
+  }else if(k==='s'||k==='S'){
+    if(activeCid)toggleStar(cidToQid(activeCid));
+  }
+}
+function navigateQ(dir){
+  var cards=Array.from(document.querySelectorAll('.sec-panel.visible .qcard')).filter(function(c){return c.style.display!=='none'&&!c.classList.contains('search-hidden');});
+  var cids=cards.map(function(c){return c.id.replace('card-','');});
+  if(!cids.length)return;
+  var idx=activeCid?cids.indexOf(activeCid):-1;
+  var nidx=Math.max(0,Math.min(cids.length-1,idx+dir));
+  var ncid=cids[nidx];if(!ncid||ncid===activeCid)return;
+  if(activeCid){var ob=document.getElementById('b-'+activeCid);var oh=document.getElementById('h-'+activeCid);if(ob)ob.classList.remove('open');if(oh)oh.classList.remove('open');var oc=document.getElementById('card-'+activeCid);if(oc)oc.classList.remove('kb-focus');}
+  activeCid=ncid;
+  var nb=document.getElementById('b-'+ncid);var nh=document.getElementById('h-'+ncid);
+  if(nb)nb.classList.add('open');if(nh)nh.classList.add('open');
+  var nc2=document.getElementById('card-'+ncid);if(nc2){nc2.classList.add('kb-focus');nc2.scrollIntoView({behavior:'smooth',block:'nearest'});}
+}
+</script>
+</body>
+</html>

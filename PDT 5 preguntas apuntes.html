@@ -1,0 +1,898 @@
+<!--
+=============================================================
+  MOTOR BANCO MIR — v10
+  Novedades respecto a v9:
+  - Numeración correlativa fija por sección (no se mezcla)
+  - Badge neutro en pestaña "Todos" + mezcla real inter-secciones
+  - Temporizador sticky editable en header (play/pausa/reset)
+  - Buscador de texto en tiempo real
+  - Modo repaso rápido (muestra RC + explicación directamente)
+  - Estadísticas de errores recurrentes entre sesiones
+=============================================================
+-->
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title id="page-title">Banco MIR</title>
+<style>
+:root{
+  --bg:#f4f3ef;--surf:#fff;--bd:#e5e5e5;--bd2:#ddd;
+  --txt:#1a1a1a;--txt2:#555;--txt3:#999;--txt4:#666;
+  --hdr:#1a1a1a;--hdr-t:#fff;
+  --ok-bg:#e6f9ef;--ok-t:#0b6e52;--ok-bd:#2da060;
+  --ko-bg:#fdecea;--ko-t:#b91c1c;--ko-bd:#d94f45;
+  --sc-ok:#dcf5ed;--sc-ko:#fdecea;--sc-rem:#f0f0f0;--sc-rem-t:#666;
+  --exp:#fffbe6;--exp-bd:#f0c04a;--exp-t:#5a4500;
+  --prog:#e5e5e5;--prog-fill:#1a56db;
+  --star:#ccc;--star-on:#f59e0b;
+  --hint:#fafafa;--hint-bd:#eee;
+  --tab-bd:#ddd;--tab-t:#555;
+  --all-bg:#e8f0fe;--all-t:#1a56db;--all-bd:#1a56db;
+  --fab:#1a1a1a;--fab-t:#fff;
+  --nota-btn-t:#1a56db;--nota-btn-bd:#1a56db;--nota-btn-bg:var(--surf);
+  --timer-bg:#222;--timer-t:#fff;--timer-danger:#ef4444;
+}
+[data-theme="dark"]{
+  --bg:#0f0f1a;--surf:#1e1e30;--bd:#2a2a45;--bd2:#333355;
+  --txt:#e8e8f0;--txt2:#aaa;--txt3:#555;--txt4:#888;
+  --hdr:#0a0a14;--hdr-t:#e8e8f0;
+  --ok-bg:#0b3020;--ok-t:#4ade80;--ok-bd:#166534;
+  --ko-bg:#2d0a0a;--ko-t:#f87171;--ko-bd:#7f1d1d;
+  --sc-ok:#0b3020;--sc-ko:#2d0a0a;--sc-rem:#252540;--sc-rem-t:#aaa;
+  --exp:#1a1500;--exp-bd:#a37f10;--exp-t:#d4b84a;
+  --prog:#2a2a45;--prog-fill:#60a5fa;
+  --star:#444;--star-on:#f59e0b;
+  --hint:#1a1a2e;--hint-bd:#2a2a45;
+  --tab-bd:#2a2a45;--tab-t:#aaa;
+  --all-bg:#1a2a4a;--all-t:#60a5fa;--all-bd:#3b82f6;
+  --fab:#2a2a50;--fab-t:#e8e8f0;
+  --nota-btn-t:#60a5fa;--nota-btn-bd:#3b82f6;--nota-btn-bg:var(--surf);
+  --timer-bg:#1a1a2e;--timer-t:#e8e8f0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;transition:background .25s,color .25s}
+
+/* ── Header ── */
+header{background:var(--hdr);color:var(--hdr-t);padding:9px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;position:sticky;top:0;z-index:100}
+header h1{font-size:13.5px;font-weight:600;white-space:nowrap}
+.hright{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.hmeta{font-size:11px;color:#888}
+.hbtn{background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:3px 5px;border-radius:5px;transition:background .15s;color:var(--hdr-t)}
+.hbtn:hover{background:rgba(255,255,255,.12)}
+.sbadge{font-size:11px;padding:3px 9px;border-radius:5px;font-weight:500}
+.sbadge.ok{background:#15803d;color:#dcfce7}.sbadge.warn{background:#92400e;color:#fef3c7}
+
+/* ── Temporizador ── */
+#timer-wrap{display:flex;align-items:center;gap:4px;background:var(--timer-bg);border-radius:7px;padding:3px 8px;border:1px solid rgba(255,255,255,.1)}
+#timer-display{font-size:13px;font-weight:700;font-family:monospace;color:var(--timer-t);min-width:58px;text-align:center;cursor:pointer;border-radius:3px;padding:1px 3px}
+#timer-display:hover{background:rgba(255,255,255,.08)}
+#timer-display.editing{background:rgba(255,255,255,.15);outline:none;color:var(--timer-t)}
+#timer-display.danger{color:var(--timer-danger)}
+#timer-wrap button{background:none;border:none;cursor:pointer;color:rgba(255,255,255,.7);font-size:12px;padding:1px 3px;border-radius:3px;line-height:1}
+#timer-wrap button:hover{background:rgba(255,255,255,.12);color:#fff}
+
+/* ── Barra de progreso ── */
+#prog-wrap{height:3px;background:var(--prog);position:sticky;top:40px;z-index:99}
+#prog-bar{height:100%;background:var(--prog-fill);width:0%;transition:width .4s}
+
+/* ── Contenedor ── */
+.container{max-width:820px;margin:0 auto;padding:16px 12px}
+
+/* ── Buscador ── */
+.search-wrap{position:relative;margin-bottom:13px}
+.search-wrap input{width:100%;padding:8px 34px 8px 12px;border:1.5px solid var(--bd2);border-radius:8px;font-size:13px;background:var(--surf);color:var(--txt);outline:none;transition:border-color .15s}
+.search-wrap input:focus{border-color:var(--prog-fill)}
+.search-clear{position:absolute;right:9px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--txt3);font-size:16px;display:none;line-height:1}
+#search-count{font-size:11px;color:var(--txt3);margin-top:4px;display:none}
+
+/* ── Modo repaso ── */
+.mode-bar{display:flex;gap:6px;margin-bottom:12px;align-items:center}
+.mode-btn{padding:5px 12px;border:1.5px solid var(--bd2);border-radius:7px;cursor:pointer;font-size:12px;font-weight:500;background:var(--surf);color:var(--txt2);transition:all .15s}
+.mode-btn:hover{border-color:#999}
+.mode-btn.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Tabs ── */
+.tabs{display:flex;gap:7px;margin-bottom:13px;flex-wrap:wrap}
+.tab{padding:7px 14px;border:1.5px solid var(--tab-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;background:var(--surf);color:var(--tab-t);transition:all .15s}
+.tab:hover{border-color:#999;color:var(--txt)}
+.tab.t-all.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Score global ── */
+.ph-global{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 15px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-left:4px solid var(--prog-fill)}
+.score-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.sc{font-size:12px;font-weight:600;padding:3px 9px;border-radius:6px}
+.sc.ok{background:var(--sc-ok);color:var(--ok-t)}.sc.ko{background:var(--sc-ko);color:var(--ko-t)}.sc.rem{background:var(--sc-rem);color:var(--sc-rem-t)}
+
+/* ── Acciones ── */
+.global-actions{display:none;margin-bottom:10px;gap:7px;flex-wrap:wrap;align-items:center}
+.container[data-tab="all"] .global-actions{display:flex}
+.sec-actions{margin:6px 0 15px;display:flex;gap:7px;flex-wrap:wrap}
+.reset-btn{padding:7px 14px;background:var(--fab);color:var(--fab-t);border:none;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:opacity .15s}
+.reset-btn:hover{opacity:.82}
+.nota-btn{padding:7px 14px;background:var(--nota-btn-bg);color:var(--nota-btn-t);border:1.5px solid var(--nota-btn-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:background .15s}
+.nota-btn:hover{background:var(--all-bg)}
+
+/* ── Nota box ── */
+.nota-box,.global-nota-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:2px solid var(--bd2);font-size:13px;line-height:1.7;display:none}
+.nota-box.pass,.global-nota-box.pass{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t)}
+.nota-box.fail,.global-nota-box.fail{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t)}
+.nota-score{font-size:26px;font-weight:700;display:block;margin-bottom:4px}
+.nota-detail{font-size:12px;opacity:.85;font-family:monospace}
+
+/* ── Vista revisión ── */
+.review-list{margin-top:12px;border-top:1px solid var(--bd2);padding-top:10px}
+.review-title{font-size:12px;font-weight:700;margin-bottom:9px;color:var(--txt)}
+.review-sec-label{font-size:11.5px;font-weight:700;color:var(--txt3);margin:8px 0 5px;padding-top:6px;border-top:1px solid var(--bd)}
+.review-item{background:var(--surf);border-radius:8px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden}
+.review-item summary{padding:9px 12px;cursor:pointer;font-size:12.5px;color:var(--txt);list-style:none;display:flex;gap:8px;align-items:flex-start}
+.review-item summary::-webkit-details-marker{display:none}
+.review-item summary::before{content:'▶';font-size:9px;color:var(--txt3);flex-shrink:0;margin-top:4px;transition:transform .18s}
+details[open] summary::before{transform:rotate(90deg)}
+.review-body{padding:0 12px 11px}
+.review-ans{font-size:12px;color:var(--ok-t);margin-bottom:7px;font-weight:500}
+
+/* ── Estadísticas ── */
+.stats-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:1.5px solid var(--bd2);background:var(--surf);display:none}
+.stats-box.show{display:block}
+.stats-title{font-size:12px;font-weight:700;margin-bottom:10px;color:var(--txt)}
+.stats-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:12.5px}
+.stats-item:last-child{border-bottom:none}
+.stats-bar-wrap{flex:1;background:var(--sc-rem);border-radius:4px;height:6px;overflow:hidden}
+.stats-bar{height:100%;background:var(--ko-bd);border-radius:4px;transition:width .4s}
+.stats-n{font-size:11px;color:var(--txt3);white-space:nowrap}
+.stats-q{flex:2;color:var(--txt);font-size:12px;line-height:1.3}
+
+/* ── Panel secciones ── */
+.sec-panel{display:none}.sec-panel.visible{display:block}
+.ph{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ph-left{flex:1;display:flex;flex-direction:column;gap:5px}
+.ph-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt3);margin-bottom:1px}
+.ph-desc{font-size:12px;color:var(--txt4)}
+.fbtn{padding:6px 12px;font-size:12px;font-weight:500;border:1.5px solid var(--bd2);border-radius:8px;cursor:pointer;background:var(--surf);color:var(--txt2);transition:all .15s;white-space:nowrap}
+.fbtn:hover{border-color:#999;color:var(--txt)}.fbtn.on{background:var(--ko-bg);color:#b91c1c;border-color:#f87171}
+.no-failed{display:none;text-align:center;padding:16px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin-top:4px}
+.no-failed.show{display:block}
+.no-results{display:none;text-align:center;padding:20px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin:8px 0}
+
+/* ── Hint ── */
+.hint{font-size:11px;color:var(--txt3);margin-bottom:15px;padding:7px 11px;background:var(--hint);border-radius:6px;border:1px solid var(--hint-bd)}
+
+/* ── Tarjeta ── */
+.qcard{background:var(--surf);border-radius:10px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden;transition:box-shadow .15s}
+.qcard:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.qcard.kb-focus{outline:2px solid var(--prog-fill);outline-offset:-2px}
+.qcard.search-hidden{display:none}
+.qhead{padding:11px 13px;cursor:pointer;display:flex;align-items:flex-start;gap:9px}
+
+/* ── Badge numérico ── */
+.qnum{font-size:11px;font-weight:700;padding:3px 7px;border-radius:5px;white-space:nowrap;flex-shrink:0;margin-top:2px;background:var(--sc-rem);color:var(--sc-rem-t)}
+/* En pestaña "Todos" siempre neutro; en sección aplica color de sección */
+.qnum.sec-colored{background:var(--sec-dim);color:var(--sec-col)}
+
+.qtxt{font-size:13px;line-height:1.5;flex:1}
+.star-btn{background:none;border:none;cursor:pointer;font-size:15px;color:var(--star);padding:0 2px;flex-shrink:0;margin-top:2px;line-height:1;transition:color .15s,transform .15s}
+.star-btn:hover{transform:scale(1.2)}
+.star-btn .si{display:inline}.star-btn .sf{display:none}
+.star-btn.on .si{display:none}.star-btn.on .sf{display:inline;color:var(--star-on)}
+.chev{font-size:15px;color:var(--bd2);flex-shrink:0;margin-top:2px;transition:transform .2s}
+.qhead.open .chev{transform:rotate(180deg)}
+.qbody{display:none;padding:0 13px 13px}.qbody.open{display:block}
+
+/* ── Imagen ── */
+.clinimg-wrap{margin:9px 0 7px;background:#111;border-radius:8px;overflow:hidden;border:1px solid var(--bd2);text-align:center}
+.clinimg{max-width:100%;max-height:340px;object-fit:contain;display:block;margin:0 auto}
+.clinimg-cap{font-size:11px;color:var(--txt3);padding:4px 0 5px;background:var(--hint);border-top:1px solid var(--bd)}
+
+/* ── Opciones ── */
+.opts{list-style:none;margin-top:9px;display:flex;flex-direction:column;gap:5px}
+.opt{padding:9px 12px;border-radius:8px;border:1.5px solid var(--bd2);cursor:pointer;display:flex;align-items:flex-start;gap:9px;color:var(--txt);font-size:13px;line-height:1.45;transition:border-color .12s,background .12s;user-select:none}
+.opt:hover:not(.done){border-color:#999;background:var(--hint)}
+.opt.correct{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t);font-weight:500;cursor:default}
+.opt.wrong{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t);cursor:default}
+.opt.done:not(.correct):not(.wrong){cursor:default;opacity:.7}
+.onum{font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px;min-width:15px}
+
+/* ── Modo repaso rápido ── */
+.quick-card{padding:9px 12px;border-radius:8px;border:1.5px solid var(--ok-bd);background:var(--ok-bg);margin-top:8px}
+.quick-rc{font-size:12.5px;font-weight:600;color:var(--ok-t);margin-bottom:6px}
+
+/* ── Explicación ── */
+.expbox{margin-top:10px;padding:10px 12px;background:var(--exp);border-left:4px solid var(--exp-bd);border-radius:0 8px 8px 0;font-size:12.5px;color:var(--exp-t);line-height:1.65}
+.expbox b,.expbox strong{font-weight:600}
+.et{display:block;margin-bottom:4px;font-weight:600;font-size:13px}
+.atag{font-size:10px;padding:2px 6px;border-radius:4px;margin-left:5px;vertical-align:middle}
+.atag.ok{background:var(--sc-ok);color:var(--ok-t)}.atag.ko{background:var(--sc-ko);color:#c0392b}
+
+/* ── All-tab CSS ── */
+.container[data-tab="all"] .ph{display:none!important}
+.container[data-tab="all"] .sec-actions{display:none!important}
+.container[data-tab="all"] .no-failed{display:none!important}
+.container[data-tab="all"] .nota-box{display:none!important}
+.container:not([data-tab="all"]) .global-nota-box{display:none!important}
+.container:not([data-tab="all"]) #stats-global{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="h-tit">Banco MIR</h1>
+  <div class="hright">
+    <span class="hmeta" id="h-meta"></span>
+    <!-- Temporizador -->
+    <div id="timer-wrap" title="Haz clic en el tiempo para editar">
+      <span id="timer-display">0:00:00</span>
+      <button id="btn-tplay" onclick="timerToggle()" title="Play/Pausa">▶</button>
+      <button onclick="timerReset()" title="Reset">↺</button>
+    </div>
+    <button class="hbtn" id="btn-dark" onclick="toggleDark()" title="Modo oscuro">🌙</button>
+    <span id="save-badge" class="sbadge"></span>
+  </div>
+</header>
+<div id="prog-wrap"><div id="prog-bar"></div></div>
+
+<div class="container" id="main-cont" data-tab="all">
+  <!-- Buscador -->
+  <div class="search-wrap">
+    <input type="text" id="search-input" placeholder="🔍 Buscar en enunciados..." oninput="onSearch(this.value)">
+    <button class="search-clear" id="search-clear" onclick="clearSearch()">✕</button>
+  </div>
+  <div id="search-count"></div>
+
+  <!-- Modo -->
+  <div class="mode-bar">
+    <span style="font-size:11.5px;color:var(--txt3);font-weight:600">MODO:</span>
+    <button class="mode-btn on" id="mode-test" onclick="setMode('test')">📝 Test</button>
+    <button class="mode-btn" id="mode-quick" onclick="setMode('quick')">⚡ Repaso rápido</button>
+    <button class="mode-btn" id="btn-stars" onclick="filterStarred()" style="margin-left:auto;border-color:#f59e0b;color:#b45309">⭐ Marcadas</button>
+    <button class="mode-btn" id="btn-stats" onclick="toggleStats()">📊 Errores</button>
+  </div>
+
+  <!-- Stats globales -->
+  <div class="stats-box" id="stats-global"></div>
+
+  <!-- Tabs -->
+  <div class="tabs" id="tabs-wrap"></div>
+
+  <!-- Score global -->
+  <div class="ph-global">
+    <div class="ph-left">
+      <span class="ph-desc" id="ph-gdesc"></span>
+      <div class="score-row">
+        <span class="sc ok" id="sc-ok-all">✓ 0</span>
+        <span class="sc ko" id="sc-ko-all">✗ 0</span>
+        <span class="sc rem" id="sc-rem-all">○ 0</span>
+      </div>
+    </div>
+  </div>
+  <div class="global-actions">
+    <button class="reset-btn" onclick="resetAll()">↺ Reiniciar y mezclar</button>
+    <button class="nota-btn" onclick="calcNotaAll()">✎ Calcular nota global</button>
+  </div>
+  <div class="global-nota-box" id="nota-all"></div>
+  <p class="hint">💡 <b>1–5</b> responde · <b>↑↓</b> navega · <b>S</b> marca ⭐ · Progreso guardado automáticamente</p>
+
+  <div id="panels-wrap"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════ MOTOR v10 ═══════════════════════════════════════ */
+
+var KEY=/*__KEY__*/'pdt_ceu_v10';
+var META=/*__META_JSON__*/{"titulo":"PDT CEU \u2014 Banco de Preguntas","subtitulo":"Radiodiagn\u00f3stico \u00b7 Cir. Pedi\u00e1trica \u00b7 Nefrourolog\u00eda \u00b7 Med. Intensiva \u00b7 Neurocirug\u00eda \u00b7 Cir. Endocrina \u00b7 Radioterapia","examen":"PDT \u00b7 CEU San Pablo","secciones":{"rad":{"label":"Radiodiagn\u00f3stico","emoji":"\ud83d\uddbc\ufe0f","color":"#0d5986","colorDim":"#dbeafe","desc":"Radiolog\u00eda pedi\u00e1trica \u00b7 Adultos y trauma \u00b7 Urol\u00f3gica y ginecol\u00f3gica"},"cirped":{"label":"Cir. Pedi\u00e1trica","emoji":"\ud83d\udc76","color":"#0f766e","colorDim":"#ccfbf1","desc":"Malformaciones \u00b7 Patolog\u00eda intestinal \u00b7 Tumores pedi\u00e1tricos"},"nef":{"label":"Nefrourolog\u00eda","emoji":"\ud83d\udd2c","color":"#7c3aed","colorDim":"#ede9fe","desc":"Litiasis y f\u00edstulas \u00b7 Tumores urol\u00f3gicos \u00b7 Pr\u00f3stata e IU \u00b7 Hematuria"},"pal":{"label":"Paliativos","emoji":"\ud83c\udf3f","color":"#15803d","colorDim":"#dcfce7","desc":"Cuidados paliativos \u00b7 Control de s\u00edntomas"},"mi":{"label":"Med. Intensiva","emoji":"\u26a1","color":"#b45309","colorDim":"#fef3c7","desc":"Ventilaci\u00f3n mec\u00e1nica \u00b7 Cardiohemodinn\u00e1mica \u00b7 Shock y trauma"},"nc":{"label":"Neurocirug\u00eda","emoji":"\ud83e\udde0","color":"#374151","colorDim":"#e2e8f0","desc":"Tumores SNC \u00b7 Hemorragia subaracnoidea \u00b7 Epilepsia refractaria"},"ce":{"label":"Cir. Endocrina","emoji":"\u2697\ufe0f","color":"#9a3412","colorDim":"#ffedd5","desc":"Tiroides \u00b7 Paratiroides \u00b7 Suprarrenales y bari\u00e1trica"},"rt":{"label":"Radioterapia","emoji":"\u2622\ufe0f","color":"#6b21a8","colorDim":"#f3e8ff","desc":"Indicaciones en oncolog\u00eda"}}};
+var D=/*__D_JSON__*/{"rad":[{"n":"rp1","q":"Respecto a la malformaci\u00f3n de Arnold-Chiari tipo I, todo es cierto EXCEPTO:","o":["Descenso amigdalar >5mm a trav\u00e9s de la l\u00ednea basio-opistion","Asocia retropulsi\u00f3n de la odontoides","En ocasiones asocia hidrosiringomielia","Conlleva un aumento del volumen de la fosa posterior y del LCR"],"c":4,"e":"La Chiari I se produce por una fosa posterior PEQUE\u00d1A que empuja las am\u00edgdalas hacia abajo; no hay aumento sino reducci\u00f3n del volumen de la fosa posterior. Las otras tres afirmaciones son correctas.","ai":false},{"n":"rp2","q":"Respecto a las lesiones qu\u00edsticas del cuello, se\u00f1ala la opci\u00f3n INCORRECTA:","o":["Para confirmar su diagn\u00f3stico es necesaria una gammagraf\u00eda tiroidea","La lesi\u00f3n cong\u00e9nita m\u00e1s frecuente es el quiste del conducto tirogloso","Los quistes braquiales m\u00e1s frecuentes provienen del 2\u00ba arco","Si los quistes se infectan pueden doler y crecer"],"c":1,"e":"El diagn\u00f3stico de los quistes cervicales (tirogloso, branquiales) se realiza con cl\u00ednica y ECOGRAF\u00cdA, no con gammagraf\u00eda tiroidea. La gammagraf\u00eda tiroidea eval\u00faa la funci\u00f3n del tejido tiroideo, no las lesiones qu\u00edsticas.","ai":false},{"n":"rp3","q":"Como complicaciones del S\u00edndrome de Distr\u00e9s Respiratorio del prematuro est\u00e1n todos los siguientes A EXCEPCI\u00d3N DE:","o":["Displasia broncopulmonar","Neumon\u00eda qu\u00edmica","Hemorragia pulmonar","Enfisema intersticial"],"c":2,"e":"La displasia broncopulmonar, la hemorragia pulmonar y el enfisema intersticial son complicaciones reales del SDR neonatal. La neumon\u00eda qu\u00edmica no es una complicaci\u00f3n caracter\u00edstica de la enfermedad de membrana hialina.","ai":false},{"n":"rp4","q":"Las t\u00e9cnicas diagn\u00f3sticas baritadas se utilizan en el diagn\u00f3stico de las siguientes patolog\u00edas A EXCEPCI\u00d3N DE:","o":["\u00cdleo meconial","V\u00f3lvulo del intestino medio","F\u00edstula traqueoesof\u00e1gica","Atresia yeyunal"],"c":3,"e":"En la f\u00edstula traqueoesof\u00e1gica el contraste baritado est\u00e1 contraindicado por riesgo de aspiraci\u00f3n bronquial grave. Se prefiere contraste hidrosoluble o directamente endoscopia/broncoscopia para el diagn\u00f3stico.","ai":false},{"n":"rp5","q":"En la imagen de disrafismo espinal cerrado con lipoma y cono medular anclado, se\u00f1ala la opci\u00f3n FALSA:","o":["Es la anomal\u00eda cong\u00e9nita m\u00e1s com\u00fan de los disrafismos cerrados","Se ve un lipoma asociado a un cono medular anclado","Es una secuencia potenciada en T1","Se necesitan estudios con contraste para alcanzar el diagn\u00f3stico"],"c":4,"e":"El lipoma con disrafismo oculto se diagnostica perfectamente con RM sin contraste en secuencias T1 (la grasa da se\u00f1al hiperintensa). El contraste no es necesario para el diagn\u00f3stico rutinario de esta malformaci\u00f3n.","ai":false},{"n":"rp6","q":"Respecto a los quistes braquiales del 2\u00ba arco, todas las afirmaciones son ciertas A EXCEPCI\u00d3N DE:","o":["Pueden llegar a la edad adulta sin dar sintomatolog\u00eda","Se localizan en el \u00e1rea submandibular, posteriores al m\u00fasculo ECM","La pared del quiste puede sangrar e infectarse","Si se origina f\u00edstula o seno en vez de quiste, el diagn\u00f3stico es m\u00e1s temprano"],"c":2,"e":"Los quistes del 2\u00ba arco braquial se localizan LATERALMENTE en el cuello, a lo largo del borde ANTERIOR (no posterior) del ECM. Pueden permanecer asintom\u00e1ticos hasta la edad adulta y tienden a infectarse.","ai":false},{"n":"rp7","q":"El tratamiento del quiste tirogloso consiste en:","o":["Antibi\u00f3tico oral en caso de infecci\u00f3n local","Punci\u00f3n y drenaje urgente en caso de infecci\u00f3n complicada","Ex\u00e9resis quir\u00fargica (intervenci\u00f3n de Sistrunk) como tratamiento definitivo programado","Todas las opciones son correctas"],"c":4,"e":"El manejo es escalonado: antibi\u00f3tico si infecci\u00f3n leve, drenaje si absceso complicado, y cirug\u00eda definitiva (Sistrunk: ex\u00e9resis del quiste + cuerpo del hioides + trayecto hasta base de lengua) en fase fr\u00eda. Las tres son correctas.","ai":false},{"n":"rp8","q":"Ante un RN con cl\u00ednica de distr\u00e9s respiratorio, \u00bfqu\u00e9 exploraci\u00f3n radiol\u00f3gica realizaremos en primer lugar?","o":["Ecograf\u00eda tor\u00e1cica","Radiolog\u00eda simple de abdomen","Radiolog\u00eda simple de t\u00f3rax","TAC tor\u00e1cico"],"c":3,"e":"La Rx simple de t\u00f3rax AP es siempre la primera prueba radiol\u00f3gica en el RN con distr\u00e9s: r\u00e1pida, accesible, sin radiaci\u00f3n significativa, y aporta informaci\u00f3n clave (patr\u00f3n pulmonar, cardiomegalia, neumot\u00f3rax, hernia diafragm\u00e1tica).","ai":false},{"n":"rp9","q":"RN prematuro con hemorragia intraventricular y dilataci\u00f3n ventricular en ecograf\u00eda. \u00bfA qu\u00e9 grado de la clasificaci\u00f3n de Papile corresponder\u00eda?","o":["Grado I: hemorragia subependimaria","Grado II: intraventricular sin dilataci\u00f3n ventricular","Grado III: intraventricular CON dilataci\u00f3n ventricular","Grado IV: extensi\u00f3n al par\u00e9nquima cerebral"],"c":4,"e":"Clasificaci\u00f3n de Papile: I=subependimaria, II=IV sin dilataci\u00f3n, III=IV CON dilataci\u00f3n ventricular, IV=extensi\u00f3n parenquimatosa. La dilataci\u00f3n ventricular define el grado III, pero el solucionario del examen indica Grado IV para la imagen espec\u00edfica mostrada.","ai":true},{"n":"rp10","q":"RN de 20 d\u00edas con hipertricosis en fosa lumbar. Para descartar disrafismo espinal, pedir\u00e1:","o":["TAC","Ecograf\u00eda","Resonancia magn\u00e9tica","Radiograf\u00eda simple"],"c":2,"e":"En menores de 6 meses, la no osificaci\u00f3n del arco posterior vertebral permite explorar la m\u00e9dula espinal con ECOGRAF\u00cdA sin radiaci\u00f3n. En mayores de 6 meses, cuando los arcos est\u00e1n osificados, se necesita RM.","ai":false},{"n":"rp11","q":"RN prematuro de 31 semanas con enfermedad de membrana hialina. \u00bfCu\u00e1l hallazgo radiol\u00f3gico NO esperar\u00eda encontrar?","o":["Broncograma a\u00e9reo","Patr\u00f3n reticulonodular (vidrio esmerilado)","Pulm\u00f3n peque\u00f1o / no expandido","Pulm\u00f3n expandido (hiperinsuflado)"],"c":4,"e":"En la enfermedad de membrana hialina el pulm\u00f3n NO puede expandirse (d\u00e9ficit de surfactante = atelectasia difusa). Lo esperado es pulm\u00f3n peque\u00f1o, broncograma a\u00e9reo y patr\u00f3n reticulonodular. Un 'pulm\u00f3n expandido' es lo contrario de lo esperado.","ai":false},{"n":"rp12","q":"Ante la sospecha de obstrucci\u00f3n intestinal en un ni\u00f1o de 4 meses, \u00bfqu\u00e9 prueba inicial pedir\u00edas?","o":["Ecograf\u00eda abdominal","Radiograf\u00eda simple de abdomen","Resonancia magn\u00e9tica","Punci\u00f3n lumbar"],"c":2,"e":"La Rx simple de abdomen es la primera prueba ante obstrucci\u00f3n intestinal en pediatr\u00eda: muestra niveles hidroa\u00e9reos, dilataci\u00f3n de asas y distribuci\u00f3n del gas, orientando sobre el nivel y la causa de la obstrucci\u00f3n.","ai":false},{"n":"rp13","q":"Respecto a los procesos infecciosos del par\u00e9nquima pulmonar del ni\u00f1o, se\u00f1ala la respuesta FALSA:","o":["Un proceso neum\u00f3nico puede complicarse con derrame pleural tabicado","En bronquiolitis es t\u00edpica la imagen en 'coraz\u00f3n velloso'","Existe menor prevalencia de neumon\u00eda redonda en ni\u00f1os respecto a adultos","La tuberculosis miliar puede acontecer en la infancia"],"c":3,"e":"La neumon\u00eda redonda (esf\u00e9rica) es M\u00c1S frecuente en ni\u00f1os que en adultos, no menos. Se presenta como opacidad redondeada bien delimitada en l\u00f3bulos inferiores y puede confundirse con una masa pulmonar.","ai":false},{"n":"rp14","q":"Ante un ni\u00f1o con estenosis hipertr\u00f3fica del p\u00edloro, se\u00f1ala la opci\u00f3n ERR\u00d3NEA respecto al estudio ecogr\u00e1fico:","o":["Doppler color mostrar\u00e1 incremento del flujo en el canal pil\u00f3rico","Antes de operar hay que confirmar con estudio baritado para valorar el grado de obstrucci\u00f3n","La falta de relajaci\u00f3n del canal en tiempo real ayuda al diagn\u00f3stico","Tras la intervenci\u00f3n pueden persistir alteradas las medidas del canal pil\u00f3rico"],"c":2,"e":"La ecograf\u00eda es el GOLD STANDARD para el diagn\u00f3stico de estenosis hipertr\u00f3fica del p\u00edloro y NO necesita confirmaci\u00f3n con estudio baritado. El tr\u00e1nsito baritado est\u00e1 completamente obsoleto para este diagn\u00f3stico.","ai":false},{"n":"rp15","q":"Lactante de 15 meses con dolor abdominal c\u00f3lico y sangre en heces. Alta sospecha de invaginaci\u00f3n intestinal. Se\u00f1ala la opci\u00f3n FALSA:","o":["El tratamiento con enema se har\u00e1 en todos los casos porque no tiene contraindicaciones","Podemos prescindir de la radiograf\u00eda si la ECO es diagn\u00f3stica","Es la segunda causa de obstrucci\u00f3n intestinal en pediatr\u00eda","La localizaci\u00f3n m\u00e1s frecuente es ileocecal"],"c":1,"e":"El enema tiene contraindicaciones absolutas: perforaci\u00f3n intestinal, peritonitis y shock. No puede aplicarse en todos los casos. La ECO con sensibilidad y especificidad >95% puede sustituir a la Rx como primera prueba.","ai":false},{"n":"rp16","q":"Son criterios diagn\u00f3sticos de la Neurofibromatosis tipo 1 (Von Recklinghausen) todos los siguientes, EXCEPTO:","o":["Glioma de la v\u00eda \u00f3ptica","Schwannoma vestibular bilateral","Un neurofibroma plexiforme","Lesi\u00f3n \u00f3sea t\u00edpica como la displasia esfenoidal"],"c":2,"e":"El schwannoma vestibular BILATERAL es criterio diagn\u00f3stico exclusivo de la Neurofibromatosis tipo 2 (NF2), no de la NF1. Los criterios de NF1 incluyen: manchas caf\u00e9 con leche \u22656, neurofibromas \u22652, ef\u00e9lides axilares, glioma \u00f3ptico, n\u00f3dulos de Lisch, lesiones \u00f3seas y familiar de 1er grado.","ai":false},{"n":"ra1","q":"\u00bfCu\u00e1l de estas NO es una lesi\u00f3n potencialmente mortal de forma inmediata en el politraumatismo?","o":["Hemorragia intestinal masiva","Neumot\u00f3rax a tensi\u00f3n","Taponamiento card\u00edaco","Traumatismo lar\u00edngeo directo"],"c":4,"e":"Las 6 lesiones tor\u00e1cicas inmediatamente mortales del ATLS son: neumot\u00f3rax a tensi\u00f3n, hemot\u00f3rax masivo, taponamiento card\u00edaco, t\u00f3rax inestable, rotura a\u00f3rtica y rotura diafragm\u00e1tica. El traumatismo lar\u00edngeo puede ser grave pero no pertenece a este grupo cl\u00e1sico de lesiones inmediatamente letales.","ai":false},{"n":"ra2","q":"\u00bfCu\u00e1l de las siguientes pruebas NO est\u00e1 indicada en un paciente con inestabilidad hemodin\u00e1mica?","o":["Rx AP de t\u00f3rax","Rx lateral de la columna cervical","Rx lateral del cr\u00e1neo","Rx AP de pelvis"],"c":3,"e":"En el paciente inestable se priorizan Rx AP de t\u00f3rax (descartar neumot\u00f3rax/hemot\u00f3rax) y AP de pelvis (descartar fractura hemorr\u00e1gica). La Rx lateral de cr\u00e1neo no aporta informaci\u00f3n urgente que cambie el manejo inmediato.","ai":false},{"n":"ra3","q":"Rx de t\u00f3rax en politraumatizado. Todos hacen sospechar lesi\u00f3n de la aorta tor\u00e1cica A EXCEPCI\u00d3N DE:","o":["P\u00e9rdida del contorno del bot\u00f3n a\u00f3rtico","Casquete apical izquierdo (hematoma apical)","Ensanchamiento mediast\u00ednico","Fractura de las \u00faltimas costillas"],"c":4,"e":"La fractura de las \u00faltimas costillas orienta a lesi\u00f3n espl\u00e9nica o hep\u00e1tica, no a\u00f3rtica. Los signos de lesi\u00f3n a\u00f3rtica en Rx de t\u00f3rax son: ensanchamiento mediast\u00ednico, p\u00e9rdida del bot\u00f3n a\u00f3rtico, casquete apical izquierdo y desviaci\u00f3n traqueal hacia la derecha.","ai":false},{"n":"ra4","q":"Respecto al traumatismo abdominal cerrado, \u00bfcu\u00e1l afirmaci\u00f3n es FALSA?","o":["Una laceraci\u00f3n espl\u00e9nica frecuentemente se asocia a fractura de los \u00faltimos arcos costales","Un vector de fuerza lateral puede lesionar el par\u00e9nquima espl\u00e9nico","El estallido del bazo corresponde a un grado III de la clasificaci\u00f3n AAST","El bazo es el \u00f3rgano intraabdominal m\u00e1s frecuentemente afectado en trauma cerrado"],"c":3,"e":"Seg\u00fan la clasificaci\u00f3n AAST, el estallido del bazo (>25% del par\u00e9nquima destruido) corresponde al GRADO V, no al III. El Grado III es una laceraci\u00f3n de profundidad >3cm o un hematoma subcapsular que afecta >50% del bazo.","ai":false},{"n":"ra5","q":"Sobre la ecograf\u00eda FAST en el paciente politraumatizado inestable, \u00bfcu\u00e1l NO es correcta?","o":["Es la t\u00e9cnica de elecci\u00f3n en pacientes inestables","No se necesita personal ejercitado para su realizaci\u00f3n","Puede realizarse simult\u00e1neamente a las maniobras de reanimaci\u00f3n","Su principal utilidad es detectar l\u00edquido libre intraperitoneal"],"c":2,"e":"La ECO FAST requiere personal ENTRENADO en la t\u00e9cnica e interpretaci\u00f3n de las im\u00e1genes. Es la t\u00e9cnica de elecci\u00f3n en el inestable (sobre el TC), puede hacerse en paralelo a la reanimaci\u00f3n y detecta l\u00edquido libre y hemopericardio.","ai":false},{"n":"ra6","q":"Dentro de las exploraciones radiogr\u00e1ficas de rutina en el politraumatizado, \u00bfcu\u00e1l NO se encuentra en el protocolo inicial?","o":["Radiograf\u00eda lateral cervical","Radiolog\u00eda AP cervical","Radiograf\u00eda AP de t\u00f3rax","Radiograf\u00eda AP de pelvis"],"c":2,"e":"La serie b\u00e1sica inicial del ATLS incluye Rx AP de t\u00f3rax, AP de pelvis y LATERAL cervical (para ver C1-C7). La Rx AP cervical no forma parte del protocolo inicial porque la proyecci\u00f3n lateral tiene mayor rendimiento diagn\u00f3stico en el trauma agudo.","ai":false},{"n":"ra7","q":"En un paciente con traumatismo tor\u00e1cico con hallazgos cr\u00edticos en la Rx, \u00bfcu\u00e1l debe ser la actitud del radi\u00f3logo?","o":["Realizar parrilla costal urgente","Realizar TCM de t\u00f3rax urgente","Notificar el hallazgo al cl\u00ednico peticionario de inmediato o realizar tratamiento urgente si es factible","A\u00f1adir una proyecci\u00f3n en dec\u00fabito lateral izquierdo"],"c":3,"e":"El radi\u00f3logo debe comunicar inmediatamente los hallazgos cr\u00edticos (neumot\u00f3rax, hemot\u00f3rax, rotura a\u00f3rtica) al cl\u00ednico responsable. Si tiene competencia para el tratamiento intervencionista urgente puede actuar directamente. La notificaci\u00f3n inmediata es siempre la prioridad absoluta.","ai":false},{"n":"ra8","q":"Respecto al traumatismo craneoencef\u00e1lico, todas las afirmaciones son ERR\u00d3NEAS A EXCEPCI\u00d3N DE:","o":["Las contusiones hemorr\u00e1gicas se localizan preferentemente en las regiones frontobasales y fosa temporal","Son lesiones extraaxiales los hematomas epidurales, subdurales, intraparenquimatosos e intraventriculares","El TC tiene mayor rendimiento diagn\u00f3stico que la RM para la lesi\u00f3n axonal difusa","Los hematomas subdurales tienen apariencia hipodensa y forma biconvexa"],"c":1,"e":"Las contusiones cerebrales en el TCE se localizan preferentemente en las regiones FRONTOBASALES y FOSA TEMPORAL (zonas de golpe-contragolpe, donde el cerebro choca con las irregularidades \u00f3seas). Los subdurales son cresc\u00e9nticos (no biconvexos); la RM es superior al TC para la lesi\u00f3n axonal difusa.","ai":false},{"n":"ra9","q":"En la Rx de t\u00f3rax del politraumatizado hay que descartar patolog\u00edas de riesgo vital, MENOS UNA. Ind\u00edquela:","o":["Taponamiento card\u00edaco","Neumot\u00f3rax masivo o a tensi\u00f3n","Laceraci\u00f3n pulmonar aislada","Rotura de la aorta"],"c":3,"e":"Las lesiones tor\u00e1cicas de riesgo vital inmediato son: neumot\u00f3rax a tensi\u00f3n, hemot\u00f3rax masivo, taponamiento card\u00edaco, rotura a\u00f3rtica, t\u00f3rax inestable y rotura diafragm\u00e1tica. La laceraci\u00f3n pulmonar aislada sin neumot\u00f3rax ni hemot\u00f3rax no suele ser inmediatamente mortal.","ai":false},{"n":"ra10","q":"Paciente con TCE y Glasgow 8. TC craneal: \u00bfqu\u00e9 hallazgo NO puede identificarse con claridad?","o":["Hematoma epidural","Contusiones hemorr\u00e1gicas frontobasales","Lesi\u00f3n axonal difusa","Herniaci\u00f3n subfalciana"],"c":3,"e":"La lesi\u00f3n axonal difusa (LAD) es la lesi\u00f3n que PEOR detecta el TC: las lesiones microsc\u00f3picas por cizallamiento axonal son invisibles en TC. La RM con secuencias FLAIR, T2* y difusi\u00f3n es mucho m\u00e1s sensible. El TC detecta bien los hematomas y los desplazamientos de l\u00ednea media.","ai":false},{"n":"ru1","q":"Ante la sospecha de torsi\u00f3n testicular, se\u00f1ala la opci\u00f3n FALSA:","o":["Una orquiepididimitis puede simular una torsi\u00f3n intermitente con hiperemia en el Doppler","Con el paso de las horas la ecoestructura del teste es m\u00e1s heterog\u00e9nea","Es una urgencia quir\u00fargica siendo el Doppler + ECO la t\u00e9cnica m\u00e1s correcta","El Doppler reflejar\u00e1 SIEMPRE ausencia de flujo intratesticular en todos los casos"],"c":4,"e":"La ausencia de flujo en el Doppler es muy sugestiva de torsi\u00f3n pero NO est\u00e1 presente en el 100% de los casos: en torsiones incompletas o muy precoces puede haber flujo residual. Ante alta sospecha cl\u00ednica se debe operar aunque el Doppler no sea concluyente.","ai":false},{"n":"ru2","q":"Ante un incidentaloma adrenal, todas las afirmaciones son FALSAS A EXCEPCI\u00d3N DE:","o":["La detecci\u00f3n de grasa macrosc\u00f3pica en TC sin contraste es altamente sugestiva de mielolipoma adrenal","En TC basal, valores <10 UH indican dudosa benignidad y se necesitan otras t\u00e9cnicas","Una ca\u00edda de se\u00f1al en RM en masa adrenal indica patolog\u00eda maligna","No debemos realizar TC con contraste ante sospecha de feocromocitoma por riesgo de crisis"],"c":1,"e":"La grasa macrosc\u00f3pica (densidades negativas en UH en TC sin contraste) en una masa adrenal es pr\u00e1cticamente diagn\u00f3stica de mielolipoma, un tumor benigno. Opci\u00f3n B es falsa: <10 UH indica adenoma benigno rico en l\u00edpidos, no dudosa benignidad. Opci\u00f3n C es falsa: la ca\u00edda de se\u00f1al en RM indica l\u00edpidos intracelulares = adenoma benigno.","ai":false},{"n":"ru3","q":"Var\u00f3n de 24 a\u00f1os, pielonefritis aguda sin respuesta al tratamiento a las 72h. \u00bfCu\u00e1l de estos hallazgos encontrar\u00eda MENOS probablemente en la ECO renal?","o":["Estudio completamente normal","\u00c1rea de hipoperfusi\u00f3n en el Doppler-Color","Aumento del tama\u00f1o renal","Engrosamiento del urotelio renal"],"c":2,"e":"Las \u00e1reas de hipoperfusi\u00f3n focal en el Doppler son hallazgos ESPERADOS en la pielonefritis grave o complicada que no responde al tratamiento (nefritis focal bacteriana, abscesificaci\u00f3n). Por tanto, es el hallazgo que menos sorprender\u00eda encontrar, no el que menos probablemente se ver\u00eda.","ai":true},{"n":"ru4","q":"\u00bfCu\u00e1l de las siguientes NO es una indicaci\u00f3n de RM prost\u00e1tica?","o":["Estadificaci\u00f3n del c\u00e1ncer de pr\u00f3stata","Prostatitis cr\u00f3nica","Elevaci\u00f3n del PSA despu\u00e9s de prostatectom\u00eda radical","Discrepancia cl\u00ednico-biopsia"],"c":2,"e":"La RM multiparam\u00e9trica prost\u00e1tica est\u00e1 indicada para estadificaci\u00f3n del c\u00e1ncer, detecci\u00f3n con PSA elevado y biopsias negativas, recidiva bioqu\u00edmica post-prostatectom\u00eda y discordancia cl\u00ednico-biopsia. La prostatitis cr\u00f3nica se maneja cl\u00ednicamente sin necesidad de RM como rutina.","ai":false},{"n":"ru5","q":"\u00bfCu\u00e1l es la t\u00e9cnica m\u00e1s sensible para el diagn\u00f3stico de la cistitis enfisematosa?","o":["Radiograf\u00eda simple de abdomen/pelvis","Ecograf\u00eda p\u00e9lvica","TC abdominop\u00e9lvico","Resonancia magn\u00e9tica p\u00e9lvica"],"c":3,"e":"La cistitis enfisematosa (gas en la pared vesical) se diagnostica mejor con TC: detecta peque\u00f1as cantidades de gas intramural con m\u00e1xima sensibilidad y permite valorar la extensi\u00f3n y complicaciones. Se asocia a pacientes diab\u00e9ticos con ITU por g\u00e9rmenes fermentadores.","ai":false},{"n":"ru6","q":"\u00bfCu\u00e1l de los siguientes criterios le har\u00eda sospechar malignidad en un quiste ov\u00e1rico?","o":["Pared fina y regular","Contenido homog\u00e9neo anecog\u00e9nico","Polos s\u00f3lidos o papilas internas con vascularizaci\u00f3n en Doppler","Lesi\u00f3n unilocular sin tabiques"],"c":3,"e":"Los criterios ecogr\u00e1ficos de sospecha de malignidad ov\u00e1rica son: pared gruesa e irregular, tabiques internos gruesos, componentes s\u00f3lidos o papilas internas con vascularizaci\u00f3n en Doppler y tama\u00f1o >5-7cm. Los quistes simples (pared fina, contenido homog\u00e9neo, uniloculares) son benignos.","ai":false},{"n":"ru7","q":"Para valorar la permeabilidad tub\u00e1rica en una paciente con problemas de fertilidad, \u00bfqu\u00e9 prueba realizar\u00eda?","o":["Resonancia magn\u00e9tica","Ecograf\u00eda transvaginal","Histerosalpingograf\u00eda","Tomograf\u00eda computarizada"],"c":3,"e":"La histerosalpingograf\u00eda (HSG) es la prueba est\u00e1ndar para valorar la permeabilidad tub\u00e1rica: inyecci\u00f3n de contraste radiopaco a trav\u00e9s del cuello uterino y observaci\u00f3n de su paso por las trompas bajo fluoroscopia. Detecta obstrucci\u00f3n tub\u00e1rica, sinecias uterinas y anomal\u00edas de la cavidad uterina.","ai":false}],"cirped":[{"n":"cm1","q":"Lactante de 3 meses con hernia umbilical sin signos de complicaci\u00f3n. \u00bfQu\u00e9 actitud tomar\u00eda?","o":["Indicar\u00eda cirug\u00eda urgente","Indicar\u00eda cirug\u00eda programada","No indicar\u00eda cirug\u00eda: es fisiol\u00f3gica y hay que esperar al cierre espont\u00e1neo","Solicitar\u00eda ecograf\u00eda para confirmar"],"c":3,"e":"La hernia umbilical es fisiol\u00f3gica en lactantes y cierra espont\u00e1neamente antes de los 4-5 a\u00f1os en la mayor\u00eda de los casos. Solo se indica cirug\u00eda si persiste m\u00e1s all\u00e1 de los 4-5 a\u00f1os, si es muy grande (>2cm) o si aparecen complicaciones (incarceraci\u00f3n, estrangulamiento).","ai":false},{"n":"cm2","q":"En relaci\u00f3n a los problemas de la fisura labiopalatina, \u00bfcu\u00e1l de estos enunciados NO es correcto?","o":["Generalmente tienen problemas de alimentaci\u00f3n","Mayor riesgo de otitis y problemas de audici\u00f3n","Pueden presentar voz nasal y retraso en el lenguaje","A menudo tienen alteraciones en la dentici\u00f3n"],"c":1,"e":"Los pacientes con fisura labiopalatina pueden tener dificultades de alimentaci\u00f3n en los casos severos (especialmente los de paladar hendido, que no pueden crear presi\u00f3n negativa para mamar), pero no 'generalmente' en todos los casos. Las otras tres asociaciones (otitis serosa, alteraciones del habla y dentarias) son muy frecuentes.","ai":false},{"n":"cm3","q":"La secuencia temporal recomendada para el manejo de la fisura labiopalatina es:","o":["NAM (1-3m), queilorrafia (3m), uranoestafilorrafia (6-12m), operaciones adicionales (>4-5 a\u00f1os)","Queilorrafia (al nacimiento), uranoestafilorrafia (3m), operaciones adicionales (1 a\u00f1o)","NAM (1-3m), uranoestafilorrafia (3m), queilorrafia (6-12m), operaciones adicionales (>4-5 a\u00f1os)","NAM (1-12m), queilorrafia + uranoestafilorrafia (1-2 a\u00f1os), operaciones adicionales (2 a\u00f1os)"],"c":1,"e":"El protocolo est\u00e1ndar es: NAM (1-3 meses de modelado preoperatorio del cart\u00edlago nasal y alv\u00e9olo), queilorrafia a los ~3 meses, uranoestafilorrafia a los 6-12 meses (antes del inicio del habla), y operaciones secundarias (injertos \u00f3seos, rinoplastia) a partir de los 4-5 a\u00f1os.","ai":false},{"n":"cm4","q":"\u00bfCu\u00e1l de las siguientes afirmaciones sobre el quiste tirogloso es CIERTA?","o":["Es una tumoraci\u00f3n cervical rara en edad infantil","Se localiza m\u00e1s frecuentemente en la zona cervical lateral","Es una masa fija y firmemente adherida a planos profundos","Su tratamiento es la intervenci\u00f3n de Sistrunk: ex\u00e9resis del quiste + resecci\u00f3n parcial del hioides"],"c":4,"e":"El quiste tirogloso es la lesi\u00f3n cervical cong\u00e9nita M\u00c1S FRECUENTE en la infancia. Se localiza en la L\u00cdNEA MEDIA, infrahioideo en el 60-70% de los casos. Es caracter\u00edsticamente m\u00f3vil con la degluci\u00f3n y la protrusi\u00f3n lingual. El tratamiento definitivo es la operaci\u00f3n de Sistrunk.","ai":false},{"n":"cm5","q":"Sobre los remanentes branquiales, s\u00f3lo uno de los siguientes enunciados es INCORRECTO:","o":["Las malformaciones derivan en su mayor\u00eda del 2\u00ba arco","La localizaci\u00f3n t\u00edpica es periauricular (1\u00ba arco) o cervical lateral anterior al ECM (2\u00ba arco)","La punci\u00f3n-drenaje es el tratamiento quir\u00fargico definitivo","Las f\u00edstulas y senos branquiales son las formas m\u00e1s frecuentes"],"c":3,"e":"La punci\u00f3n-drenaje NO es el tratamiento quir\u00fargico definitivo de los remanentes branquiales; es solo una medida temporal ante infecci\u00f3n. El tratamiento definitivo es siempre la ex\u00e9resis quir\u00fargica completa del quiste, seno o f\u00edstula en fase fr\u00eda.","ai":false},{"n":"cm6","q":"\u00bfEn qu\u00e9 se diferencian fundamentalmente el onfalocele y la gastrosquisis?","o":["El onfalocele es epig\u00e1strico y la gastrosquisis umbilical","El defecto en la gastrosquisis es de mayor tama\u00f1o que en el onfalocele","En el onfalocele un saco peritoneal recubre el contenido; en la gastrosquisis no existe dicho saco","El onfalocele se asocia frecuentemente a atresia intestinal"],"c":3,"e":"La diferencia fundamental es el saco peritoneal: en el onfalocele las v\u00edsceras est\u00e1n recubiertas por membrana (amnios + peritoneo); en la gastrosquisis est\u00e1n expuestas directamente al l\u00edquido amni\u00f3tico sin ninguna cubierta. La gastrosquisis es paraumbilical derecha; el onfalocele es umbilical.","ai":false},{"n":"cm7","q":"MIR 2022. Ni\u00f1o de 23 meses con rectorragias de repetici\u00f3n y gammagraf\u00eda con pertecnetato-99mTc positiva. \u00bfDiagn\u00f3stico m\u00e1s probable?","o":["Sangrado de origen g\u00e1strico","Divert\u00edculo de Meckel con mucosa g\u00e1strica ect\u00f3pica","Sangrado de origen genitourinario","Gammagraf\u00eda normal"],"c":2,"e":"La gammagraf\u00eda de Meckel (pertecnetato-99mTc) es captado por la mucosa g\u00e1strica ect\u00f3pica presente en el 50% de los divert\u00edculos de Meckel sintom\u00e1ticos. Es la prueba de elecci\u00f3n para el divert\u00edculo de Meckel sangrante: hemorragia digestiva baja indolora en ni\u00f1o menor de 2 a\u00f1os.","ai":false},{"n":"cm8","q":"Se\u00f1ale la respuesta CORRECTA sobre las diferencias entre onfalocele y gastrosquisis:","o":["La localizaci\u00f3n es central en la gastrosquisis y lateral en el onfalocele","En la gastrosquisis las v\u00edsceras est\u00e1n expuestas; en el onfalocele est\u00e1n cubiertas por membrana","Las malformaciones m\u00e1s frecuentemente asociadas son cardiacas en gastrosquisis y digestivas en onfalocele","La mayor mortalidad del onfalocele obliga a tratamiento quir\u00fargico m\u00e1s precoz"],"c":2,"e":"La diferencia estructural clave: onfalocele tiene saco (membrana peritoneal + amnios); gastrosquisis NO tiene saco, las v\u00edsceras est\u00e1n completamente expuestas al l\u00edquido amni\u00f3tico. El onfalocele asocia m\u00e1s anomal\u00edas cromos\u00f3micas y cardiacas.","ai":false},{"n":"cm9","q":"Sobre las malformaciones del uraco y el conducto onfalomesent\u00e9rico, se\u00f1ale la respuesta FALSA:","o":["El uraco deriva del saco vitelino y el divert\u00edculo de Meckel del alantoides","Los tipos m\u00e1s frecuentes de anomal\u00edas uracales son la persistencia y el quiste de uraco","El ombligo h\u00famedo es la presentaci\u00f3n cl\u00ednica m\u00e1s com\u00fan de ambas anomal\u00edas","Ante un ni\u00f1o de 2 a\u00f1os con hemorragia digestiva baja indolora, el divert\u00edculo de Meckel debe considerarse"],"c":1,"e":"Es al REV\u00c9S: el URACO deriva del alantoides (estructura embrionaria que conecta vejiga con el ombligo), y el divert\u00edculo de Meckel es el remanente del conducto onfalomesent\u00e9rico (saco vitelino). Esta confusi\u00f3n de origen embriol\u00f3gico es un cl\u00e1sico de examen.","ai":false},{"n":"cm10","q":"Sobre la hernia inguinal en el paciente pedi\u00e1trico, se\u00f1ale la respuesta FALSA:","o":["Es de tipo indirecta en la mayor\u00eda de los casos","Es m\u00e1s frecuente en varones prematuros","El tratamiento quir\u00fargico se reserva para casos sin resoluci\u00f3n espont\u00e1nea m\u00e1s all\u00e1 de los 2 a\u00f1os","Las complicaciones m\u00e1s frecuentes son la incarceraci\u00f3n y el estrangulamiento"],"c":3,"e":"Las hernias inguinales pedi\u00e1tricas NO resuelven espont\u00e1neamente (a diferencia de las umbilicales) y deben operarse desde el diagn\u00f3stico. No existe ning\u00fan per\u00edodo de espera de 2 a\u00f1os: el riesgo de incarceraci\u00f3n es especialmente alto en lactantes.","ai":false},{"n":"cm11","q":"\u00bfCu\u00e1l de las siguientes afirmaciones sobre onfalocele y gastrosquisis es correcta?","o":["En la gastrosquisis hay un saco peritoneal que recubre las v\u00edsceras","El onfalocele es m\u00e1s frecuente en gestantes j\u00f3venes menores de 20 a\u00f1os","El onfalocele asocia m\u00e1s cromosomopat\u00edas que la gastrosquisis","La gastrosquisis asocia m\u00e1s cromosomopat\u00edas que el onfalocele"],"c":3,"e":"El onfalocele se asocia a cromosomopat\u00edas (Trisom\u00eda 18, 13 y 21) en un 30-50% de los casos, mientras que la gastrosquisis es generalmente espor\u00e1dica y raramente se asocia a anomal\u00edas cromos\u00f3micas. La gastrosquisis es m\u00e1s frecuente en madres j\u00f3venes. En la gastrosquisis NO hay saco.","ai":false},{"n":"cm12","q":"En el tipo m\u00e1s frecuente de atresia de es\u00f3fago (tipo C: f\u00edstula traqueoesof\u00e1gica distal), \u00bfcu\u00e1l es VERDADERA?","o":["La ecograf\u00eda prenatal en el 3er trimestre permite el diagn\u00f3stico en un 60-80% de casos","Se asocia en un 50% de casos a microgastria y defectos del tubo neural","La distancia entre los bolsones atr\u00e9sicos es mayor que en los otros tipos","La presencia de aire en el est\u00f3mago en la Rx de abdomen confirma la existencia de f\u00edstula traqueoesof\u00e1gica distal"],"c":4,"e":"En el tipo C (el m\u00e1s frecuente ~85%), la f\u00edstula traqueoesof\u00e1gica distal permite el paso de aire al est\u00f3mago, por lo que la Rx simple de abdomen mostrar\u00e1 gas en el est\u00f3mago e intestino. La AUSENCIA de gas caracteriza al tipo I (sin f\u00edstula). Las opciones A, B y C son caracter\u00edsticas del tipo I.","ai":false},{"n":"ci1","q":"Neonato de 8 d\u00edas con irritabilidad, distensi\u00f3n abdominal y v\u00f3mitos biliosos de instauraci\u00f3n brusca. \u00bfDiagn\u00f3stico m\u00e1s probable?","o":["Estenosis hipertr\u00f3fica del p\u00edloro con alcalosis metab\u00f3lica","Malrotaci\u00f3n intestinal con v\u00f3lvulo","Enfermedad de Hirschsprung","Atresia yeyunal"],"c":2,"e":"Los v\u00f3mitos BILIOSOS en un neonato son una emergencia quir\u00fargica hasta que se demuestre lo contrario. La malrotaci\u00f3n intestinal con v\u00f3lvulo puede causar necrosis intestinal masiva en horas. Los v\u00f3mitos de la EHP son no biliosos porque la obstrucci\u00f3n es a nivel del p\u00edloro (supraampular).","ai":false},{"n":"ci2","q":"Sobre la obstrucci\u00f3n duodenal en pediatr\u00eda:","o":["Su causa m\u00e1s frecuente es cong\u00e9nita (atresia, malrotaci\u00f3n...)","Se asocia con frecuencia al S\u00edndrome de Down","Presenta t\u00edpicamente la imagen de 'doble burbuja' en Rx abdomen","Todas son correctas"],"c":4,"e":"La obstrucci\u00f3n duodenal pedi\u00e1trica (atresia, p\u00e1ncreas anular, malrotaci\u00f3n, bandas de Ladd) presenta la imagen en 'doble burbuja' (gas en est\u00f3mago + bulbo dilatado sin gas distal), se asocia al S\u00edndrome de Down en ~30% y la causa m\u00e1s frecuente es cong\u00e9nita. Las tres son correctas.","ai":false},{"n":"ci3","q":"Con respecto a la malrotaci\u00f3n intestinal, indique la respuesta FALSA:","o":["El tratamiento quir\u00fargico para su reparaci\u00f3n es la duodeno-duodenostom\u00eda en diamante","La rotaci\u00f3n incompleta es la forma m\u00e1s frecuente","Las malformaciones m\u00e1s frecuentemente asociadas son hernia diafragm\u00e1tica cong\u00e9nita, gastrosquisis, onfalocele y atresia intestinal","Todas las anteriores son falsas"],"c":1,"e":"La duodeno-duodenostom\u00eda en diamante es el tratamiento de la ATRESIA DUODENAL, no de la malrotaci\u00f3n intestinal. El tratamiento de la malrotaci\u00f3n es la Operaci\u00f3n de Ladd: liberaci\u00f3n de las bandas de Ladd, reducci\u00f3n del v\u00f3lvulo, ampliar el mesenterio y apendicectom\u00eda.","ai":false},{"n":"ci4","q":"\u00bfCu\u00e1l de las siguientes patolog\u00edas NO es una causa de obstrucci\u00f3n duodenal en pediatr\u00eda?","o":["Malrotaci\u00f3n intestinal","P\u00e1ncreas anular","Atresia o membrana duodenal","Tap\u00f3n meconial"],"c":4,"e":"El tap\u00f3n meconial causa obstrucci\u00f3n del COLON (colon izquierdo o sigma), no del duodeno. Las causas de obstrucci\u00f3n duodenal son: atresia/membrana duodenal, p\u00e1ncreas anular, malrotaci\u00f3n intestinal y bandas de Ladd.","ai":false},{"n":"ci5","q":"Respecto a la obstrucci\u00f3n intestinal distal en pediatr\u00eda, se\u00f1ala la opci\u00f3n VERDADERA:","o":["El \u00edleo meconial es una forma de debut de la esclerosis tuberosa","En el ano imperforado se realiza un TAC p\u00e9lvico para medir la distancia del recto a la piel","En el enema opaco de Hirschsprung, el signo m\u00e1s espec\u00edfico es la transici\u00f3n de intestino dilatado (agangli\u00f3nico) a otro de calibre normal","Un colon de calibre normal es indicador de una progresi\u00f3n normal del meconio en la vida fetal"],"c":4,"e":"Un colon de calibre normal en el RN indica que el meconio ha transitado adecuadamente in utero, siendo un signo indirecto de normalidad. Opci\u00f3n A falsa: el \u00edleo meconial es debut de la fibrosis qu\u00edstica. En Hirschsprung: el segmento DILATADO es el ganglionado (normal, proximal) y el ESTRECHO es el agangli\u00f3nico (patol\u00f3gico).","ai":false},{"n":"ci6","q":"En la enfermedad de Hirschsprung es FALSO que:","o":["El patr\u00f3n de afectaci\u00f3n es t\u00edpicamente parcheado","En las ni\u00f1as la afectaci\u00f3n suele ser m\u00e1s extensa que en los ni\u00f1os","Existe afectaci\u00f3n del recto en el 100% de los pacientes","El gen m\u00e1s frecuentemente implicado es el proto-oncogen RET"],"c":1,"e":"La afectaci\u00f3n en Hirschsprung es CONTINUA desde el recto hacia proximal, nunca parcheada (a diferencia de la enfermedad de Crohn). Siempre incluye el recto (100%) y se extiende hacia tramos m\u00e1s proximales en longitud variable. El gen RET es el principal gen implicado.","ai":false},{"n":"ci7","q":"\u00bfCu\u00e1l es la malformaci\u00f3n ano-rectal m\u00e1s frecuente en las ni\u00f1as?","o":["F\u00edstula perineal","F\u00edstula vestibular","Cloaca de canal corto","F\u00edstula recto-uretral"],"c":2,"e":"En ni\u00f1as, la malformaci\u00f3n ano-rectal m\u00e1s frecuente es la F\u00cdSTULA VESTIBULAR (el orificio anal termina en el vest\u00edbulo vaginal, anterior al himen). La f\u00edstula perineal ocupa el segundo lugar. La f\u00edstula recto-uretral es exclusiva de los varones.","ai":false},{"n":"ci8","q":"Ni\u00f1a de 13 a\u00f1os intervenida por Hirschsprung a los 3 meses. \u00bfCu\u00e1l de los siguientes tumores es m\u00e1s probable que presente?","o":["Neuroblastoma abdominal","Tumor de Wilms","Nefroma mesobl\u00e1stico","Carcinoma medular de tiroides familiar"],"c":4,"e":"La enfermedad de Hirschsprung se asocia a mutaciones en el gen RET. El mismo gen RET est\u00e1 implicado en el Carcinoma Medular de Tiroides (CMT) hereditario y los s\u00edndromes MEN2A y MEN2B. Esta asociaci\u00f3n gen\u00e9tica entre Hirschsprung y CMT es una pregunta cl\u00e1sica del MIR.","ai":false},{"n":"ci9","q":"En el megacolon agangli\u00f3nico cong\u00e9nito (Hirschsprung) se dan todas las caracter\u00edsticas siguientes EXCEPTO:","o":["En la zona afectada existe concentraci\u00f3n aumentada de acetilcolinesterasa","Est\u00e1 ausente el reflejo inhibitorio recto-anal","Las pruebas diagn\u00f3sticas de referencia son las biopsias rectales por succi\u00f3n","Es frecuente la presencia de encopresis o incontinencia fecal"],"c":4,"e":"La encopresis (incontinencia fecal) NO es caracter\u00edstica de Hirschsprung; al contrario, estos ni\u00f1os tienen ESTRE\u00d1IMIENTO grave desde el nacimiento. La incontinencia fecal es m\u00e1s propia del estre\u00f1imiento funcional cr\u00f3nico. Las otras tres caracter\u00edsticas (AChE aumentada, ausencia del reflejo inhibitorio y biopsias por succi\u00f3n) s\u00ed son correctas.","ai":false},{"n":"ci10","q":"MIR 2002. La Enterocolitis Necrotizante (ECN):","o":["Es la patolog\u00eda gastrointestinal menos grave del RN de bajo peso","Se produce por sobreinfecci\u00f3n intestinal del Streptococcus neumoniae","En estudios experimentales puede ser prevenida por la alimentaci\u00f3n con leche materna","Puede asociarse a trombocitosis en el reci\u00e9n nacido"],"c":3,"e":"La leche materna tiene efecto protector frente a la ECN: contiene IgA secretora, factores de crecimiento epitelial y probi\u00f3ticos. La ECN es la patolog\u00eda gastrointestinal m\u00e1s GRAVE del prematuro (mortalidad 20-30%). Se asocia a TROMBOPENIA (consumo de plaquetas por CID), no trombocitosis.","ai":false},{"n":"ci11","q":"MIR 2013. Ni\u00f1o de 7 meses con llanto brusco, encogimiento de piernas y deposici\u00f3n con sangre. Ecograf\u00eda: imagen en diana. \u00bfDiagn\u00f3stico?","o":["Gastroenteritis aguda","Apendicitis aguda","Invaginaci\u00f3n intestinal","Adenitis mesent\u00e9rica"],"c":3,"e":"La imagen en 'diana' o 'rosquilla' en la ECO es patognom\u00f3nica de invaginaci\u00f3n intestinal: capas del intestino invaginado vistas en corte transversal. La cl\u00ednica cl\u00e1sica del lactante de 6-18 meses: llanto c\u00f3lico intermitente, encogimiento de piernas, palidez y heces en 'jalea de grosella'.","ai":false},{"n":"ci12","q":"En el paciente anterior con invaginaci\u00f3n intestinal, \u00bfcu\u00e1l de las medidas terap\u00e9uticas NO est\u00e1 indicada?","o":["Reducci\u00f3n hidrost\u00e1tica con enema de bario","Reducci\u00f3n hidrost\u00e1tica con insuflaci\u00f3n de aire","Antibioterapia de amplio espectro si hay signos de infecci\u00f3n","Tratamiento conservador con dieta exenta de gluten"],"c":4,"e":"La invaginaci\u00f3n intestinal no tiene ninguna relaci\u00f3n con la intolerancia al gluten (es un distractor del enunciado). El tratamiento es la reducci\u00f3n neum\u00e1tica o hidrost\u00e1tica (de elecci\u00f3n en ausencia de complicaciones) o la cirug\u00eda. La dieta exenta de gluten no tiene ning\u00fan papel en el tratamiento.","ai":false},{"n":"ci13","q":"MIR 2023. Lactante de 14 meses con irritabilidad de 12h, heces sanguinolentas con moco y masa cil\u00edndrica palpable en parte derecha del abdomen. \u00bfDiagn\u00f3stico y prueba?","o":["Apendicitis aguda. Ecograf\u00eda abdominal","Invaginaci\u00f3n intestinal. Ecograf\u00eda abdominal","Apendicitis aguda. TC abdominal","Invaginaci\u00f3n intestinal. TC abdominal"],"c":2,"e":"La cl\u00ednica es cl\u00e1sica de invaginaci\u00f3n intestinal: lactante, dolor c\u00f3lico, heces con sangre y moco, masa abdominal palpable cil\u00edndrica en fosa iliaca derecha. La prueba de elecci\u00f3n es la ECOGRAF\u00cdA (imagen en diana, sensibilidad y especificidad >95%), que tambi\u00e9n gu\u00eda el tratamiento.","ai":false},{"n":"ci14","q":"MIR 2025. Se\u00f1ale la respuesta FALSA respecto a la invaginaci\u00f3n intestinal en pediatr\u00eda:","o":["La mayor\u00eda de los casos en ni\u00f1os se deben a adherencias cong\u00e9nitas","La incidencia estacional alcanza picos en oto\u00f1o e invierno","Se ha apreciado correlaci\u00f3n con infecci\u00f3n respiratoria previa por adenovirus tipo C","Se ha observado un aumento ligero de invaginaci\u00f3n en las 3 semanas posteriores a la vacuna de rotavirus"],"c":1,"e":"La mayor\u00eda de las invaginaciones pedi\u00e1tricas (>90%) son IDIOP\u00c1TICAS, no se deben a adherencias cong\u00e9nitas (\u00e9stas son m\u00e1s caracter\u00edsticas en adultos donde siempre hay que buscar causa org\u00e1nica). Se correlaciona con infecciones v\u00edricas que hipertrofian los ganglios linf\u00e1ticos mesent\u00e9ricos actuando como punto de arrastre.","ai":false},{"n":"ci15","q":"MIR 2011. Ni\u00f1o de 28 d\u00edas con v\u00f3mitos en escopetazo, siempre hambriento, pH 7.49, bicarbonato 30 mEq/L, K 3.1 mEq/L, Cl 94 mEq/L. \u00bfPrueba de elecci\u00f3n para confirmar el diagn\u00f3stico?","o":["Radiograf\u00eda simple de abdomen","pHmetr\u00eda esof\u00e1gica","Ecograf\u00eda abdominal","Determinaci\u00f3n de electrolitos en sudor"],"c":3,"e":"La cl\u00ednica (v\u00f3mitos no biliosos en escopetazo, hambre insaciable, alcalosis metab\u00f3lica hipoclor\u00e9mica e hipopotas\u00e9mica) es caracter\u00edstica de la estenosis hipertr\u00f3fica del p\u00edloro. La prueba de confirmaci\u00f3n de elecci\u00f3n es la ECOGRAF\u00cdA: visualiza el p\u00edloro hipertrofiado (longitud >16mm, grosor muscular >4mm).","ai":false},{"n":"ci16","q":"MIR 2024. Ante la sospecha de estenosis hipertr\u00f3fica del p\u00edloro, \u00bfc\u00f3mo iniciar\u00eda los ex\u00e1menes complementarios?","o":["Tr\u00e1nsito digestivo baritado","pHmetr\u00eda g\u00e1strica","Radiolog\u00eda simple de abdomen","Ecograf\u00eda abdominal"],"c":4,"e":"La ecograf\u00eda abdominal es la prueba diagn\u00f3stica de elecci\u00f3n para la estenosis hipertr\u00f3fica del p\u00edloro (sensibilidad >95%), est\u00e1ndar actual en todas las gu\u00edas pedi\u00e1tricas. El tr\u00e1nsito baritado est\u00e1 completamente obsoleto para este diagn\u00f3stico.","ai":true},{"n":"ci17","q":"MIR 2015. \u00bfCu\u00e1l de los siguientes datos NO es propio de la estenosis hipertr\u00f3fica del p\u00edloro?","o":["Alcalosis metab\u00f3lica hipoclor\u00e9mica","V\u00f3mitos proyectivos de contenido bilioso","Incidencia familiar","Predominio del sexo masculino (4:1)"],"c":2,"e":"Los v\u00f3mitos de la EHP son NO BILIOSOS: la obstrucci\u00f3n es a nivel del p\u00edloro, por encima de donde drena la bilis (papila de Vater). Un v\u00f3mito BILIOSO en un neonato indica obstrucci\u00f3n distal al p\u00edloro y obliga a descartar urgentemente malrotaci\u00f3n/v\u00f3lvulo intestinal.","ai":false},{"n":"ci18","q":"MIR 2018. Lactante de 1 mes con v\u00f3mitos de 24h de evoluci\u00f3n, come con apetito y llora entre tomas. \u00bfQu\u00e9 pruebas son m\u00e1s adecuadas?","o":["Es reflujo gastroesof\u00e1gico fisiol\u00f3gico, basta con posici\u00f3n semiincorporada","Puede ser gastroenteritis, har\u00eda gasometr\u00eda e iones y rehidrataci\u00f3n IV","Probablemente estenosis hipertr\u00f3fica del p\u00edloro, pedir\u00eda ecograf\u00eda","Hay que descartar malformaci\u00f3n cong\u00e9nita con tr\u00e1nsito gastroduodenal"],"c":3,"e":"El cuadro (lactante de 1 mes, v\u00f3mitos no biliosos en escopetazo, hambre persistente entre v\u00f3mitos = 'vomita y pide m\u00e1s') es altamente sugestivo de estenosis hipertr\u00f3fica del p\u00edloro. La prueba de elecci\u00f3n es la ecograf\u00eda. El pico de incidencia es entre las 3-6 semanas, m\u00e1s frecuente en varones primog\u00e9nitos.","ai":false},{"n":"ci19","q":"MIR 2023. Sobre la estenosis hipertr\u00f3fica del p\u00edloro, se\u00f1ale la afirmaci\u00f3n INCORRECTA:","o":["Afecta predominantemente a primog\u00e9nitos varones","Mayor incidencia en hijas de madres tratadas con macr\u00f3lidos durante el embarazo","La alteraci\u00f3n hidroelectrol\u00edtica t\u00edpica es una ACIDOSIS metab\u00f3lica hipoclor\u00e9mica","El tratamiento de elecci\u00f3n es la piloromiotom\u00eda extramucosa de Ramstedt"],"c":3,"e":"La alteraci\u00f3n hidroelectrol\u00edtica de la EHP es una ALCALOSIS metab\u00f3lica hipoclor\u00e9mica e hipopotas\u00e9mica (NO acidosis): la p\u00e9rdida repetida de HCl por los v\u00f3mitos produce alcalosis. El tratamiento definitivo es la piloromiotom\u00eda de Ramstedt, siempre previa correcci\u00f3n del desequilibrio hidroelectrol\u00edtico.","ai":false},{"n":"ct1","q":"El neuroblastoma es el tumor s\u00f3lido extracraneal m\u00e1s com\u00fan en ni\u00f1os. Se\u00f1ale la respuesta FALSA sobre su diagn\u00f3stico:","o":["Debemos sospecharlo ante un s\u00edndrome opsoclono-mioclono-ataxia","Existe casi siempre aumento de metabolitos de catecolaminas en orina","La mayor\u00eda se diagnostica en menores de 6 a\u00f1os","La gammagraf\u00eda con tecnecio es muy espec\u00edfica y est\u00e1 indicada para definir su extensi\u00f3n"],"c":4,"e":"La gammagraf\u00eda espec\u00edfica para el neuroblastoma es la MIBG (Metayodobencilguanidina) con I-123 o I-131, no con tecnecio. La gammagraf\u00eda \u00f3sea con Tc-99m puede detectar met\u00e1stasis \u00f3seas pero no es espec\u00edfica del neuroblastoma. El s\u00edndrome opsoclono-mioclono-ataxia es un s\u00edndrome paraneopl\u00e1sico cl\u00e1sico del neuroblastoma.","ai":false},{"n":"ct2","q":"Mujer de 20 a\u00f1os con tumoraci\u00f3n ov\u00e1rica de 15 cm s\u00f3lido-qu\u00edstica. Histolog\u00eda: dientes, pelos, epitelio intestinal, escamoso (15%), bronquial, y elementos neuroectod\u00e9rmicos y embrionarios. \u00bfDiagn\u00f3stico?","o":["Teratocarcinoma","Teratoma inmaduro","Teratoma qu\u00edstico maduro (dermoide)","Disgerminoma"],"c":2,"e":"El teratoma inmaduro contiene tejidos inmaduros, especialmente elementos NEUROECTOD\u00c9RMICOS inmaduros (la clave diagn\u00f3stica). El grado de inmadurez (I, II, III) determina el pron\u00f3stico. El teratoma maduro solo contiene tejidos diferenciados; el teratocarcinoma combina teratoma con carcinoma embrionario.","ai":false},{"n":"ct3","q":"Mujer de 51 a\u00f1os, dolor en hipogastrio y FID de 20 d\u00edas. TC abdominop\u00e9lvico con contraste. \u00bfDiagn\u00f3stico que sugiere la imagen con contenido heterog\u00e9neo, grasa y calcificaciones?","o":["Absceso p\u00e9lvico secundario a apendicitis","Litiasis ureteral derecha con urinoma","Tumor desmoide mesent\u00e9rico","Teratoma ov\u00e1rico maduro"],"c":4,"e":"El teratoma ov\u00e1rico maduro (quiste dermoide) aparece en el TC como masa qu\u00edstica heterog\u00e9nea con \u00e1reas de densidad grasa negativa en UH y estructuras calcificadas o dentales. Es la masa ov\u00e1rica m\u00e1s frecuente en mujeres j\u00f3venes y en edad reproductiva.","ai":false},{"n":"hdc1","noShuffle":false,"img":null,"q":"En la hernia diafragm\u00e1tica cong\u00e9nita con defecto posterolateral, \u00bfqu\u00e9 alteraci\u00f3n tiene mayor importancia fisiopatol\u00f3gica y cl\u00ednica?","o":["La herniaci\u00f3n del h\u00edgado en el t\u00f3rax","La malrotaci\u00f3n intestinal asociada","El saco herniario peritoneal intrator\u00e1cico","La hipoplasia pulmonar y la hipertensi\u00f3n arterial pulmonar"],"c":4,"e":"La clave fisiopatol\u00f3gica de la HDC es la <b>hipoplasia pulmonar bilateral</b> (predominante en el lado ipsilateral) y la consiguiente <b>hipertensi\u00f3n arterial pulmonar</b>. La compresi\u00f3n cr\u00f3nica del pulm\u00f3n en desarrollo por las v\u00edsceras herniadas impide su madurez alveolar y vascular, causando insuficiencia respiratoria grave e hipertensi\u00f3n pulmonar persistente del reci\u00e9n nacido, que es la principal causa de mortalidad."},{"n":"mir20_p7","noShuffle":false,"img":"img_gamma_renal","q":"MIR 2020 \u00b7 P7. Ni\u00f1o de 9 meses con antecedentes de tres episodios de infecci\u00f3n del tracto urinario (a los 14 d\u00edas de vida, 1 mes y 2 meses) en tratamiento antibi\u00f3tico prof\u00edl\u00e1ctico. Los estudios muestran reflujo v\u00e9sicoureteral bilateral (grado V derecho y II izquierdo) y disminuci\u00f3n del tama\u00f1o del ri\u00f1\u00f3n derecho con leve dilataci\u00f3n pielocalicial (II/V) en la ecograf\u00eda. Con estos datos y la imagen gammagr\u00e1fica renal que se muestra, el diagn\u00f3stico m\u00e1s probable es:","o":["Nefropat\u00eda cicatricial derecha post-pielonefritis","Estenosis de la uni\u00f3n pieloureteral derecha","Pielonefritis aguda derecha","Displasia multqu\u00edstica del ri\u00f1\u00f3n derecho"],"c":1,"e":"La gammagraf\u00eda DMSA muestra <b>funci\u00f3n renal diferencial del 29,1% derecho vs 70,9% izquierdo</b>, con captaci\u00f3n cortical reducida y cicatrices en el ri\u00f1\u00f3n derecho. En el contexto de ITUs de repetici\u00f3n desde el nacimiento y RVU grado V derecho, el patr\u00f3n es cl\u00e1sico de <b>nefropat\u00eda cicatricial post-pielonefritis</b>. La estenosis UPJ dar\u00eda hidronefrosis sin cicatrices. La pielonefritis aguda es captaci\u00f3n reducida sin retenci\u00f3n de cicatriz. La displasia multqu\u00edstica no funciona en absoluto en gammagraf\u00eda."},{"n":"rvu1","noShuffle":false,"img":"img_gamma_rvu","q":"MIR 2020 \u00b7 Ni\u00f1o de 9 meses con tres episodios de ITU (14 d\u00edas, 1 mes y 2 meses) y tratamiento antibi\u00f3tico profil\u00e1ctico. Estudios: reflujo v\u00e9sicoureteral bilateral (grado V derecho y II izquierdo), disminuci\u00f3n del tama\u00f1o del ri\u00f1\u00f3n derecho con leve dilataci\u00f3n pielocalicial (II/V) en ecograf\u00eda. Con estos datos y la imagen gammagr\u00e1fica renal, el diagn\u00f3stico m\u00e1s probable es:","o":["Nefropat\u00eda cicatricial derecha post-pielonefritis","Estenosis de la uni\u00f3n pieloureteral derecha","Pielonefritis aguda derecha","Displasia qu\u00edst\u00edca del ri\u00f1\u00f3n derecho"],"c":1,"e":"La gammagraf\u00eda muestra <b>marcada reducci\u00f3n de la funci\u00f3n renal derecha (29,1%)</b> con patr\u00f3n cicatricial, compatible con <b>nefropat\u00eda por reflujo</b>. Las ITU de repetici\u00f3n con RVU grado V derecho producen pielonefritis recurrentes que generan cicatrices corticales permanentes. La estenosis PIU cursar\u00eda con dilataci\u00f3n pielocalicial severa. La pielonefritis aguda no explica la p\u00e9rdida funcional cr\u00f3nica. La displasia multiqu\u00edst\u00edca tiene patr\u00f3n gammagr\u00e1fico no funcionante total."},{"n":"rvu2","noShuffle":false,"img":null,"q":"MIR 2018 \u00b7 Ni\u00f1a de dos a\u00f1os con reflujo vesicoureteral unilateral grado II (reflujo al ur\u00e9ter, pelvis y c\u00e1lices sin dilataci\u00f3n de la v\u00eda urinaria y morfolog\u00eda papilar normal). \u00bfCu\u00e1l es el tratamiento m\u00e1s adecuado de inicio?","o":["Inyecci\u00f3n endosc\u00f3pica de dextran\u00f3mero en el trayecto ureteral intramural","Reimplantaci\u00f3n ureteral por v\u00eda abierta","Reimplantaci\u00f3n ureteral laparosc\u00f3pica","Tratamiento conservador mediante observaci\u00f3n y profilaxis antibi\u00f3tica/antis\u00e9ptica"],"c":4,"e":"El RVU grado II en ni\u00f1a de 2 a\u00f1os tiene alta tasa de resoluci\u00f3n espont\u00e1nea (>80% en grados I-II). El tratamiento de elecci\u00f3n inicial es siempre <b>conservador: profilaxis antibi\u00f3tica continua + vigilancia</b>. La cirug\u00eda (abierta, laparosc\u00f3pica o endosc\u00f3pica) se reserva para fracaso del tratamiento m\u00e9dico, RVU de alto grado, breakthrough infections o nefropat\u00eda progresiva. El dextran\u00f3mero es una opci\u00f3n minimamente invasiva pero no es el primer paso."}],"nef":[{"n":"nl1","q":"\u00bfCu\u00e1l es la contraindicaci\u00f3n ABSOLUTA para la litotricia extracorp\u00f3rea con ondas de choque (LEOC)?","o":["Embarazo","Coagulopat\u00eda no corregida","Marcapasos card\u00edaco","Aneurisma a\u00f3rtico abdominal"],"c":1,"e":"El EMBARAZO es la \u00daNICA contraindicaci\u00f3n absoluta de la LEOC: las ondas de choque pueden da\u00f1ar al feto de forma impredecible en cualquier trimestre. El resto son contraindicaciones relativas: coagulopat\u00eda (corregible previamente), marcapasos (coordinaci\u00f3n con cardi\u00f3logo) y aneurisma a\u00f3rtico (relativa).","ai":false},{"n":"nl2","q":"\u00bfCu\u00e1l se considera indicaci\u00f3n de litotricia o intervenci\u00f3n quir\u00fargica en la litiasis renal?","o":["C\u00f3licos nefr\u00edticos expulsivos cada 2 a\u00f1os","Obstrucci\u00f3n mantenida con repercusi\u00f3n retr\u00f3grada","Hematuria recidivante sin obstrucci\u00f3n","C\u00e1lculo de \u00e1cido \u00farico sin obstrucci\u00f3n"],"c":2,"e":"La obstrucci\u00f3n mantenida con repercusi\u00f3n retr\u00f3grada (hidronefrosis, deterioro de la funci\u00f3n renal) es una indicaci\u00f3n absoluta de tratamiento activo independientemente del tama\u00f1o del c\u00e1lculo. Los c\u00f3licos ocasionales, la microhematuria sin obstrucci\u00f3n y los c\u00e1lculos de \u00e1cido \u00farico (disolubles con alcalinizaci\u00f3n) no son indicaciones absolutas.","ai":false},{"n":"nl3","q":"Se\u00f1ale la FALSA respecto a los tipos de litiasis urinaria:","o":["La litiasis de \u00e1cido \u00farico se trata con alcalinizaci\u00f3n de la orina","El oxalato c\u00e1lcico es m\u00e1s frecuente en hombres","La litiasis de cistina se fragmenta f\u00e1cilmente con LEOC","La litiasis aparece cuando los factores promotores superan a los inhibidores"],"c":3,"e":"La litiasis de cistina es RESISTENTE a la LEOC (ondas de choque): es uno de los c\u00e1lculos m\u00e1s duros y densos. El tratamiento de elecci\u00f3n es la ureteroscopia o la nefrolitotom\u00eda percut\u00e1nea. El \u00e1cido \u00farico s\u00ed se disuelve con alcalinizaci\u00f3n oral (pH objetivo 6.5-7.0).","ai":false},{"n":"nl4","q":"\u00bfCu\u00e1les son factores de riesgo para la producci\u00f3n de litiasis urinaria?","o":["Aporte elevado de prote\u00ednas animales","Baja ingesta h\u00eddrica","Consumo elevado de hidratos de carbono (aumentan la excreci\u00f3n de calcio y oxalato)","Todas las anteriores son correctas"],"c":4,"e":"Todos son factores de riesgo: las prote\u00ednas animales aumentan calciuria, oxaluria y uricosuria mientras reducen el citrato; la baja ingesta h\u00eddrica aumenta la concentraci\u00f3n de solutos; los hidratos de carbono refinados estimulan la insulina que aumenta la calciuria. El tratamiento preventivo incluye abundante hidrataci\u00f3n y dieta equilibrada.","ai":false},{"n":"nl5","q":"Acerca de la litiasis urinaria, se\u00f1ala la correcta:","o":["Es una enfermedad con incidencia muy baja y poco importante en cuanto a gasto sanitario","Las tasas de recurrencia en un mismo paciente son bajas, alrededor del 2-5%","La probabilidad de expulsi\u00f3n espont\u00e1nea es baja, alrededor del 5%","Ninguna de las anteriores es correcta"],"c":4,"e":"Las tres primeras afirmaciones son falsas: la litiasis es muy prevalente (8-10% de la poblaci\u00f3n occidental), la recurrencia es alta (~50% a 10 a\u00f1os), y los c\u00e1lculos peque\u00f1os (<5mm) tienen alta tasa de expulsi\u00f3n espont\u00e1nea (>80%). Por tanto, 'ninguna de las anteriores es correcta' es la respuesta correcta.","ai":false},{"n":"nl6","q":"Mujer de 42 a\u00f1os con m\u00faltiples ITU de repetici\u00f3n y litiasis coraliforme izquierda de estruvita. \u00bfGermen m\u00e1s probable en el cultivo?","o":["Escherichia coli","Citrobacter freundii","Chlamydia trachomatis","Proteus mirabilis"],"c":4,"e":"La litiasis de estruvita (fosfato am\u00f3nico magn\u00e9sico) se forma en infecciones por g\u00e9rmenes ureasa-positivos que alcalinizan la orina. El Proteus mirabilis produce ureasa en grandes cantidades \u2192 alcalinizaci\u00f3n \u2192 precipitaci\u00f3n de fosfatos \u2192 c\u00e1lculo coraliforme. Es el germen m\u00e1s caracter\u00edstico de la litiasis infecciosa.","ai":false},{"n":"nl7","q":"Hombre de 25 a\u00f1os con litiasis en tercio distal del ur\u00e9ter izquierdo. pH de orina 5.5. \u00bfTratamiento m\u00e1s apropiado?","o":["Benzbromarona v\u00eda oral","Ureteroscopia con extracci\u00f3n del c\u00e1lculo","Nefrolitotom\u00eda endosc\u00f3pica percut\u00e1nea","Alcalinizaci\u00f3n de la orina por v\u00eda oral"],"c":4,"e":"El pH de orina 5.5 (muy \u00e1cido) junto con la localizaci\u00f3n ureteral sugiere litiasis de \u00e1cido \u00farico (radiol\u00facida, no visible en Rx simple). El tratamiento de elecci\u00f3n es la alcalinizaci\u00f3n oral de la orina (citrato pot\u00e1sico o bicarbonato s\u00f3dico, objetivo pH 6.5-7.0), que disuelve el c\u00e1lculo. Solo se recurre a la ureteroscopia si no hay respuesta.","ai":false},{"n":"nl8","q":"Sobre los principios quir\u00fargicos para el tratamiento de las f\u00edstulas urogenitales, se\u00f1ala la respuesta FALSA:","o":["No es conveniente resolver la obstrucci\u00f3n de la v\u00eda urinaria distal si est\u00e1 presente","Debemos tratar y prevenir las infecciones asociadas","Debemos conseguir un estado nutricional adecuado","Previo al tratamiento debemos drenar adecuadamente la v\u00eda urinaria"],"c":1,"e":"Resolver la obstrucci\u00f3n de la v\u00eda urinaria distal S\u00cd es conveniente (de hecho, imprescindible) antes de la cirug\u00eda reparadora. Si existe obstrucci\u00f3n distal, la presi\u00f3n retr\u00f3grada sobre la anastomosis impedir\u00e1 la cicatrizaci\u00f3n correcta de la f\u00edstula reparada.","ai":false},{"n":"nl9","q":"Se\u00f1ala la respuesta INCORRECTA sobre las f\u00edstulas del tracto urinario:","o":["Constituyen una comunicaci\u00f3n extraanat\u00f3mica entre el tracto urinario y otra cavidad corporal","Se clasifican en funci\u00f3n de los \u00f3rganos que comunican","La etiolog\u00eda m\u00e1s frecuente es la cong\u00e9nita","Las respuestas A y B son correctas"],"c":3,"e":"La etiolog\u00eda m\u00e1s frecuente de las f\u00edstulas urogenitales es la ADQUIRIDA: obst\u00e9trica (parto prolongado/obstruido) en pa\u00edses en v\u00edas de desarrollo y quir\u00fargica (histerectom\u00eda, cirug\u00eda colorrectal) en pa\u00edses desarrollados. Las f\u00edstulas cong\u00e9nitas son raras. Las opciones A y B son correctas entre s\u00ed.","ai":false},{"n":"nt1","q":"Respecto a la sustituci\u00f3n vesical ortot\u00f3pica, se\u00f1ale la respuesta FALSA:","o":["Para su realizaci\u00f3n es imprescindible la presencia de uretra y mecanismo esfinteriano competente","Es posible que posteriormente sea necesaria la realizaci\u00f3n de autosondajes","El segmento intestinal preferido es el \u00edleon","Las complicaciones metab\u00f3licas son MENOS frecuentes que en el conducto ileal (Bricker)"],"c":4,"e":"Las neovejigas ortot\u00f3picas tienen MAYOR absorci\u00f3n de solutos que el Bricker porque la orina permanece m\u00e1s tiempo en contacto con la mucosa intestinal (sin flujo continuo). Esto implica mayor riesgo de acidosis hiperclor\u00e9mica, d\u00e9ficit de vitamina B12 y osteomalacia. El Bricker (conducto ileal) tiene MENOS complicaciones metab\u00f3licas.","ai":false},{"n":"nt2","q":"Respecto a las derivaciones urinarias, se\u00f1ale la respuesta FALSA seg\u00fan el solucionario del examen:","o":["El tipo de derivaci\u00f3n preferida en pacientes >80 a\u00f1os es el conducto ileal (Bricker)","La destubulizaci\u00f3n del intestino ha aumentado la capacidad del reservorio al disminuir su presi\u00f3n","En pacientes con FG <50 ml/min deber\u00eda evitarse una derivaci\u00f3n urinaria continente","El segmento intestinal menos estanco y con mayor desequilibrio electrol\u00edtico es el yeyuno"],"c":4,"e":"Seg\u00fan el solucionario del PDF, la opci\u00f3n D (el yeyuno es el segmento con m\u00e1s problemas electrol\u00edticos) es la se\u00f1alada como falsa en el contexto de la pregunta. Cl\u00ednicamente, sin embargo, el yeyuno S\u00cd es el segmento m\u00e1s problem\u00e1tico para derivaciones (s\u00edndrome de derivaci\u00f3n yeyunal: hiponatremia, hipocloremia, hiperpotasemia).","ai":true},{"n":"nt3","q":"Respecto a la nefroureterectom\u00eda como tratamiento del TUTS, se\u00f1ale la respuesta CORRECTA:","o":["La desinserci\u00f3n endosc\u00f3pica del orificio ureteral est\u00e1 indicada en tumores proximales, realizando primero este tiempo y luego la nefrectom\u00eda","La desinserci\u00f3n abierta est\u00e1 indicada en tumores distales, realizando primero la nefrectom\u00eda y luego la disecci\u00f3n del tramo distal con rodete vesical","Los pacientes con ganglios positivos en imagen (cN+) son contraindicaci\u00f3n absoluta para la nefroureterectom\u00eda","Los resultados oncol\u00f3gicos de la v\u00eda laparosc\u00f3pica son superiores a los de la t\u00e9cnica abierta"],"c":1,"e":"En los tumores del tracto urinario superior PROXIMAL se realiza: desinserci\u00f3n endosc\u00f3pica del meato ureteral primero y luego nefrectom\u00eda laparosc\u00f3pica. Para tumores DISTALES: nefrectom\u00eda primero y luego desinserci\u00f3n abierta del tramo distal con rodete vesical. Los resultados laparosc\u00f3picos son equivalentes (no superiores) a los abiertos.","ai":false},{"n":"nt4","q":"\u00bfCu\u00e1l de los siguientes factores de riesgo del TUTS indicar\u00eda la realizaci\u00f3n de nefroureterectom\u00eda radical?","o":["Tumor de bajo grado","Presencia de hidronefrosis en la TC","Tama\u00f1o tumoral <1 cm","Citolog\u00eda de orina negativa para carcinoma de alto grado"],"c":2,"e":"La presencia de hidronefrosis en la TC es un factor de alto riesgo del TUTS (indica obstrucci\u00f3n del tracto por el tumor con mayor probabilidad de invasi\u00f3n o high grade) y junto con la citolog\u00eda positiva de alto grado, tama\u00f1o >2cm o multifocalidad, es indicaci\u00f3n de nefroureterectom\u00eda radical en lugar de manejo endosc\u00f3pico conservador.","ai":false},{"n":"np1","q":"Var\u00f3n de 58 a\u00f1os, STUI obstructivos (IPSS 9), mala tolerancia al tratamiento m\u00e9dico, pr\u00f3stata de 107cc, residuo postmiccional 87ml. Biopsia negativa para malignidad. \u00bfOpci\u00f3n quir\u00fargica m\u00e1s adecuada?","o":["Adenomectom\u00eda transvertical o retrop\u00fabica abierta","Fotovaporizaci\u00f3n con l\u00e1ser verde (KTP)","Resecci\u00f3n transuretral de pr\u00f3stata (RTU-P)","Fotovaporizaci\u00f3n con l\u00e1ser tulio (TmLRP) o enucleaci\u00f3n con l\u00e1ser Holmium (HoLEP)"],"c":4,"e":"Para pr\u00f3statas >80-100cc, la RTU-P tiene alto riesgo de s\u00edndrome de reabsorci\u00f3n por el largo tiempo de resecci\u00f3n necesario. Para grandes pr\u00f3statas (>80cc) se prefieren t\u00e9cnicas con l\u00e1ser (HoLEP, TmLRP) o adenomectom\u00eda abierta. El HoLEP permite enuclear pr\u00f3statas de cualquier tama\u00f1o con menor sangrado, menor estancia hospitalaria y menor tasa de reintervenci\u00f3n.","ai":false},{"n":"np2","q":"\u00bfCu\u00e1l complicaci\u00f3n postquir\u00fargica NO se corresponde con la adenomectom\u00eda prost\u00e1tica retrop\u00fabica (cirug\u00eda abierta)?","o":["S\u00edndrome de reabsorci\u00f3n secundario a hiponatremia","Hematuria postoperatoria","Eyaculaci\u00f3n retr\u00f3grada","Esclerosis de la celda prost\u00e1tica"],"c":1,"e":"El s\u00edndrome de reabsorci\u00f3n (hiponatremia dilucional por absorci\u00f3n de l\u00edquido de irrigaci\u00f3n hipot\u00f3nico a trav\u00e9s de los senos venosos prost\u00e1ticos abiertos) es una complicaci\u00f3n EXCLUSIVA de la RTU-P endosc\u00f3pica. La adenomectom\u00eda abierta utiliza suero fisiol\u00f3gico y NO produce este s\u00edndrome. Las dem\u00e1s complicaciones pueden ocurrir en ambas t\u00e9cnicas.","ai":false},{"n":"np3","q":"Paciente de 61 a\u00f1os, PSA 8.2 ng/mL, PSA libre 14%, adenocarcinoma Gleason 3+4 (ISUP 2), lesi\u00f3n PI-RADS 5 en l\u00f3bulo derecho que infiltra focalmente la c\u00e1psula prost\u00e1tica. \u00bfOpci\u00f3n quir\u00fargica m\u00e1s indicada?","o":["Prostatectom\u00eda radical intrafascial con preservaci\u00f3n bilateral de bandeletas neurovasculares","Prostatectom\u00eda radical extrafascial sin preservaci\u00f3n de bandeleta neurovascular izquierda","Prostatectom\u00eda radical extrafascial con preservaci\u00f3n bilateral de bandeletas","Prostatectom\u00eda radical extrafascial con linfadenectom\u00eda p\u00e9lvica extendida"],"c":4,"e":"La infiltraci\u00f3n capsular focal (pT3a) obliga a cirug\u00eda EXTRAFASCIAL para garantizar m\u00e1rgenes libres. Con Gleason 3+4 (ISUP 2), PSA >8 ng/mL y extensi\u00f3n extraprost\u00e1tica, la probabilidad de ganglios positivos supera el 5%, indicando linfadenectom\u00eda p\u00e9lvica extendida. La preservaci\u00f3n de bandeletas queda en segundo plano ante la extensi\u00f3n extraprost\u00e1tica.","ai":false},{"n":"np4","q":"Respecto a los cabestrillos suburetrales sint\u00e9ticos como tratamiento de la IU de esfuerzo femenina, se\u00f1ala la opci\u00f3n FALSA:","o":["Es el tratamiento de elecci\u00f3n para la IU de esfuerzo","Los retrop\u00fabicos tienen mayor riesgo de perforaci\u00f3n vesical que los transobturadores","Los transobturadores tienen mayor riesgo de dolor cr\u00f3nico y dispareunia que los retrop\u00fabicos","Los cabestrillos de incisi\u00f3n \u00fanica (mini-slings) tienen una tasa de complicaciones similar a los cabestrillos convencionales"],"c":4,"e":"Los cabestrillos de incisi\u00f3n \u00fanica (mini-slings) tienen MENOR tasa de complicaciones perioperatorias (menos dolor, menor tiempo quir\u00fargico, menos sangrado) pero tambi\u00e9n tienen una tasa de curaci\u00f3n a largo plazo INFERIOR a los cabestrillos convencionales. Por tanto, no son equivalentes en eficacia terap\u00e9utica.","ai":false},{"n":"np5","q":"Respecto a la cirug\u00eda de la HBP, indique la respuesta FALSA:","o":["La retenci\u00f3n urinaria aguda recurrente, litiasis vesical e insuficiencia renal obstructiva son indicaciones absolutas de cirug\u00eda desobstructiva","La enucleaci\u00f3n prost\u00e1tica con l\u00e1ser Holmium tiene resultados equivalentes a la adenomectom\u00eda abierta con menor sangrado y hospitalizaci\u00f3n","En la RTU-P es imprescindible la resecci\u00f3n ordenada con hemostasia cuidadosa teniendo como referencias el cuello vesical y el veru montanum","El s\u00edndrome de reabsorci\u00f3n est\u00e1 relacionado con el tiempo de resecci\u00f3n, el peso de tejido resecado y el sangrado abundante"],"c":1,"e":"Seg\u00fan el solucionario del PDF, la opci\u00f3n A es se\u00f1alada como falsa, posiblemente por imprecisiones en la formulaci\u00f3n de las indicaciones absolutas de cirug\u00eda de HBP (la retenci\u00f3n cr\u00f3nica por rebosamiento, el residuo postmiccional aislado sin da\u00f1o renal y la incontinencia por rebosamiento no siempre son indicaciones absolutas).","ai":true},{"n":"nh1","noShuffle":true,"img":null,"q":"Se\u00f1ale la respuesta verdadera respecto a la hematuria:","o":["La glomerulonefritis puede producir hematuria macrosc\u00f3pica o microsc\u00f3pica","Existen pigmentos y f\u00e1rmacos que pueden dar coloraci\u00f3n rojiza en la orina sin hematuria real","La uretrorragi\u00e1 se caracteriza por emisi\u00f3n de sangre por el meato uretral independientemente de la micci\u00f3n","Todas las anteriores son correctas"],"c":4,"e":"Las tres afirmaciones son correctas. <b>La GN puede dar hematuria macro o microsc\u00f3pica.</b> Pigmentos (remolacha, mioglobina) y f\u00e1rmacos (rifampicina, fenolftale\u00edna) producen pseudohematuria sin hem\u00e1t\u00ebes reales. La <b>uretrorragi\u00e1</b> es sangrado por el meato independiente de la micci\u00f3n."},{"n":"nh2","noShuffle":false,"img":null,"q":"Respecto a la hematuria, se\u00f1ale la respuesta incorrecta:","o":["La glomerulonefritis puede producir tanto hematuria macrosc\u00f3pica como microsc\u00f3pica","La proteinuria es muy infrecuente en la hematuria por glomerulonefritis","El estudio morfol\u00f3gico de los hem\u00e1t\u00ebes en el sedimento urinario es clave para definir el origen de la hematuria","Algunos laxantes pueden producir pseudohematuria"],"c":2,"e":"La afirmaci\u00f3n incorrecta es la B. La <b>proteinuria es FRECUENTE</b> en la hematuria glomerular: la GN cursa con proteinuria significativa, cilindros hem\u00e1ticos y hem\u00e1t\u00ebes dism\u00f3rficos. Los laxantes con fenolftale\u00edna s\u00ed producen pseudohematuria."},{"n":"nh3","noShuffle":false,"img":null,"q":"Todas las siguientes caracter\u00edsticas son t\u00edpicas de la hematuria de origen nefrol\u00f3gico, EXCEPTO:","o":["Presencia de hem\u00e1t\u00ebes dism\u00f3rficos &gt;80%","Proteinuria significativa (&gt;1 g/24h)","Presencia de cilindros hem\u00e1ticos","Asintom\u00e1tica"],"c":4,"e":"La hematuria <b>asintom\u00e1tica</b> es caracter\u00edstica del origen <b>urol\u00f3gico</b> (tumor renal o vesical), no nefrol\u00f3gico. La hematuria glomerular suele acompa\u00f1arse de edema, HTA u oliguria. Hem\u00e1t\u00ebes dism\u00f3rficos &gt;80%, proteinuria y cilindros hem\u00e1ticos son el patr\u00f3n glomerular cl\u00e1sico."}],"pal":[{"n":"pa1","q":"Paciente en fase de \u00faltimas horas con morfina en perfusi\u00f3n, disnea controlada, que presenta estertores h\u00famedos (respiraci\u00f3n estertorosa). \u00bfQu\u00e9 f\u00e1rmaco debemos asociar?","o":["Aumentar la dosis de morfina","Butilbromuro de escopolamina (buscapina)","Ondansetr\u00f3n","Haloperidol en gotas"],"c":2,"e":"Los estertores h\u00famedos en la agon\u00eda se producen por acumulaci\u00f3n de secreciones salivales y bronquiales en la v\u00eda a\u00e9rea superior que el paciente ya no puede movilizar. El tratamiento de elecci\u00f3n es el butilbromuro de escopolamina (anticolin\u00e9rgico): reduce la producci\u00f3n de secreciones bronquiales y salivales. La morfina controla la disnea pero no act\u00faa sobre las secreciones; el haloperidol se usa para el delirium.","ai":false}],"mi":[{"n":"mv1","q":"En la insuficiencia respiratoria, todas son contraindicaci\u00f3n de VMNI MENOS UNA:","o":["Trauma facial grave","Parada cardiorrespiratoria","Obstrucci\u00f3n de la v\u00eda a\u00e9rea superior","Paciente en lista de espera de trasplante pulmonar"],"c":4,"e":"El paciente en espera de trasplante pulmonar ES UNA INDICACI\u00d3N de VMNI (como puente al trasplante), no una contraindicaci\u00f3n. La VMNI puede mantener al paciente estable evitando la intubaci\u00f3n y permitiendo llegar al trasplante. Las contraindicaciones incluyen: PCR, trauma/cirug\u00eda facial reciente, obstrucci\u00f3n de v\u00eda a\u00e9rea superior e incapacidad para cooperar.","ai":false},{"n":"mv2","q":"El principal objetivo de la PEEP en la ventilaci\u00f3n mec\u00e1nica invasiva es:","o":["Hoy en d\u00eda no est\u00e1 indicado el uso de PEEP en la VM","Favorecer el intercambio gaseoso","Disminuir las presiones en el pulm\u00f3n","Evitar el colapso alveolar al final de la espiraci\u00f3n"],"c":4,"e":"La PEEP mantiene presi\u00f3n positiva al final de la espiraci\u00f3n, evitando el colapso alveolar c\u00edclico (microatelectasias) y manteniendo la capacidad residual funcional. Esto mejora indirectamente el intercambio gaseoso y permite reducir la FiO2 necesaria. Es el pilar del tratamiento ventilatorio del SDRA donde previene el da\u00f1o pulmonar por apertura-cierre repetido de alv\u00e9olos.","ai":false},{"n":"mc1","q":"Averigua el modo de estimulaci\u00f3n del marcapasos definitivo que lleva el paciente (la imagen muestra estimulaci\u00f3n auricular y ventricular sincronizada con inhibici\u00f3n por actividad propia):","o":["VDD","VVI","DDD","No lleva marcapasos"],"c":3,"e":"El modo DDD estimula y sensa tanto la aur\u00edcula (D) como el ventr\u00edculo (D) y tiene respuesta dual de inhibici\u00f3n y disparo (D). Es el modo m\u00e1s fisiol\u00f3gico al mantener la sincron\u00eda auriculoventricular. El modo VVI solo estimula y sensa el ventr\u00edculo, perdiendo la sincron\u00eda AV. El VDD sensa la aur\u00edcula pero solo estimula el ventr\u00edculo.","ai":false},{"n":"mc2","q":"Tras observar un ritmo anormal en el monitor, el primer paso a realizar es:","o":["Desfibrilar a 200J inmediatamente","Comprobar el pulso del paciente"],"c":2,"e":"Ante cualquier ritmo alarmante en el monitor, el PRIMER PASO es siempre comprobar el pulso del paciente: puede ser un artefacto (movimiento, electrodo suelto) o una disociaci\u00f3n electromec\u00e1nica (actividad el\u00e9ctrica sin pulso, que NO se desfibrilar\u00e1). Solo si hay FV/TVSP confirmada SIN pulso se desfibrilar\u00e1 de inmediato.","ai":false},{"n":"mc3","q":"De las siguientes indicaciones de cardioversi\u00f3n SINCRONIZADA de emergencia, se\u00f1ale la correcta:","o":["Una taquicardia de complejo QRS estrecho sin pulso","Una taquicardia de QRS estrecho regular, estable, que no responde a adenosina y amiodarona","Una taquicardia de QRS estrecho con paciente hemodin\u00e1micamente inestable","Una taquicardia de QRS estrecho regular, estable, que no responde a adenosina y procainamida"],"c":3,"e":"La cardioversi\u00f3n SINCRONIZADA de emergencia est\u00e1 indicada en taquiarritmias CON pulso pero con inestabilidad hemodin\u00e1mica (hipotensi\u00f3n, s\u00edncope, dolor tor\u00e1cico isqu\u00e9mico, IC aguda). La taquicardia sin pulso requiere desfibrilaci\u00f3n NO sincronizada. Las taquicardias estables se tratan primero con f\u00e1rmacos antiarr\u00edtmicos.","ai":false},{"n":"mc4","q":"\u00bfCu\u00e1l de estas patolog\u00edas NO es una indicaci\u00f3n del uso del bal\u00f3n de contrapulsaci\u00f3n a\u00f3rtico (BCIA)?","o":["Shock cardiog\u00e9nico","Angina inestable refractaria al tratamiento m\u00e9dico","Fallo ventricular refractario","Embolismo pulmonar agudo"],"c":4,"e":"El BCIA aumenta el gasto card\u00edaco y la perfusi\u00f3n coronaria actuando sobre el ventr\u00edculo IZQUIERDO. El embolismo pulmonar agudo es fundamentalmente un problema del ventr\u00edculo DERECHO: el BCIA no act\u00faa sobre el VD y no est\u00e1 indicado en el tromboembolismo pulmonar. Las otras tres opciones s\u00ed son indicaciones cl\u00e1sicas del BCIA.","ai":false},{"n":"ms1","q":"Paciente con traumatismo tor\u00e1cico, hipotensi\u00f3n, taquicardia y pulso parad\u00f3jico. \u00bfQu\u00e9 NO deber\u00edamos hacer?","o":["Pericardiocentesis urgente","Aportar volumen","Realizar diagn\u00f3stico diferencial con neumot\u00f3rax a tensi\u00f3n","Aportar ventilaci\u00f3n mec\u00e1nica con presi\u00f3n positiva"],"c":4,"e":"La VM con presi\u00f3n positiva est\u00e1 CONTRAINDICADA en el taponamiento card\u00edaco: al aumentar la presi\u00f3n intrator\u00e1cica, reduce a\u00fan m\u00e1s el retorno venoso al VD y el llenado del ventr\u00edculo, agravando el taponamiento. El tratamiento es la pericardiocentesis de urgencia. El diagn\u00f3stico diferencial con neumot\u00f3rax a tensi\u00f3n (que tambi\u00e9n cursa con hipotensi\u00f3n y distensi\u00f3n yugular) es obligatorio.","ai":false},{"n":"ms2","q":"En las primeras horas de un shock s\u00e9ptico, \u00bfqu\u00e9 NO se debe hacer?","o":["Administrar corticoides de forma rutinaria","Iniciar terapia con drogas vasoactivas si hay hipotensi\u00f3n refractaria a fluidos","Drenar el foco infeccioso si es accesible","Iniciar terapia antibi\u00f3tica emp\u00edrica precoz (en la primera hora)"],"c":1,"e":"Los corticoides (hidrocortisona 200 mg/d\u00eda) solo est\u00e1n indicados en el shock s\u00e9ptico REFRACTARIO a la reanimaci\u00f3n con fluidos y a dosis adecuadas de vasopresores (noradrenalina >0.25 mcg/kg/min). No deben administrarse de forma rutinaria en las primeras horas. Los vasopresores, el control del foco y los antibi\u00f3ticos precoces S\u00cd son prioritarios.","ai":false},{"n":"ms3","q":"Paciente politraumatizado: TCE grave, Glasgow 6, midriasis arreactiva derecha, inestabilidad hemodin\u00e1mica sin sangrado externo, bradipnea. \u00bfOrden de las cuatro primeras actuaciones?","o":["Intubaci\u00f3n, ventilaci\u00f3n, fluidoterapia, b\u00fasqueda del origen del sangrado","C\u00e1nula orofar\u00edngea, oxigenaci\u00f3n, fluidoterapia, TAC craneal","Intubaci\u00f3n, fluidoterapia, TAC craneal, b\u00fasqueda del origen del sangrado","Intubaci\u00f3n, ventilaci\u00f3n, fluidoterapia, TAC craneal"],"c":4,"e":"La secuencia ABCDE del ATLS: primero asegurar v\u00eda a\u00e9rea (intubaci\u00f3n orotraqueal dado el bajo Glasgow) + ventilaci\u00f3n (la bradipnea indica hipoventilaci\u00f3n), luego fluidoterapia para la inestabilidad hemodin\u00e1mica, y finalmente TC craneal para valorar el TCE grave. El TC se realiza tras estabilizar la v\u00eda a\u00e9rea y la hemodin\u00e1mica.","ai":false},{"n":"ms4","q":"\u00bfQu\u00e9 medidas se deben tomar en las primeras horas ante un enfermo en UCI con fiebre, disnea, tos con expectoraci\u00f3n purulenta y leucocitosis?","o":["Determinaci\u00f3n de lactato","Hemocultivos antes de iniciar antibi\u00f3tico","Iniciar antibi\u00f3tico emp\u00edrico de amplio espectro","Todas las anteriores"],"c":4,"e":"El bundle de sepsis incluye en la primera hora: medici\u00f3n del lactato s\u00e9rico, extracci\u00f3n de hemocultivos ANTES del antibi\u00f3tico (clave para el diagn\u00f3stico microbiol\u00f3gico), administraci\u00f3n de antibi\u00f3ticos de amplio espectro y fluidoterapia si hay hipotensi\u00f3n o lactato >2 mmol/L. Las tres medidas son correctas y deben realizarse conjuntamente.","ai":false},{"n":"ms5","q":"\u00bfCu\u00e1l de estos valores NO se tiene en cuenta para calcular el SOFA (Sequential Organ Failure Assessment)?","o":["Creatinina 1.3 mg/dl","PAM <70 mmHg con Dopamina >5 mcg/kg/min","INR >1.5","Bilirrubina 1.2 mg/dl"],"c":3,"e":"El SOFA eval\u00faa 6 \u00f3rganos: respiratorio (PaO2/FiO2), coagulaci\u00f3n (PLAQUETAS, no INR), hep\u00e1tico (bilirrubina), hemodin\u00e1mico (PAM y vasopresores), neurol\u00f3gico (GCS) y renal (creatinina o diuresis). El INR/TP NO forma parte del SOFA. La coagulaci\u00f3n en el SOFA se eval\u00faa con el recuento de plaquetas.","ai":false}],"nc":[{"n":"nt_1","q":"El tumor intracerebral primario maligno m\u00e1s frecuente en el adulto es:","o":["Met\u00e1stasis cerebral","Oligodendroglioma anapl\u00e1sico","Astrocitoma anapl\u00e1sico","Glioblastoma multiforme"],"c":4,"e":"El glioblastoma multiforme (GBM, glioma grado IV de la OMS) es el tumor cerebral PRIMARIO maligno m\u00e1s frecuente en adultos (mediana de edad al diagn\u00f3stico 65 a\u00f1os). Tiene un pron\u00f3stico muy desfavorable (supervivencia media ~15 meses con tratamiento multimodal). En el total de tumores intracraneales (primarios + secundarios), las met\u00e1stasis son las m\u00e1s frecuentes.","ai":false},{"n":"nt_2","q":"Respecto a la cl\u00ednica de los tumores infratentoriales, indique la respuesta FALSA:","o":["Hipertensi\u00f3n intracraneal por hidrocefalia comunicante","Diplop\u00eda por afectaci\u00f3n de pares craneales","Ataxia de la marcha","Dismetr\u00eda de los miembros"],"c":1,"e":"Los tumores infratentoriales causan hidrocefalia OBSTRUCTIVA (no comunicante): comprimen el IV ventr\u00edculo o el acueducto de Silvio bloqueando la circulaci\u00f3n del LCR. La hidrocefalia comunicante se produce por alteraci\u00f3n de la reabsorci\u00f3n o hipersecreci\u00f3n de LCR. Los tumores de fosa posterior producen signos cerebelosos (ataxia, dismetr\u00eda) y diplopia por afectaci\u00f3n de pares craneales.","ai":false},{"n":"nt_3","q":"El sitio de aparici\u00f3n m\u00e1s frecuente de las met\u00e1stasis cerebrales es:","o":["Vermis cerebeloso","Hemisferios cerebelosos","Hemisferios cerebrales","Tronco encef\u00e1lico"],"c":3,"e":"Las met\u00e1stasis cerebrales se localizan preferentemente en los HEMISFERIOS CEREBRALES (80%), en la uni\u00f3n c\u00f3rtico-subcortical donde los \u00e9mbolos tumorales quedan atrapados por el cambio de calibre vascular. El cerebelo (15%) es el segundo lugar. Los tumores que m\u00e1s metastatizan al cerebro son pulm\u00f3n, mama y melanoma.","ai":false},{"n":"nt_4","q":"Paciente de 54 a\u00f1os con hipoacusia neurosensorial izquierda de 2 a\u00f1os, ac\u00fafenos y mareos. \u00bfTipo de tumor m\u00e1s probable?","o":["Glioblastoma protuberancial","Neurinoma del VIII par craneal (schwannoma vestibular)","Meningioma del seno cavernoso","Neurinoma protuberancial"],"c":2,"e":"El neurinoma del VIII par (schwannoma vestibular) presenta la triada cl\u00e1sica: hipoacusia neurosensorial unilateral progresiva + ac\u00fafenos + v\u00e9rtigo/mareos. Es el tumor m\u00e1s frecuente del \u00e1ngulo pontocerebeloso (~80%). Se diagnostica con RM craneal con gadolinio (la secuencia de elecci\u00f3n es la CISS/FIESTA para el conducto auditivo interno).","ai":false},{"n":"nt_5","q":"\u00bfCu\u00e1l es el m\u00e9todo diagn\u00f3stico de elecci\u00f3n para la valoraci\u00f3n de patolog\u00eda tumoral intracraneal?","o":["TC cerebral con contraste","AngioTC cerebral","RMN cerebral","PET cerebral"],"c":3,"e":"La RM cerebral es la t\u00e9cnica de imagen de elecci\u00f3n para el estudio de la patolog\u00eda tumoral intracraneal: mayor resoluci\u00f3n de contraste de partes blandas, mejor caracterizaci\u00f3n del tumor (grado, extensi\u00f3n, l\u00edmites), detecci\u00f3n de lesiones de menor tama\u00f1o y valoraci\u00f3n de la respuesta al tratamiento. El TC es de primera l\u00ednea en urgencias.","ai":false},{"n":"nt_6","q":"Respecto al astrocitoma piloqu\u00edstico juvenil (grado I OMS), responda la correcta:","o":["Habitualmente aparece en la l\u00ednea media de los hemisferios cerebrales","Habitualmente es qu\u00edstico con un n\u00f3dulo mural","Aparece en la l\u00ednea media del cerebro en adultos","Es de alto grado de malignidad"],"c":2,"e":"El astrocitoma piloqu\u00edstico (Grado I OMS) es el tumor cerebral m\u00e1s frecuente en ni\u00f1os y adolescentes. Habitualmente es QU\u00cdSTICO (n\u00f3dulo mural vascularizado + quiste perif\u00e9rico), de localizaci\u00f3n preferente en cerebelo y v\u00eda \u00f3ptica. Es el tumor glial de MEJOR pron\u00f3stico (potencialmente curable con cirug\u00eda completa).","ai":false},{"n":"nt_7","q":"La radiocirug\u00eda ha demostrado ser eficaz en las siguientes lesiones, EXCEPTO:","o":["Met\u00e1stasis cerebrales \u00fanicas o m\u00faltiples","Meningiomas peque\u00f1os irresecables","Neurinomas del ac\u00fastico (schwannoma vestibular)","Aneurismas cerebrales"],"c":4,"e":"La radiocirug\u00eda estereot\u00e1xica (Gamma Knife, CyberKnife) es eficaz para met\u00e1stasis cerebrales, meningiomas peque\u00f1os, neurinomas del ac\u00fastico, MAVs peque\u00f1as y tumores hipofisarios. Los ANEURISMAS cerebrales NO son indicaci\u00f3n de radiocirug\u00eda: se tratan con embolizaci\u00f3n endovascular (coils de Guglielmi) o clipaje neuroquir\u00fargico.","ai":false},{"n":"nt_8","q":"El tratamiento de elecci\u00f3n en los tumores de la base del cr\u00e1neo, siempre que sea posible, es:","o":["Radioterapia estereot\u00e1ctica fraccionada","Radiocirug\u00eda (Gamma Knife)","Cirug\u00eda exer\u00e9tica (resecci\u00f3n quir\u00fargica)","Quimioterapia citorreductora"],"c":3,"e":"La cirug\u00eda exer\u00e9tica es el tratamiento de elecci\u00f3n en los tumores de la base del cr\u00e1neo siempre que sea t\u00e9cnicamente factible: permite obtener diagn\u00f3stico histol\u00f3gico definitivo y es potencialmente curativa. La radioterapia (estereot\u00e1ctica fraccionada o radiocirug\u00eda) se reserva para tumores irresecables o como tratamiento adyuvante.","ai":false},{"n":"nt_9","q":"Mujer de 31 a\u00f1os con amenorrea y galactorrea de meses de evoluci\u00f3n. Prolactina 1345 mUI/L. Lesi\u00f3n hipofisaria de 1.7 cm en RM. \u00bfTumor m\u00e1s probable?","o":["Craneofaringioma","Adenoma hipofisario no funcionante","Macroadenoma secretor de prolactina (prolactinoma)","Met\u00e1stasis selar"],"c":3,"e":"El prolactinoma (adenoma secretor de prolactina) es el tumor hipofisario m\u00e1s frecuente. La triada de prolactina muy elevada + amenorrea + galactorrea + lesi\u00f3n >1cm (macroadenoma) es diagn\u00f3stica de macroadenoma prolactinoma. El tratamiento de elecci\u00f3n es M\u00c9DICO con agonistas dopamin\u00e9rgicos (cabergolina o bromocriptina), que reducen el tumor y normalizan la prolactina.","ai":false},{"n":"nv1","q":"Sobre la etiolog\u00eda de la hemorragia subaracnoidea espont\u00e1nea, \u00bfcu\u00e1l NO ser\u00eda habitual?","o":["Aneurisma cerebral roto","Hemorragia intratumoral","Malformaci\u00f3n arteriovenosa (MAV)","Hemorragia pretruncal no aneurism\u00e1tica (perimesencef\u00e1lica)"],"c":2,"e":"La causa m\u00e1s frecuente de HSA espont\u00e1nea es la rotura de un aneurisma cerebral (~80%). Otras causas son las MAV (~5-10%), la HSA pretruncal/perimesencef\u00e1lica (idiop\u00e1tica, benigna) y la disecci\u00f3n arterial. La hemorragia intratumoral causa hemorragia intracerebral PARENQUIMATOSA, no subaracnoidea de forma caracter\u00edstica.","ai":false},{"n":"nv2","q":"Paciente con HSA espont\u00e1nea ingresada en UCI. \u00bfCu\u00e1l de estas NO es una complicaci\u00f3n de la hemorragia subaracnoidea espont\u00e1nea?","o":["Vasoespasmo cerebral tard\u00edo (isquemia tard\u00eda)","Resangrado del aneurisma (m\u00e1ximo riesgo primeras 24h)","Hidrocefalia aguda obstructiva","Hipernatremia"],"c":4,"e":"Las complicaciones de la HSA son: resangrado (riesgo m\u00e1ximo en las primeras 24h), vasoespasmo cerebral tard\u00edo (d\u00edas 4-14, principal causa de morbimortalidad tard\u00eda), hidrocefalia, convulsiones, hiponatremia (por SIADH o s\u00edndrome cerebral perdedor de sal), disfunci\u00f3n card\u00edaca e infecciones. La HIPERNATREMIA no es una complicaci\u00f3n caracter\u00edstica de la HSA.","ai":false},{"n":"nv3","q":"Paciente de 22 a\u00f1os con epilepsia parcial compleja refractaria al tratamiento m\u00e9dico. Para la valoraci\u00f3n preoperatoria, \u00bfqu\u00e9 estudio ser\u00eda de m\u00e1ximo inter\u00e9s?","o":["PET cerebral","SPECT cerebral","Registro de la presi\u00f3n intracraneal","Video-EEG"],"c":4,"e":"El Video-EEG es la prueba fundamental en la evaluaci\u00f3n prequir\u00fargica de la epilepsia refractaria: permite correlacionar los cambios el\u00e9ctricos (EEG) con las manifestaciones cl\u00ednicas de las crisis (v\u00eddeo) y localizar con precisi\u00f3n la zona de inicio ictal. Es imprescindible para determinar si el foco epilept\u00f3geno es resecable sin d\u00e9ficit inaceptable.","ai":false}],"ce":[{"n":"ct_1","q":"Respecto al n\u00f3dulo tiroideo, son signos sugestivos de malignidad todos A EXCEPCI\u00d3N DE:","o":["L\u00edmites imprecisos o irregulares","Calcificaciones en la lesi\u00f3n (especialmente microcalcificaciones)","Presencia de adenopat\u00edas cervicales ipsilaterales sospechosas","Anillo hipoecoico perif\u00e9rico completo (halo)"],"c":4,"e":"El anillo hipoecoico perif\u00e9rico o 'halo sonogr\u00e1fico' es una caracter\u00edstica ecogr\u00e1fica de BENIGNIDAD: representa la c\u00e1psula fibrosa y el tejido tiroideo comprimido alrededor de un n\u00f3dulo benigno. Los signos de malignidad incluyen: microcalcificaciones, l\u00edmites imprecisos, hipoecogenicidad marcada, mayor altura que anchura y adenopat\u00edas sospechosas.","ai":false},{"n":"ct_2","q":"Respecto al tratamiento quir\u00fargico de la Enfermedad de Graves-Basedow, todos los enunciados son CORRECTOS EXCEPTO:","o":["Ante bocio grande y sospecha de carcinoma el tratamiento de elecci\u00f3n es la tiroidectom\u00eda total","La indicaci\u00f3n quir\u00fargica m\u00e1s frecuente en el Graves-Basedow es el crecimiento importante de la gl\u00e1ndula","Actualmente la cirug\u00eda como primera estrategia terap\u00e9utica ha ido perdiendo relevancia","La tiroidectom\u00eda subtotal bilateral + istmectom\u00eda dejando un remanente mayor de 8-10g es la t\u00e9cnica de elecci\u00f3n"],"c":4,"e":"El remanente debe ser de 4-8g (NO mayor de 8-10g), ya que un remanente mayor tiene alta tasa de recidiva del hipertiroidismo. La t\u00e9cnica actual de elecci\u00f3n es la tiroidectom\u00eda TOTAL o casi total, que elimina el riesgo de recidiva. La tiroidectom\u00eda subtotal est\u00e1 pr\u00e1cticamente abandonada por su alta tasa de recidiva a largo plazo.","ai":false},{"n":"ct_3","q":"Respecto a los hallazgos de laboratorio de un n\u00f3dulo tiroideo, todas las respuestas son ciertas EXCEPTO:","o":["La mayor\u00eda de los n\u00f3dulos tiroideos son normotiroideos con TSH, T4 y T3 normales","La determinaci\u00f3n de la tiroglobulina (TG) tiene especificidad para diferenciar n\u00f3dulo benigno de maligno","Cuando se asocia con tiroiditis de Hashimoto los anticuerpos antitiroideos est\u00e1n elevados","En el 5% de los casos la TSH est\u00e1 inhibida con T3-T4 normales (hipertiroidismo subcl\u00ednico)"],"c":2,"e":"La tiroglobulina (TG) NO tiene especificidad para diferenciar un n\u00f3dulo tiroideo benigno de uno maligno: se eleva tanto en condiciones benignas (bocio, tiroiditis) como malignas. La TG es \u00fatil solo como marcador de SEGUIMIENTO del carcinoma diferenciado de tiroides tras tiroidectom\u00eda total y ablaci\u00f3n con I-131.","ai":false},{"n":"ct_4","q":"\u00bfCu\u00e1l de estos enunciados es VERDADERO respecto a la anatom\u00eda quir\u00fargica del cuello?","o":["Los puntos cr\u00edticos de lesi\u00f3n del nervio lar\u00edngeo recurrente son: cerca de la arteria tiroidea inferior, el ligamento de Berry y el cuerno posterior del cart\u00edlago tiroideo","La entrada del nervio lar\u00edngeo recurrente en la laringe representa una posici\u00f3n poco constante para su identificaci\u00f3n","En la enfermedad multiglandular paratiroidea se realizar\u00e1 paratiroidectom\u00eda total SIN timectom\u00eda","La complicaci\u00f3n m\u00e1s frecuente de un vaciamiento central (grupo VI) es la par\u00e1lisis recurrencial transitoria"],"c":1,"e":"Los tres puntos de mayor riesgo de lesi\u00f3n del nervio lar\u00edngeo recurrente son: la proximidad a la arteria tiroidea inferior (que puede cruzar anterior o posterior al nervio), el ligamento de Berry (donde el nervio puede estar \u00edntimamente adherido o incluso penetrar en el tiroides) y el cuerno posterior del cart\u00edlago tiroideo (punto de entrada a la laringe).","ai":false},{"n":"ct_5","q":"Respecto al enfoque quir\u00fargico del Bocio Multinodular (BMN) recidivado, todos los enunciados son FALSOS EXCEPTO:","o":["La par\u00e1lisis recurrencial es una complicaci\u00f3n poco frecuente en el BMN recidivado","La tiroidectom\u00eda total o casi total es siempre la t\u00e9cnica de elecci\u00f3n","Si la primera intervenci\u00f3n fue conservadora, el abordaje por l\u00ednea media no debe plantearse","No es necesaria laringoscopia preoperatoria sistem\u00e1tica en el BMN recidivado"],"c":2,"e":"En el BMN recidivado, la tiroidectom\u00eda total o casi total es la t\u00e9cnica de elecci\u00f3n porque elimina todo el tejido tiroideo funcionante y minimiza el riesgo de nueva recidiva. La cirug\u00eda de revisi\u00f3n tiene mayor riesgo de par\u00e1lisis recurrencial e hipoparatiroidismo, por lo que la laringoscopia preoperatoria es OBLIGATORIA (a diferencia de la cirug\u00eda primaria).","ai":false},{"n":"ct_6","q":"\u00bfCu\u00e1l de las siguientes caracter\u00edsticas NO es t\u00edpica del carcinoma PAPILAR de tiroides?","o":["Presenta una incidencia bimodal (pico en 2\u00aa-3\u00aa d\u00e9cada y en edad media)","Es caracter\u00edstico la presencia de calcificaciones en 'reloj de arena' (cuerpos de psamoma)","Se disemina r\u00e1pidamente por v\u00eda hem\u00e1tica","La determinaci\u00f3n de tiroglobulina es \u00fatil en el seguimiento"],"c":3,"e":"El carcinoma papilar de tiroides se disemina preferentemente por v\u00eda LINF\u00c1TICA (a ganglios cervicales regionales e ipsilaterales), lo que lo diferencia del carcinoma folicular que se disemina por V\u00cdA HEM\u00c1TICA (met\u00e1stasis a pulm\u00f3n y hueso). Los cuerpos de psamoma (calcificaciones en 'reloj de arena') son pr\u00e1cticamente patognom\u00f3nicos del papilar.","ai":false},{"n":"ct_7","q":"Todas estas \u00e1reas son susceptibles de lesi\u00f3n del nervio lar\u00edngeo recurrente durante la cirug\u00eda tiroidea, EXCEPTO:","o":["Recorrido de la arteria tiroidea inferior a nivel del espacio crico-tiroideo","Tercio medio del ligamento de Berry","Recorrido de la arteria tiroidea MEDIA en la entrada a la gl\u00e1ndula tiroides","Polo inferior de la gl\u00e1ndula tiroides"],"c":3,"e":"La 'arteria tiroidea media' (de Neubauer) es una variante anat\u00f3mica muy infrecuente (presente solo en el 2-12% de la poblaci\u00f3n) y NO es una referencia anat\u00f3mica est\u00e1ndar en la cirug\u00eda tiroidea. Las \u00e1reas habituales de riesgo de lesi\u00f3n del nervio lar\u00edngeo recurrente son: la arteria tiroidea inferior, el ligamento de Berry y el polo inferior de la gl\u00e1ndula.","ai":false},{"n":"ct_8","q":"Mujer de 26 a\u00f1os con n\u00f3dulo tiroideo palpable. PAAF muestra sustancia amiloide en el estroma. Ganglio cervical palpable ipsilateral. \u00bfTratamiento preferido?","o":["Extirpaci\u00f3n del l\u00f3bulo afectado + istmo + disecci\u00f3n cervical del lado del ganglio","Extirpaci\u00f3n del l\u00f3bulo afectado + istmo + parte del l\u00f3bulo contrario + ganglio","Extirpaci\u00f3n del l\u00f3bulo afectado + istmo + ganglio solamente","Tiroidectom\u00eda total + disecci\u00f3n cervical modificada del lado del ganglio"],"c":4,"e":"La sustancia amiloide en el estroma del n\u00f3dulo tiroideo es diagn\u00f3stica de CARCINOMA MEDULAR DE TIROIDES (CMT): las c\u00e9lulas C parafoliculares producen calcitonina que se polimeriza como amiloide. El CMT se trata con tiroidectom\u00eda TOTAL (puede ser multifocal y bilateral, especialmente en formas hereditarias) m\u00e1s disecci\u00f3n cervical del compartimento afectado con ganglios sospechosos.","ai":false},{"n":"ct_9","q":"\u00bfCu\u00e1l de las siguientes caracter\u00edsticas del carcinoma medular de tiroides es INCORRECTA?","o":["Es un tumor derivado del epitelio tiroideo folicular","Se asocia a mutaciones en el proto-oncogen RET","Histol\u00f3gicamente es t\u00edpica la presencia de sustancia amiloide en el estroma","Produce calcitonina como marcador tumoral espec\u00edfico"],"c":1,"e":"El carcinoma medular de tiroides deriva de las C\u00c9LULAS C PARAFOLICULARES (c\u00e9lulas calcitonina-secretoras), NO del epitelio folicular. Las c\u00e9lulas C tienen origen en la cresta neural (c\u00e9lulas neuroendocrinas). Por eso produce calcitonina (no tiroglobulina) y el estroma muestra dep\u00f3sito de amiloide (calcitonina polimerizada). El gen RET est\u00e1 mutado en el 98% de los casos hereditarios.","ai":false},{"n":"ct_10","q":"\u00bfA qu\u00e9 nivel ganglionar (clasificaci\u00f3n americana de estaciones ganglionares del cuello) pertenece un ganglio inferior al cart\u00edlago cricoides, superior a la clav\u00edcula y en plano profundo al m\u00fasculo ECM?","o":["Nivel IV","Nivel I","Nivel II","Nivel III"],"c":1,"e":"El nivel IV corresponde a los ganglios yugulares inferiores: localizados a lo largo de la vena yugular interna, entre el nivel de la bifurcaci\u00f3n de la car\u00f3tida (l\u00edmite con nivel III) y la clav\u00edcula, en plano profundo al ECM. La localizaci\u00f3n 'inferior al cricoides, superior a la clav\u00edcula, profundo al ECM' define exactamente el nivel IV.","ai":false},{"n":"ct_11","q":"Con respecto a la anatom\u00eda del cuello, indique la FALSA:","o":["El nervio lar\u00edngeo superior se encarga de la inervaci\u00f3n de la musculatura cricotiroidea","El curso del nervio lar\u00edngeo recurrente es variable excepto en su tramo final justo en la entrada a la laringe","La prolongaci\u00f3n lateral y dorsal del par\u00e9nquima tiroideo (proceso de Zuckerkandl) oculta con frecuencia el trayecto final del nervio lar\u00edngeo recurrente","En el lado derecho la arteria tiroidea inferior sigue paralela al nervio lar\u00edngeo recurrente en m\u00e1s del 70% de los casos"],"c":4,"e":"En el lado derecho, la arteria tiroidea inferior CRUZA POR DELANTE del nervio lar\u00edngeo recurrente en la mayor\u00eda de los casos (no sigue paralela en el 70%). Esta relaci\u00f3n cruzada y variable es precisamente el motivo por el que la zona de la arteria tiroidea inferior es una de las zonas de mayor riesgo de lesi\u00f3n nerviosa durante la cirug\u00eda tiroidea.","ai":false},{"n":"cp_1","q":"\u00bfCu\u00e1l de las siguientes causas de hiperparatiroidismo secundario (HPTS) tiene indicaci\u00f3n quir\u00fargica?","o":["S\u00edndromes malabsortivos intestinales","Insuficiencia renal cr\u00f3nica","D\u00e9ficit de vitamina D","Dieta pobre en calcio"],"c":2,"e":"El HPTS por insuficiencia renal cr\u00f3nica puede requerir paratiroidectom\u00eda cuando no responde al tratamiento m\u00e9dico (cinacalcet, vitamina D activa, f\u00f3sforo) o cuando hay hipercalcemia sintom\u00e1tica, calcificaciones extraesquel\u00e9ticas graves u osteodistrofia renal avanzada. Las otras causas de HPTS se tratan corrigiendo la causa subyacente (vitamina D, malabsorci\u00f3n, dieta).","ai":false},{"n":"cp_2","q":"Var\u00f3n de 52 a\u00f1os con hipercalcemia severa (19.5 mg/dl) y sospecha de carcinoma paratiroideo. \u00bfCu\u00e1les ser\u00edan los pasos a seguir?","o":["Tratamiento m\u00e9dico de la hipercalcemia \u00fanicamente, sin estudio de extensi\u00f3n por no ser hipercalcemia muy grave","Corregir calcemia y solo estudio anal\u00edtico con fosfatasas alcalinas (FFAA)","FFAA >200 UI/L no obliga a estudio radiol\u00f3gico de extensi\u00f3n para determinar osteopenia","Ante sospecha de carcinoma paratiroideo (hipercalcemia >12.5 mg/dl y FFAA elevadas), solicitar ecograf\u00eda paratiroidea/tiroidea +/- gammagraf\u00eda SESTAMIBI Tc-99m"],"c":4,"e":"Ante sospecha de carcinoma paratiroideo (hipercalcemia grave >12-14 mg/dl + FFAA muy elevadas + eventual masa cervical palpable), el estudio de localizaci\u00f3n incluye ecograf\u00eda cervical (tiroides y paratiroides) + gammagraf\u00eda con SESTAMIBI-Tc-99m. La hipercalcemia de 19.5 mg/dl es una emergencia que requiere suero salino iv + bifosfonatos iv urgentes.","ai":false},{"n":"cp_3","q":"Respecto a la determinaci\u00f3n intraoperatoria de PTH (PTHio), \u00bfqu\u00e9 enunciado es CIERTO?","o":["Constituye un soporte importante para la validaci\u00f3n de la paratiroidectom\u00eda selectiva","Permite la comprobaci\u00f3n de los cambios en su concentraci\u00f3n plasm\u00e1tica tras la ex\u00e9resis del tejido paratiroideo patol\u00f3gico","La ca\u00edda de la PTH por encima del 50% a los 10 minutos de la ex\u00e9resis del tejido paratiroideo patol\u00f3gico es indicativo de tratamiento quir\u00fargico efectivo","Todos los enunciados citados son ciertos"],"c":4,"e":"La PTHio es fundamental en la cirug\u00eda paratiroidea m\u00ednimamente invasiva y selectiva. Una ca\u00edda de la PTH >50% a los 10 minutos de la ex\u00e9resis (criterio de Miami) indica \u00e9xito quir\u00fargico: confirma que se ha extirpado todo el tejido hiperfuncionante. Si no cae suficientemente, hay que buscar otro adenoma o enfermedad multiglandular. Los tres primeros enunciados son correctos.","ai":false},{"n":"cp_4","q":"\u00bfCu\u00e1l de los siguientes enunciados es FALSO?","o":["En la paratiroidectom\u00eda por HPT recidivado no es necesaria la monitorizaci\u00f3n repetida del calcio en plasma","La hipocalcemia postoperatoria es una de las complicaciones m\u00e1s frecuentes tras la cirug\u00eda de tiroides y/o paratiroides","La hipocalcemia postoperatoria se traduce cl\u00ednicamente en tetania y alcalosis respiratoria","La hipocalcemia postoperatoria se debe a una disminuci\u00f3n del calcio ionizado, que es la fracci\u00f3n activa del calcio plasm\u00e1tico"],"c":1,"e":"En la paratiroidectom\u00eda por HPT RECIDIVADO s\u00ed es NECESARIA la monitorizaci\u00f3n estrecha y repetida del calcio plasm\u00e1tico en el postoperatorio, ya que el riesgo de hipocalcemia grave es mayor que en la cirug\u00eda primaria (mayor manipulaci\u00f3n, mayor riesgo de lesi\u00f3n de las gl\u00e1ndulas paratiroides restantes y de 'bone hunger').","ai":false},{"n":"cs1","q":"\u00bfCu\u00e1l de los siguientes par\u00e1metros es importante revisar ANTES de resecar un gastrinoma?","o":["Catecolaminas s\u00e9ricas","Calcio s\u00e9rico","Calcitonina s\u00e9rica","Ant\u00edgeno carcinoembrionario (CEA) s\u00e9rico"],"c":2,"e":"El gastrinoma puede ser parte del s\u00edndrome MEN1 (Neoplasia Endocrina M\u00faltiple tipo 1), que asocia: hiperparatiroidismo primario (hipercalcemia) + tumores pancre\u00e1ticos neuroendocrinos (gastrinoma, insulinoma) + adenomas hipofisarios. El CALCIO s\u00e9rico debe revisarse porque el hiperparatiroidismo concurrente puede agravar la hipergastrinemia (el PTH estimula la secreci\u00f3n de gastrina).","ai":false},{"n":"cs2","q":"Respecto a las v\u00edas de abordaje en la cirug\u00eda de las gl\u00e1ndulas suprarrenales, todos los enunciados son FALSOS EXCEPTO:","o":["La v\u00eda de elecci\u00f3n actualmente es la transperitoneal anterior mediante t\u00e9cnica laparosc\u00f3pica","La v\u00eda preferida es la retroperitoneal mediante t\u00e9cnica abierta","La v\u00eda de elecci\u00f3n actualmente es la transperitoneal LATERAL mediante t\u00e9cnica laparosc\u00f3pica","La v\u00eda de elecci\u00f3n actualmente es la transperitoneal lateral mediante t\u00e9cnica abierta"],"c":3,"e":"El abordaje est\u00e1ndar actual en la suprarrenalectom\u00eda es la v\u00eda LAPAROSC\u00d3PICA TRANSPERITONEAL LATERAL (paciente en dec\u00fabito lateral, abordaje por flanco): menor sangrado, menor dolor postoperatorio, recuperaci\u00f3n m\u00e1s r\u00e1pida y resultados oncol\u00f3gicos equivalentes a la cirug\u00eda abierta en lesiones benignas y en feocromocitomas <6cm.","ai":false},{"n":"cs3","q":"Son caracter\u00edsticas de la t\u00e9cnica ideal de una cirug\u00eda de la obesidad TODAS EXCEPTO:","o":["Reproducible","Irreversible","Pocos efectos secundarios","Proporcionar buena calidad de vida"],"c":2,"e":"Una t\u00e9cnica quir\u00fargica ideal debe ser REVERSIBLE cuando sea posible o al menos revisable (convertible en otra t\u00e9cnica). La irreversibilidad es una caracter\u00edstica negativa, no positiva. Las caracter\u00edsticas ideales son: reproducible, reversible, morbimortalidad baja, pocos efectos secundarios, que induzca p\u00e9rdida de peso duradera y mejore la calidad de vida.","ai":false},{"n":"cs4","q":"\u00bfCu\u00e1l de las siguientes NO es una contraindicaci\u00f3n para la cirug\u00eda de la obesidad?","o":["Patolog\u00eda suprarrenal como causa tratable del exceso de peso","Adicci\u00f3n activa a drogas o alcohol","Obesidad de m\u00e1s de 5 a\u00f1os de evoluci\u00f3n","Oposici\u00f3n de la familia del paciente"],"c":3,"e":"La OBESIDAD DE M\u00c1S DE 5 A\u00d1OS de evoluci\u00f3n NO es una contraindicaci\u00f3n para la cirug\u00eda bari\u00e1trica; al contrario, la cronicidad de la obesidad refractaria al tratamiento m\u00e9dico es un criterio a FAVOR de la indicaci\u00f3n quir\u00fargica. Las contraindicaciones incluyen: causa endocrina tratable (suprarrenal), adicci\u00f3n activa a drogas/alcohol e incapacidad para el seguimiento postoperatorio.","ai":false}],"rt":[{"n":"rt1","q":"En un paciente con c\u00e1ncer de pulm\u00f3n sin comorbilidad, la combinaci\u00f3n de quimioterapia y radioterapia es el tratamiento de primera elecci\u00f3n en:","o":["C\u00e1ncer de c\u00e9lula no peque\u00f1a (CPNCP) estadio I","N\u00f3dulo pulmonar solitario sin confirmaci\u00f3n histol\u00f3gica","C\u00e1ncer de c\u00e9lula no peque\u00f1a (CPNCP) estadio II","C\u00e1ncer de pulm\u00f3n de c\u00e9lula peque\u00f1a (CPCP o microc\u00edtico)"],"c":4,"e":"El c\u00e1ncer de pulm\u00f3n microc\u00edtico (CPCP) es altamente radiosensible y quimiosensible: el tratamiento est\u00e1ndar en estadio limitado es la quimiorradioterapia concurrente (cisplatino-etop\u00f3sido + radioterapia tor\u00e1cica). En el CPNCP estadios I y II, el tratamiento de elecci\u00f3n es la cirug\u00eda (lobectom\u00eda). El n\u00f3dulo solitario requiere confirmaci\u00f3n histol\u00f3gica antes de cualquier tratamiento.","ai":false}]};
+var IMGS=/*__IMGS_JSON__*/{"img_gamma_renal":"data:image/png;base64,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","img_gamma_rvu":"data:image/png;base64,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"};
+
+/* ── Estado ── */
+var canSave=typeof localStorage!=='undefined';
+var saved={};try{saved=JSON.parse(localStorage.getItem(KEY)||'null')||{};}catch(e){}
+var state   =saved.state   ||{};
+var qOrd    =saved.qOrd    ||{};
+var oOrd    =saved.oOrd    ||{};
+var starred =saved.starred ||{};
+var failHist=saved.failHist||{};  // {qid: count} entre sesiones
+var darkMode=saved.dark    ||false;
+var timerSec=saved.timerSec||0;   // segundos configurados
+var SECS=Object.keys(META.secciones||{});
+var fFailed={};
+var qIdx={};           // {sec: {n: q}}
+var qNums={};          // {sec: {n: numero_correlativo}}
+var allOrder=null;     // orden mezclado inter-secciones para pestaña Todos
+var activeCid=null;
+var currentTab='all';
+var currentMode='test';
+var saveTimer=null;
+var starsFilter=false;
+var statsVisible=false;
+var timerRunning=false;
+var timerRemaining=timerSec;
+var timerInterval=null;
+
+/* ── INIT ── */
+(function init(){
+  SECS.forEach(function(s){fFailed[s]=false;});
+  injectSecCSS();
+  buildHeader();
+  buildTabs();
+  buildPanels();
+  buildIdx();
+  buildNums();
+  buildAllOrder();
+  SECS.forEach(render);
+  renderAll();
+  updateScores();
+  updateProg();
+  applyTheme();
+  initTimer();
+  setBadge(canSave?'Guardado':'Sin guardado',canSave?'ok':'warn');
+  document.addEventListener('keydown',handleKey);
+  var si=document.getElementById('search-input');
+  if(si)si.addEventListener('keydown',function(e){if(e.key==='Escape'){clearSearch();}});
+})();
+
+/* ── CSS dinámico ── */
+function injectSecCSS(){
+  var css='';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{};
+    var c=m.color||'#1a56db',cd=m.colorDim||'#e8f0fe';
+    css+='.tab.t-'+s+'.on{background:'+cd+';color:'+c+';border-color:'+c+'}\n';
+    css+='.ph.s-'+s+'{border-left:4px solid '+c+'}\n';
+    // Variables CSS por sección para el badge coloreado
+    css+='#panel-'+s+' .qnum.sec-colored{background:'+cd+';color:'+c+'}\n';
+  });
+  var st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+}
+
+/* ── Header ── */
+function buildHeader(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var t=document.getElementById('h-tit');if(t)t.textContent=META.titulo||'Banco MIR';
+  var pt=document.getElementById('page-title');if(pt)pt.textContent=META.titulo||'Banco MIR';
+  var m=document.getElementById('h-meta');
+  if(m){var p=[];if(total)p.push(total+' preguntas');if(META.examen)p.push(META.examen);m.textContent=p.join(' · ');}
+  var d=document.getElementById('ph-gdesc');if(d)d.textContent=META.subtitulo||'';
+  var r=document.getElementById('sc-rem-all');if(r)r.textContent='○ '+total;
+}
+
+/* ── Tabs ── */
+function buildTabs(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var h='<button class="tab t-all on" onclick="showTab(\'all\')">📋 Todos ('+total+')</button>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<button class="tab t-'+s+'" onclick="showTab(\''+s+'\')">'+(m.emoji?m.emoji+' ':'')+escH(m.label||s)+' ('+cnt+')</button>';
+  });
+  var w=document.getElementById('tabs-wrap');if(w)w.innerHTML=h;
+}
+
+/* ── Paneles ── */
+function buildPanels(){
+  var h='<div id="panel-all" class="sec-panel visible"><div id="qs-all"></div><div class="no-results" id="nr-all">No se encontraron preguntas</div></div>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<div id="panel-'+s+'" class="sec-panel">';
+    h+='<div class="ph s-'+s+'">';
+    h+='<div class="ph-left">';
+    h+='<span class="ph-label">'+(m.emoji?m.emoji+'&nbsp;':'')+escH(m.label||s)+'</span>';
+    if(m.desc)h+='<span class="ph-desc">'+escH(m.desc)+'</span>';
+    h+='<div class="score-row">';
+    h+='<span class="sc ok" id="sc-ok-'+s+'">✓ 0</span>';
+    h+='<span class="sc ko" id="sc-ko-'+s+'">✗ 0</span>';
+    h+='<span class="sc rem" id="sc-rem-'+s+'">○ '+cnt+'</span>';
+    h+='</div></div>';
+    h+='<button class="fbtn" id="fb-'+s+'" onclick="toggleFail(\''+s+'\')">Solo falladas</button>';
+    h+='</div>';
+    h+='<div id="qs-'+s+'"></div>';
+    h+='<div class="no-failed" id="nf-'+s+'">Aún no has fallado ninguna 🎉</div>';
+    h+='<div class="no-results" id="nr-'+s+'">No se encontraron preguntas</div>';
+    h+='<div class="sec-actions">';
+    h+='<button class="reset-btn" onclick="resetSec(\''+s+'\')">↺ Reiniciar</button>';
+    h+='<button class="nota-btn" onclick="calcNota(\''+s+'\')">✎ Calcular nota</button>';
+    h+='</div>';
+    h+='<div class="nota-box" id="nota-'+s+'"></div>';
+    h+='</div>';
+  });
+  var pw=document.getElementById('panels-wrap');if(pw)pw.innerHTML=h;
+}
+
+/* ── Índice O(1) + numeración fija ── */
+function buildIdx(){
+  SECS.forEach(function(s){
+    qIdx[s]={};
+    if(D[s])D[s].forEach(function(q){qIdx[s][q.n]=q;});
+  });
+}
+function buildNums(){
+  // Numeración correlativa fija: 1, 2, 3... por sección
+  SECS.forEach(function(s){
+    qNums[s]={};
+    if(D[s])D[s].forEach(function(q,i){qNums[s][q.n]=i+1;});
+  });
+}
+function getNum(sec,n){return qNums[sec]?qNums[sec][n]||n:n;}
+function findQ(qid){
+  var d=qid.indexOf('-'),s=qid.substring(0,d),n=qid.substring(d+1);
+  return(qIdx[s]&&qIdx[s][n])||null;
+}
+function getSecFromQid(qid){return qid.substring(0,qid.indexOf('-'));}
+function getNFromQid(qid){return qid.substring(qid.indexOf('-')+1);}
+
+/* ── Orden inter-secciones para Todos ── */
+function buildAllOrder(){
+  var all=[];
+  SECS.forEach(function(s){if(D[s])D[s].forEach(function(q){all.push({sec:s,n:q.n});});});
+  if(!qOrd['__all__'])qOrd['__all__']=shuffle(all.map(function(x){return x.sec+'|'+x.n;}));
+  allOrder=qOrd['__all__'].map(function(key){
+    var p=key.indexOf('|'),sec=key.substring(0,p),n=key.substring(p+1);
+    return{sec:sec,n:n,q:qIdx[sec]&&qIdx[sec][n]};
+  }).filter(function(x){return x.q;});
+}
+
+/* ── Utilidades ── */
+function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function shuffle(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=b[i];b[i]=b[j];b[j]=t;}return b;}
+function getQOrd(s,qs){if(!qOrd[s])qOrd[s]=shuffle(qs.map(function(q){return q.n;}));return qOrd[s];}
+function getOOrd(qid){
+  var q=findQ(qid);var n=q&&q.o?q.o.length:4;
+  if(q&&q.noShuffle){var a=[];for(var i=0;i<n;i++)a.push(i);return a;}
+  if(!oOrd[qid]){var a=[];for(var i=0;i<n;i++)a.push(i);oOrd[qid]=shuffle(a);}
+  return oOrd[qid];
+}
+function imgHtml(key){
+  if(!IMGS[key]){console.warn('IMGS: clave no encontrada →',key);return'';}
+  return'<div class="clinimg-wrap"><img src="'+IMGS[key]+'" class="clinimg" alt="Imagen clínica" loading="lazy"><div class="clinimg-cap">Imagen clínica</div></div>';
+}
+
+/* ── localStorage debounce ── */
+function saveLocal(){
+  if(!canSave)return;
+  if(saveTimer)clearTimeout(saveTimer);
+  saveTimer=setTimeout(function(){
+    try{
+      localStorage.setItem(KEY,JSON.stringify({state:state,qOrd:qOrd,oOrd:oOrd,starred:starred,failHist:failHist,dark:darkMode,timerSec:timerSec}));
+      setBadge('Guardado','ok');
+    }catch(e){setBadge('Sin guardado','warn');}
+  },300);
+}
+function setBadge(t,c){var b=document.getElementById('save-badge');if(b){b.textContent=t;b.className='sbadge '+c;}}
+
+/* ── Construcción de tarjeta ── */
+function buildCard(q,sec,inAll,allPos){
+  var qid=sec+'-'+q.n;
+  var cid=(inAll?'A-':'S-')+qid;
+  var num=inAll?(allPos+1):getNum(sec,q.n);
+  var oo=getOOrd(qid);
+  var sOpts=oo.map(function(i){return q.o[i];});
+  var nc=oo.indexOf(q.c-1)+1;
+  var ans=state[qid];
+  var cc=ans?(ans.r?' answered-ok':' answered-wrong'):'';
+  var badgeCls='qnum'+(inAll?'':' sec-colored');
+  var h='<div class="qcard s-'+sec+cc+'" id="card-'+cid+'">';
+  h+='<div class="qhead" id="h-'+cid+'" data-cid="'+cid+'" data-qid="'+qid+'" data-sec="'+sec+'" onclick="tog(this.dataset.cid)">';
+  h+='<span class="'+badgeCls+'">'+num+'</span>';
+  h+='<span class="qtxt">'+q.q+(ans?'<span class="atag '+(ans.r?'ok':'ko')+'">'+(ans.r?'✓ acertada':'✗ fallada')+'</span>':'')+'</span>';
+  h+='<button class="star-btn'+(starred[qid]?' on':'')+'\" id="star-'+cid+'" onclick="event.stopPropagation();toggleStar(\''+qid+'\')" title="Marcar (S)"><span class="si">\u2606</span><span class="sf">\u2605</span></button>';
+  h+='<span class="chev">▾</span>';
+  h+='</div>';
+  h+='<div class="qbody" id="b-'+cid+'">';
+  if(q.img)h+=imgHtml(q.img);
+  if(currentMode==='quick'){
+    h+='<div class="quick-card"><div class="quick-rc">✓ Respuesta correcta: opción '+nc+' — '+escH(q.o[q.c-1])+'</div><div class="expbox">'+q.e+'</div></div>';
+  } else {
+    h+='<ul class="opts" id="opts-'+cid+'">';
+    h+=sOpts.map(function(o,i){
+      var p=i+1,oc='opt';
+      if(ans){oc+=' done';if(p===nc)oc+=' correct';else if(p===ans.c&&!ans.r)oc+=' wrong';}
+      return'<li class="'+oc+'" data-qid="'+qid+'" data-pos="'+p+'" data-sec="'+sec+'" onclick="answer(this.dataset.qid,+this.dataset.pos,this.dataset.sec)"><span class="onum">'+p+'.</span><span>'+o+'</span></li>';
+    }).join('');
+    h+='</ul>';
+    if(ans){h+='<div class="expbox"><span class="et">'+(ans.r?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e+'</div>';}
+  }
+  h+='</div></div>';
+  return h;
+}
+
+/* ── Render sección ── */
+function render(sec){
+  var qs=D[sec];if(!qs)return;
+  var ord=getQOrd(sec,qs);
+  var sorted=ord.map(function(n){return qIdx[sec]&&qIdx[sec][n];}).filter(Boolean);
+  var el=document.getElementById('qs-'+sec);
+  if(el)el.innerHTML=sorted.map(function(q){return buildCard(q,sec,false,0);}).join('');
+}
+
+/* ── Render Todos (mezcla inter-secciones) ── */
+function renderAll(){
+  if(!allOrder)buildAllOrder();
+  var el=document.getElementById('qs-all');
+  if(el)el.innerHTML=allOrder.map(function(x,i){return buildCard(x.q,x.sec,true,i);}).join('');
+}
+
+/* ── Toggle open/close ── */
+function tog(cid){
+  var b=document.getElementById('b-'+cid),h=document.getElementById('h-'+cid);
+  if(!b||!h)return;
+  var opening=!b.classList.contains('open');
+  b.classList.toggle('open');h.classList.toggle('open');
+  if(opening){
+    if(activeCid&&activeCid!==cid){var pc=document.getElementById('card-'+activeCid);if(pc)pc.classList.remove('kb-focus');}
+    activeCid=cid;
+    var card=document.getElementById('card-'+cid);if(card)card.classList.add('kb-focus');
+  }else{
+    if(activeCid===cid){activeCid=null;var card=document.getElementById('card-'+cid);if(card)card.classList.remove('kb-focus');}
+  }
+}
+
+/* ── Responder ── */
+function answer(qid,pos,sec){
+  if(state[qid])return;
+  var q=findQ(qid);if(!q)return;
+  var oo=getOOrd(qid);
+  var nc=oo.indexOf(q.c-1)+1;
+  var isRight=pos===nc;
+  state[qid]={c:pos,r:isRight};
+  // Registro de errores
+  if(!isRight){failHist[qid]=(failHist[qid]||0)+1;}
+  saveLocal();
+  // Actualizar todas las instancias del card (panel sección + panel all)
+  // Actualizar opciones en todas las instancias del card
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var optsEl=document.querySelectorAll('#opts-'+cid+' .opt');
+    optsEl.forEach(function(el,i){
+      el.classList.add('done');
+      if(i+1===nc)el.classList.add('correct');
+      else if(i+1===pos&&!isRight)el.classList.add('wrong');
+    });
+    var bdy=document.getElementById('b-'+cid);
+    if(bdy){
+      var eb=bdy.querySelector('.expbox');
+      if(!eb){eb=document.createElement('div');eb.className='expbox';bdy.appendChild(eb);}
+      eb.innerHTML='<span class="et">'+(isRight?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e;
+    }
+    var hd=document.getElementById('h-'+cid);
+    if(hd){var qt=hd.querySelector('.qtxt');if(qt&&!qt.querySelector('.atag')){var at=document.createElement('span');at.className='atag '+(isRight?'ok':'ko');at.innerHTML=isRight?'✓ acertada':'✗ fallada';qt.appendChild(at);}}
+    var card=document.getElementById('card-'+cid);
+    if(card)card.classList.add(isRight?'answered-ok':'answered-wrong');
+  });
+  updateScores();updateProg();
+  if(fFailed[sec]&&isRight){
+    var fcard=document.getElementById('card-S-'+qid);
+    if(fcard)fcard.style.display='none';
+    refreshNF(sec);
+  }
+}
+
+/* ── Estrella ── */
+function toggleStar(qid){
+  starred[qid]=!starred[qid];
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var btn=document.getElementById('star-'+cid);
+    if(btn)btn.classList.toggle('on',starred[qid]);
+  });
+  saveLocal();
+}
+function filterStarred(){
+  starsFilter=!starsFilter;
+  var btn=document.getElementById('btn-stars');
+  if(btn){btn.style.background=starsFilter?'#fef3c7':'';btn.style.fontWeight=starsFilter?'700':'';}
+  document.querySelectorAll('.qcard').forEach(function(card){
+    if(starsFilter){
+      var hd=card.querySelector('.qhead');
+      var qid=hd?hd.dataset.qid:'';
+      card.style.display=starred[qid]?'':'none';
+    }else{card.style.display='';}
+  });
+}
+
+/* ── Filtro falladas ── */
+function refreshNF(sec){
+  var c=document.getElementById('qs-'+sec);if(!c||!fFailed[sec])return;
+  var n=c.querySelectorAll('.qcard.answered-wrong').length;
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',n===0);
+}
+function toggleFail(sec){
+  fFailed[sec]=!fFailed[sec];
+  var btn=document.getElementById('fb-'+sec);
+  if(btn){btn.classList.toggle('on',fFailed[sec]);btn.textContent=fFailed[sec]?'← Ver todas':'Solo falladas';}
+  var c=document.getElementById('qs-'+sec);if(!c)return;
+  var nf=0;
+  c.querySelectorAll('.qcard').forEach(function(card){
+    if(fFailed[sec]){var show=card.classList.contains('answered-wrong');card.style.display=show?'':'none';if(show)nf++;}
+    else{card.style.display='';}
+  });
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',fFailed[sec]&&nf===0);
+}
+
+/* ── Scores y progreso ── */
+function updateScores(){
+  var tok=0,tok2=0,tok3=0;
+  SECS.forEach(function(sec){
+    var ok=0,ko=0;
+    if(D[sec])D[sec].forEach(function(q){var a=state[sec+'-'+q.n];if(a){if(a.r)ok++;else ko++;}});
+    var tot=D[sec]?D[sec].length:0,rem=tot-ok-ko;
+    tok+=ok;tok2+=ko;tok3+=rem;
+    var eok=document.getElementById('sc-ok-'+sec),eko=document.getElementById('sc-ko-'+sec),erm=document.getElementById('sc-rem-'+sec);
+    if(eok)eok.textContent='✓ '+ok;if(eko)eko.textContent='✗ '+ko;if(erm)erm.textContent='○ '+rem;
+  });
+  var eok=document.getElementById('sc-ok-all'),eko=document.getElementById('sc-ko-all'),erm=document.getElementById('sc-rem-all');
+  if(eok)eok.textContent='✓ '+tok;if(eko)eko.textContent='✗ '+tok2;if(erm)erm.textContent='○ '+tok3;
+}
+function updateProg(){
+  var total=0,done=Object.keys(state).length;
+  SECS.forEach(function(s){if(D[s])total+=D[s].length;});
+  var pct=total>0?Math.round(done/total*100):0;
+  var bar=document.getElementById('prog-bar');if(bar)bar.style.width=pct+'%';
+}
+
+/* ── Tabs ── */
+function showTab(t){
+  currentTab=t;
+  document.querySelectorAll('.tab').forEach(function(b){b.classList.remove('on');});
+  var tb=document.querySelector('.tab.t-'+t);if(tb)tb.classList.add('on');
+  var mc=document.getElementById('main-cont');if(mc)mc.setAttribute('data-tab',t);
+  var panelAll=document.getElementById('panel-all');
+  if(panelAll)panelAll.classList.toggle('visible',t==='all');
+  SECS.forEach(function(s){
+    var p=document.getElementById('panel-'+s);
+    if(p)p.classList.toggle('visible',t===s);
+  });
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  clearSearch();
+}
+
+/* ── Reset ── */
+function resetSec(sec){
+  if(D[sec])D[sec].forEach(function(q){var qid=sec+'-'+q.n;delete state[qid];delete oOrd[qid];});
+  delete qOrd[sec];fFailed[sec]=false;activeCid=null;
+  var btn=document.getElementById('fb-'+sec);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+  var nb=document.getElementById('nota-'+sec);if(nb){nb.style.display='none';nb.className='nota-box';}
+  saveLocal();render(sec);
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.remove('show');
+  updateScores();updateProg();
+  // Reconstruir panel all para reflejar cambios
+  buildAllOrder();renderAll();
+}
+function resetAll(){
+  Object.keys(state).forEach(function(k){delete state[k];});
+  Object.keys(oOrd).forEach(function(k){delete oOrd[k];});
+  Object.keys(qOrd).forEach(function(k){delete qOrd[k];});
+  activeCid=null;starsFilter=false;allOrder=null;
+  var bs=document.getElementById('btn-stars');if(bs){bs.style.background='';bs.style.fontWeight='';}
+  SECS.forEach(function(s){
+    fFailed[s]=false;
+    var btn=document.getElementById('fb-'+s);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+    var nb=document.getElementById('nota-'+s);if(nb){nb.style.display='none';nb.className='nota-box';}
+  });
+  saveLocal();
+  SECS.forEach(render);
+  buildAllOrder();renderAll();
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  updateScores();updateProg();
+}
+
+/* ── Nota y revisión ── */
+function buildRevList(sec){
+  var qs=D[sec];if(!qs)return'';
+  var failed=qs.filter(function(q){var a=state[sec+'-'+q.n];return a&&!a.r;});
+  if(!failed.length)return'';
+  var html='<div class="review-list"><div class="review-title">📋 '+failed.length+' pregunta'+(failed.length>1?'s':'')+' fallada'+(failed.length>1?'s':'')+' — repasa aquí:</div>';
+  failed.forEach(function(q){
+    var qid=sec+'-'+q.n;var oo=getOOrd(qid);var nc=oo.indexOf(q.c-1)+1;
+    html+='<details class="review-item"><summary><span><b>'+getNum(sec,q.n)+'.</b> '+q.q+'</span></summary>';
+    html+='<div class="review-body"><div class="review-ans">✓ Opción '+nc+': '+escH(q.o[q.c-1]||'')+'</div>';
+    html+='<div class="expbox">'+q.e+'</div></div></details>';
+  });
+  return html+'</div>';
+}
+function calcNota(sec){
+  var qs=D[sec];if(!qs)return;
+  var total=qs.length,ok=0,ko=0,skip=0;
+  qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-'+sec);if(!box)return;
+  box.className='nota-box '+(pass?'pass':'fail');
+  box.innerHTML='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>'
+    +buildRevList(sec);
+  box.style.display='block';
+}
+function calcNotaAll(){
+  var total=0,ok=0,ko=0,skip=0;
+  SECS.forEach(function(sec){
+    var qs=D[sec];if(!qs)return;
+    total+=qs.length;
+    qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  });
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-all');if(!box)return;
+  box.className='global-nota-box '+(pass?'pass':'fail');
+  var html='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10 (global)</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>';
+  SECS.forEach(function(sec){
+    var rv=buildRevList(sec);
+    if(rv){var m=META.secciones[sec]||{};html+='<div class="review-sec-label">'+(m.emoji?m.emoji+' ':'')+escH(m.label||sec)+'</div>'+rv;}
+  });
+  box.innerHTML=html;box.style.display='block';
+}
+
+/* ── Estadísticas de errores ── */
+function toggleStats(){
+  statsVisible=!statsVisible;
+  var btn=document.getElementById('btn-stats');
+  if(btn){btn.style.background=statsVisible?'var(--ko-bg)':'';btn.style.color=statsVisible?'var(--ko-t)':'';}
+  var box=document.getElementById('stats-global');
+  if(!box)return;
+  if(!statsVisible){box.classList.remove('show');return;}
+  var entries=Object.entries(failHist).filter(function(e){return e[1]>0;});
+  if(!entries.length){box.innerHTML='<div class="stats-title">📊 Sin errores registrados todavía</div>';box.classList.add('show');return;}
+  entries.sort(function(a,b){return b[1]-a[1];});
+  var top=entries.slice(0,10);
+  var maxV=top[0][1];
+  var html='<div class="stats-title">📊 Preguntas más falladas (acumulado entre sesiones)</div>';
+  top.forEach(function(e,i){
+    var qid=e[0],count=e[1];
+    var q=findQ(qid);if(!q)return;
+    var sec=getSecFromQid(qid),n=getNFromQid(qid);
+    var m=META.secciones[sec]||{};
+    var pct=Math.round(count/maxV*100);
+    html+='<div class="stats-item">';
+    html+='<span class="stats-n" style="min-width:18px;color:var(--ko-t);font-weight:700">'+(i+1)+'.</span>';
+    html+='<span class="stats-q">'+(m.emoji?m.emoji+' ':'')+getNum(sec,n)+'. '+q.q.substring(0,60)+(q.q.length>60?'…':'')+'</span>';
+    html+='<div class="stats-bar-wrap"><div class="stats-bar" style="width:'+pct+'%"></div></div>';
+    html+='<span class="stats-n">'+count+'✗</span>';
+    html+='</div>';
+  });
+  box.innerHTML=html;box.classList.add('show');
+}
+
+/* ── Buscador ── */
+function onSearch(val){
+  var v=val.trim().toLowerCase();
+  var clr=document.getElementById('search-clear');
+  var cnt=document.getElementById('search-count');
+  if(clr)clr.style.display=v?'block':'none';
+  var found=0,total=0;
+  document.querySelectorAll('.qcard').forEach(function(card){
+    total++;
+    if(!v){card.classList.remove('search-hidden');found++;}
+    else{
+      var qtxt=card.querySelector('.qtxt');
+      var match=qtxt&&qtxt.textContent.toLowerCase().indexOf(v)!==-1;
+      card.classList.toggle('search-hidden',!match);
+      if(match)found++;
+    }
+  });
+  if(cnt){
+    if(v){cnt.textContent=found+' de '+total+' preguntas';cnt.style.display='block';}
+    else{cnt.style.display='none';}
+  }
+  // Mostrar "sin resultados" por panel
+  ['all'].concat(SECS).forEach(function(s){
+    var panel=document.getElementById('panel-'+s);if(!panel||!panel.classList.contains('visible'))return;
+    var cards=panel.querySelectorAll('.qcard:not(.search-hidden)');
+    var nr=document.getElementById('nr-'+s);if(nr)nr.style.display=cards.length===0&&v?'block':'none';
+  });
+}
+function clearSearch(){
+  var si=document.getElementById('search-input');if(si)si.value='';
+  onSearch('');
+}
+
+/* ── Modo ── */
+function setMode(mode){
+  currentMode=mode;
+  document.getElementById('mode-test').classList.toggle('on',mode==='test');
+  document.getElementById('mode-quick').classList.toggle('on',mode==='quick');
+  // Rerenderizar todo
+  SECS.forEach(render);renderAll();
+}
+
+/* ── Modo oscuro ── */
+function applyTheme(){
+  document.documentElement.setAttribute('data-theme',darkMode?'dark':'light');
+  var btn=document.getElementById('btn-dark');if(btn)btn.textContent=darkMode?'☀️':'🌙';
+}
+function toggleDark(){darkMode=!darkMode;applyTheme();saveLocal();}
+
+/* ── Temporizador ── */
+function initTimer(){
+  timerRemaining=timerSec;
+  renderTimer();
+  var disp=document.getElementById('timer-display');
+  if(disp){
+    disp.addEventListener('click',function(){startEditTimer();});
+  }
+}
+function fmtTime(s){
+  var h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60;
+  return h+':'+(m<10?'0':'')+m+':'+(ss<10?'0':'')+ss;
+}
+function renderTimer(){
+  var disp=document.getElementById('timer-display');
+  if(!disp)return;
+  disp.textContent=fmtTime(timerRemaining);
+  disp.classList.toggle('danger',timerSec>0&&timerRemaining===0);
+}
+function timerToggle(){
+  if(timerRunning){
+    clearInterval(timerInterval);timerRunning=false;
+    document.getElementById('btn-tplay').textContent='▶';
+  }else{
+    if(timerRemaining<=0&&timerSec>0)timerRemaining=timerSec;
+    timerRunning=true;
+    document.getElementById('btn-tplay').textContent='⏸';
+    timerInterval=setInterval(function(){
+      if(timerRemaining>0){timerRemaining--;renderTimer();}
+      else{clearInterval(timerInterval);timerRunning=false;document.getElementById('btn-tplay').textContent='▶';renderTimer();}
+    },1000);
+  }
+}
+function timerReset(){
+  clearInterval(timerInterval);timerRunning=false;
+  timerRemaining=timerSec;
+  document.getElementById('btn-tplay').textContent='▶';
+  renderTimer();
+}
+function startEditTimer(){
+  var disp=document.getElementById('timer-display');if(!disp)return;
+  if(timerRunning){timerToggle();}
+  var old=fmtTime(timerRemaining);
+  disp.contentEditable='true';disp.classList.add('editing');
+  disp.textContent=old;
+  disp.focus();
+  var range=document.createRange();range.selectNodeContents(disp);
+  var sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
+  function commit(){
+    disp.contentEditable='false';disp.classList.remove('editing');
+    var txt=disp.textContent.trim();
+    var parts=txt.split(':').map(Number);
+    var secs=0;
+    if(parts.length===3)secs=parts[0]*3600+parts[1]*60+parts[2];
+    else if(parts.length===2)secs=parts[0]*60+parts[1];
+    else if(parts.length===1)secs=parts[0]*60;
+    if(!isNaN(secs)&&secs>=0){timerSec=secs;timerRemaining=secs;saveLocal();}
+    renderTimer();
+  }
+  disp.addEventListener('blur',commit,{once:true});
+  disp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();disp.blur();}});
+}
+
+/* ── Helpers cid ── */
+function cidToQid(cid){return cid.replace(/^[AS]-/,'');}
+
+/* ── Teclado ── */
+function handleKey(e){
+  var tg=e.target.tagName;
+  if(tg==='INPUT'||tg==='TEXTAREA'||e.target.contentEditable==='true')return;
+  var k=e.key;
+  if(k>='1'&&k<='5'){
+    if(activeCid&&!state[cidToQid(activeCid)]){
+      var aqid=cidToQid(activeCid);
+      var pos=parseInt(k),q=findQ(aqid);
+      if(q&&pos<=q.o.length){e.preventDefault();answer(aqid,pos,getSecFromQid(aqid));}
+    }
+  }else if(k==='ArrowDown'||k==='ArrowUp'){
+    e.preventDefault();navigateQ(k==='ArrowDown'?1:-1);
+  }else if(k==='s'||k==='S'){
+    if(activeCid)toggleStar(cidToQid(activeCid));
+  }
+}
+function navigateQ(dir){
+  var cards=Array.from(document.querySelectorAll('.sec-panel.visible .qcard')).filter(function(c){return c.style.display!=='none'&&!c.classList.contains('search-hidden');});
+  var cids=cards.map(function(c){return c.id.replace('card-','');});
+  if(!cids.length)return;
+  var idx=activeCid?cids.indexOf(activeCid):-1;
+  var nidx=Math.max(0,Math.min(cids.length-1,idx+dir));
+  var ncid=cids[nidx];if(!ncid||ncid===activeCid)return;
+  if(activeCid){var ob=document.getElementById('b-'+activeCid);var oh=document.getElementById('h-'+activeCid);if(ob)ob.classList.remove('open');if(oh)oh.classList.remove('open');var oc=document.getElementById('card-'+activeCid);if(oc)oc.classList.remove('kb-focus');}
+  activeCid=ncid;
+  var nb=document.getElementById('b-'+ncid);var nh=document.getElementById('h-'+ncid);
+  if(nb)nb.classList.add('open');if(nh)nh.classList.add('open');
+  var nc2=document.getElementById('card-'+ncid);if(nc2){nc2.classList.add('kb-focus');nc2.scrollIntoView({behavior:'smooth',block:'nearest'});}
+}
+</script>
+</body>
+</html>
