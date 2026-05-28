@@ -1,0 +1,898 @@
+<!--
+=============================================================
+  MOTOR BANCO MIR — v10
+  Novedades respecto a v9:
+  - Numeración correlativa fija por sección (no se mezcla)
+  - Badge neutro en pestaña "Todos" + mezcla real inter-secciones
+  - Temporizador sticky editable en header (play/pausa/reset)
+  - Buscador de texto en tiempo real
+  - Modo repaso rápido (muestra RC + explicación directamente)
+  - Estadísticas de errores recurrentes entre sesiones
+=============================================================
+-->
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title id="page-title">Banco MIR</title>
+<style>
+:root{
+  --bg:#f4f3ef;--surf:#fff;--bd:#e5e5e5;--bd2:#ddd;
+  --txt:#1a1a1a;--txt2:#555;--txt3:#999;--txt4:#666;
+  --hdr:#1a1a1a;--hdr-t:#fff;
+  --ok-bg:#e6f9ef;--ok-t:#0b6e52;--ok-bd:#2da060;
+  --ko-bg:#fdecea;--ko-t:#b91c1c;--ko-bd:#d94f45;
+  --sc-ok:#dcf5ed;--sc-ko:#fdecea;--sc-rem:#f0f0f0;--sc-rem-t:#666;
+  --exp:#fffbe6;--exp-bd:#f0c04a;--exp-t:#5a4500;
+  --prog:#e5e5e5;--prog-fill:#1a56db;
+  --star:#ccc;--star-on:#f59e0b;
+  --hint:#fafafa;--hint-bd:#eee;
+  --tab-bd:#ddd;--tab-t:#555;
+  --all-bg:#e8f0fe;--all-t:#1a56db;--all-bd:#1a56db;
+  --fab:#1a1a1a;--fab-t:#fff;
+  --nota-btn-t:#1a56db;--nota-btn-bd:#1a56db;--nota-btn-bg:var(--surf);
+  --timer-bg:#222;--timer-t:#fff;--timer-danger:#ef4444;
+}
+[data-theme="dark"]{
+  --bg:#0f0f1a;--surf:#1e1e30;--bd:#2a2a45;--bd2:#333355;
+  --txt:#e8e8f0;--txt2:#aaa;--txt3:#555;--txt4:#888;
+  --hdr:#0a0a14;--hdr-t:#e8e8f0;
+  --ok-bg:#0b3020;--ok-t:#4ade80;--ok-bd:#166534;
+  --ko-bg:#2d0a0a;--ko-t:#f87171;--ko-bd:#7f1d1d;
+  --sc-ok:#0b3020;--sc-ko:#2d0a0a;--sc-rem:#252540;--sc-rem-t:#aaa;
+  --exp:#1a1500;--exp-bd:#a37f10;--exp-t:#d4b84a;
+  --prog:#2a2a45;--prog-fill:#60a5fa;
+  --star:#444;--star-on:#f59e0b;
+  --hint:#1a1a2e;--hint-bd:#2a2a45;
+  --tab-bd:#2a2a45;--tab-t:#aaa;
+  --all-bg:#1a2a4a;--all-t:#60a5fa;--all-bd:#3b82f6;
+  --fab:#2a2a50;--fab-t:#e8e8f0;
+  --nota-btn-t:#60a5fa;--nota-btn-bd:#3b82f6;--nota-btn-bg:var(--surf);
+  --timer-bg:#1a1a2e;--timer-t:#e8e8f0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;transition:background .25s,color .25s}
+
+/* ── Header ── */
+header{background:var(--hdr);color:var(--hdr-t);padding:9px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;position:sticky;top:0;z-index:100}
+header h1{font-size:13.5px;font-weight:600;white-space:nowrap}
+.hright{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.hmeta{font-size:11px;color:#888}
+.hbtn{background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:3px 5px;border-radius:5px;transition:background .15s;color:var(--hdr-t)}
+.hbtn:hover{background:rgba(255,255,255,.12)}
+.sbadge{font-size:11px;padding:3px 9px;border-radius:5px;font-weight:500}
+.sbadge.ok{background:#15803d;color:#dcfce7}.sbadge.warn{background:#92400e;color:#fef3c7}
+
+/* ── Temporizador ── */
+#timer-wrap{display:flex;align-items:center;gap:4px;background:var(--timer-bg);border-radius:7px;padding:3px 8px;border:1px solid rgba(255,255,255,.1)}
+#timer-display{font-size:13px;font-weight:700;font-family:monospace;color:var(--timer-t);min-width:58px;text-align:center;cursor:pointer;border-radius:3px;padding:1px 3px}
+#timer-display:hover{background:rgba(255,255,255,.08)}
+#timer-display.editing{background:rgba(255,255,255,.15);outline:none;color:var(--timer-t)}
+#timer-display.danger{color:var(--timer-danger)}
+#timer-wrap button{background:none;border:none;cursor:pointer;color:rgba(255,255,255,.7);font-size:12px;padding:1px 3px;border-radius:3px;line-height:1}
+#timer-wrap button:hover{background:rgba(255,255,255,.12);color:#fff}
+
+/* ── Barra de progreso ── */
+#prog-wrap{height:3px;background:var(--prog);position:sticky;top:40px;z-index:99}
+#prog-bar{height:100%;background:var(--prog-fill);width:0%;transition:width .4s}
+
+/* ── Contenedor ── */
+.container{max-width:820px;margin:0 auto;padding:16px 12px}
+
+/* ── Buscador ── */
+.search-wrap{position:relative;margin-bottom:13px}
+.search-wrap input{width:100%;padding:8px 34px 8px 12px;border:1.5px solid var(--bd2);border-radius:8px;font-size:13px;background:var(--surf);color:var(--txt);outline:none;transition:border-color .15s}
+.search-wrap input:focus{border-color:var(--prog-fill)}
+.search-clear{position:absolute;right:9px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--txt3);font-size:16px;display:none;line-height:1}
+#search-count{font-size:11px;color:var(--txt3);margin-top:4px;display:none}
+
+/* ── Modo repaso ── */
+.mode-bar{display:flex;gap:6px;margin-bottom:12px;align-items:center}
+.mode-btn{padding:5px 12px;border:1.5px solid var(--bd2);border-radius:7px;cursor:pointer;font-size:12px;font-weight:500;background:var(--surf);color:var(--txt2);transition:all .15s}
+.mode-btn:hover{border-color:#999}
+.mode-btn.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Tabs ── */
+.tabs{display:flex;gap:7px;margin-bottom:13px;flex-wrap:wrap}
+.tab{padding:7px 14px;border:1.5px solid var(--tab-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;background:var(--surf);color:var(--tab-t);transition:all .15s}
+.tab:hover{border-color:#999;color:var(--txt)}
+.tab.t-all.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Score global ── */
+.ph-global{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 15px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-left:4px solid var(--prog-fill)}
+.score-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.sc{font-size:12px;font-weight:600;padding:3px 9px;border-radius:6px}
+.sc.ok{background:var(--sc-ok);color:var(--ok-t)}.sc.ko{background:var(--sc-ko);color:var(--ko-t)}.sc.rem{background:var(--sc-rem);color:var(--sc-rem-t)}
+
+/* ── Acciones ── */
+.global-actions{display:none;margin-bottom:10px;gap:7px;flex-wrap:wrap;align-items:center}
+.container[data-tab="all"] .global-actions{display:flex}
+.sec-actions{margin:6px 0 15px;display:flex;gap:7px;flex-wrap:wrap}
+.reset-btn{padding:7px 14px;background:var(--fab);color:var(--fab-t);border:none;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:opacity .15s}
+.reset-btn:hover{opacity:.82}
+.nota-btn{padding:7px 14px;background:var(--nota-btn-bg);color:var(--nota-btn-t);border:1.5px solid var(--nota-btn-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:background .15s}
+.nota-btn:hover{background:var(--all-bg)}
+
+/* ── Nota box ── */
+.nota-box,.global-nota-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:2px solid var(--bd2);font-size:13px;line-height:1.7;display:none}
+.nota-box.pass,.global-nota-box.pass{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t)}
+.nota-box.fail,.global-nota-box.fail{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t)}
+.nota-score{font-size:26px;font-weight:700;display:block;margin-bottom:4px}
+.nota-detail{font-size:12px;opacity:.85;font-family:monospace}
+
+/* ── Vista revisión ── */
+.review-list{margin-top:12px;border-top:1px solid var(--bd2);padding-top:10px}
+.review-title{font-size:12px;font-weight:700;margin-bottom:9px;color:var(--txt)}
+.review-sec-label{font-size:11.5px;font-weight:700;color:var(--txt3);margin:8px 0 5px;padding-top:6px;border-top:1px solid var(--bd)}
+.review-item{background:var(--surf);border-radius:8px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden}
+.review-item summary{padding:9px 12px;cursor:pointer;font-size:12.5px;color:var(--txt);list-style:none;display:flex;gap:8px;align-items:flex-start}
+.review-item summary::-webkit-details-marker{display:none}
+.review-item summary::before{content:'▶';font-size:9px;color:var(--txt3);flex-shrink:0;margin-top:4px;transition:transform .18s}
+details[open] summary::before{transform:rotate(90deg)}
+.review-body{padding:0 12px 11px}
+.review-ans{font-size:12px;color:var(--ok-t);margin-bottom:7px;font-weight:500}
+
+/* ── Estadísticas ── */
+.stats-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:1.5px solid var(--bd2);background:var(--surf);display:none}
+.stats-box.show{display:block}
+.stats-title{font-size:12px;font-weight:700;margin-bottom:10px;color:var(--txt)}
+.stats-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:12.5px}
+.stats-item:last-child{border-bottom:none}
+.stats-bar-wrap{flex:1;background:var(--sc-rem);border-radius:4px;height:6px;overflow:hidden}
+.stats-bar{height:100%;background:var(--ko-bd);border-radius:4px;transition:width .4s}
+.stats-n{font-size:11px;color:var(--txt3);white-space:nowrap}
+.stats-q{flex:2;color:var(--txt);font-size:12px;line-height:1.3}
+
+/* ── Panel secciones ── */
+.sec-panel{display:none}.sec-panel.visible{display:block}
+.ph{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ph-left{flex:1;display:flex;flex-direction:column;gap:5px}
+.ph-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt3);margin-bottom:1px}
+.ph-desc{font-size:12px;color:var(--txt4)}
+.fbtn{padding:6px 12px;font-size:12px;font-weight:500;border:1.5px solid var(--bd2);border-radius:8px;cursor:pointer;background:var(--surf);color:var(--txt2);transition:all .15s;white-space:nowrap}
+.fbtn:hover{border-color:#999;color:var(--txt)}.fbtn.on{background:var(--ko-bg);color:#b91c1c;border-color:#f87171}
+.no-failed{display:none;text-align:center;padding:16px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin-top:4px}
+.no-failed.show{display:block}
+.no-results{display:none;text-align:center;padding:20px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin:8px 0}
+
+/* ── Hint ── */
+.hint{font-size:11px;color:var(--txt3);margin-bottom:15px;padding:7px 11px;background:var(--hint);border-radius:6px;border:1px solid var(--hint-bd)}
+
+/* ── Tarjeta ── */
+.qcard{background:var(--surf);border-radius:10px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden;transition:box-shadow .15s}
+.qcard:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.qcard.kb-focus{outline:2px solid var(--prog-fill);outline-offset:-2px}
+.qcard.search-hidden{display:none}
+.qhead{padding:11px 13px;cursor:pointer;display:flex;align-items:flex-start;gap:9px}
+
+/* ── Badge numérico ── */
+.qnum{font-size:11px;font-weight:700;padding:3px 7px;border-radius:5px;white-space:nowrap;flex-shrink:0;margin-top:2px;background:var(--sc-rem);color:var(--sc-rem-t)}
+/* En pestaña "Todos" siempre neutro; en sección aplica color de sección */
+.qnum.sec-colored{background:var(--sec-dim);color:var(--sec-col)}
+
+.qtxt{font-size:13px;line-height:1.5;flex:1}
+.star-btn{background:none;border:none;cursor:pointer;font-size:15px;color:var(--star);padding:0 2px;flex-shrink:0;margin-top:2px;line-height:1;transition:color .15s,transform .15s}
+.star-btn:hover{transform:scale(1.2)}
+.star-btn .si{display:inline}.star-btn .sf{display:none}
+.star-btn.on .si{display:none}.star-btn.on .sf{display:inline;color:var(--star-on)}
+.chev{font-size:15px;color:var(--bd2);flex-shrink:0;margin-top:2px;transition:transform .2s}
+.qhead.open .chev{transform:rotate(180deg)}
+.qbody{display:none;padding:0 13px 13px}.qbody.open{display:block}
+
+/* ── Imagen ── */
+.clinimg-wrap{margin:9px 0 7px;background:#111;border-radius:8px;overflow:hidden;border:1px solid var(--bd2);text-align:center}
+.clinimg{max-width:100%;max-height:340px;object-fit:contain;display:block;margin:0 auto}
+.clinimg-cap{font-size:11px;color:var(--txt3);padding:4px 0 5px;background:var(--hint);border-top:1px solid var(--bd)}
+
+/* ── Opciones ── */
+.opts{list-style:none;margin-top:9px;display:flex;flex-direction:column;gap:5px}
+.opt{padding:9px 12px;border-radius:8px;border:1.5px solid var(--bd2);cursor:pointer;display:flex;align-items:flex-start;gap:9px;color:var(--txt);font-size:13px;line-height:1.45;transition:border-color .12s,background .12s;user-select:none}
+.opt:hover:not(.done){border-color:#999;background:var(--hint)}
+.opt.correct{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t);font-weight:500;cursor:default}
+.opt.wrong{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t);cursor:default}
+.opt.done:not(.correct):not(.wrong){cursor:default;opacity:.7}
+.onum{font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px;min-width:15px}
+
+/* ── Modo repaso rápido ── */
+.quick-card{padding:9px 12px;border-radius:8px;border:1.5px solid var(--ok-bd);background:var(--ok-bg);margin-top:8px}
+.quick-rc{font-size:12.5px;font-weight:600;color:var(--ok-t);margin-bottom:6px}
+
+/* ── Explicación ── */
+.expbox{margin-top:10px;padding:10px 12px;background:var(--exp);border-left:4px solid var(--exp-bd);border-radius:0 8px 8px 0;font-size:12.5px;color:var(--exp-t);line-height:1.65}
+.expbox b,.expbox strong{font-weight:600}
+.et{display:block;margin-bottom:4px;font-weight:600;font-size:13px}
+.atag{font-size:10px;padding:2px 6px;border-radius:4px;margin-left:5px;vertical-align:middle}
+.atag.ok{background:var(--sc-ok);color:var(--ok-t)}.atag.ko{background:var(--sc-ko);color:#c0392b}
+
+/* ── All-tab CSS ── */
+.container[data-tab="all"] .ph{display:none!important}
+.container[data-tab="all"] .sec-actions{display:none!important}
+.container[data-tab="all"] .no-failed{display:none!important}
+.container[data-tab="all"] .nota-box{display:none!important}
+.container:not([data-tab="all"]) .global-nota-box{display:none!important}
+.container:not([data-tab="all"]) #stats-global{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="h-tit">Banco MIR</h1>
+  <div class="hright">
+    <span class="hmeta" id="h-meta"></span>
+    <!-- Temporizador -->
+    <div id="timer-wrap" title="Haz clic en el tiempo para editar">
+      <span id="timer-display">0:00:00</span>
+      <button id="btn-tplay" onclick="timerToggle()" title="Play/Pausa">▶</button>
+      <button onclick="timerReset()" title="Reset">↺</button>
+    </div>
+    <button class="hbtn" id="btn-dark" onclick="toggleDark()" title="Modo oscuro">🌙</button>
+    <span id="save-badge" class="sbadge"></span>
+  </div>
+</header>
+<div id="prog-wrap"><div id="prog-bar"></div></div>
+
+<div class="container" id="main-cont" data-tab="all">
+  <!-- Buscador -->
+  <div class="search-wrap">
+    <input type="text" id="search-input" placeholder="🔍 Buscar en enunciados..." oninput="onSearch(this.value)">
+    <button class="search-clear" id="search-clear" onclick="clearSearch()">✕</button>
+  </div>
+  <div id="search-count"></div>
+
+  <!-- Modo -->
+  <div class="mode-bar">
+    <span style="font-size:11.5px;color:var(--txt3);font-weight:600">MODO:</span>
+    <button class="mode-btn on" id="mode-test" onclick="setMode('test')">📝 Test</button>
+    <button class="mode-btn" id="mode-quick" onclick="setMode('quick')">⚡ Repaso rápido</button>
+    <button class="mode-btn" id="btn-stars" onclick="filterStarred()" style="margin-left:auto;border-color:#f59e0b;color:#b45309">⭐ Marcadas</button>
+    <button class="mode-btn" id="btn-stats" onclick="toggleStats()">📊 Errores</button>
+  </div>
+
+  <!-- Stats globales -->
+  <div class="stats-box" id="stats-global"></div>
+
+  <!-- Tabs -->
+  <div class="tabs" id="tabs-wrap"></div>
+
+  <!-- Score global -->
+  <div class="ph-global">
+    <div class="ph-left">
+      <span class="ph-desc" id="ph-gdesc"></span>
+      <div class="score-row">
+        <span class="sc ok" id="sc-ok-all">✓ 0</span>
+        <span class="sc ko" id="sc-ko-all">✗ 0</span>
+        <span class="sc rem" id="sc-rem-all">○ 0</span>
+      </div>
+    </div>
+  </div>
+  <div class="global-actions">
+    <button class="reset-btn" onclick="resetAll()">↺ Reiniciar y mezclar</button>
+    <button class="nota-btn" onclick="calcNotaAll()">✎ Calcular nota global</button>
+  </div>
+  <div class="global-nota-box" id="nota-all"></div>
+  <p class="hint">💡 <b>1–5</b> responde · <b>↑↓</b> navega · <b>S</b> marca ⭐ · Progreso guardado automáticamente</p>
+
+  <div id="panels-wrap"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════ MOTOR v10 ═══════════════════════════════════════ */
+
+var KEY="mir_spub_t11t12t17t19_v1";
+var META=/*__META_JSON__*/{"titulo":"Salud P\u00fablica \u2014 Material Complementario T11-T19","subtitulo":"Tema 11 \u00b7 Tema 12 \u00b7 Tema 17 \u00b7 Tema 19","examen":"Material complementario \u00b7 CEU Castell\u00f3n","secciones":{"t11":{"label":"Tema 11","emoji":"\ud83e\uddd3","color":"#7c3aed","colorDim":"#ede9fe","desc":"Envejecimiento \u00b7 Violencia dom\u00e9stica \u00b7 Accidentes de tr\u00e1fico"},"t12":{"label":"Tema 12","emoji":"\ud83d\udee0\ufe0f","color":"#b45309","colorDim":"#fef3c7","desc":"Enfermedades profesionales \u00b7 Accidentes laborales \u00b7 Ley 31/1995"},"t17":{"label":"Tema 17","emoji":"\ud83e\uddec","color":"#dc2626","colorDim":"#fee2e2","desc":"VIH \u00b7 Transmisi\u00f3n vertical \u00b7 Profilaxis \u00b7 Cribado"},"t19":{"label":"Tema 19","emoji":"\ud83e\udd67","color":"#0369a1","colorDim":"#e0f2fe","desc":"Gripe estacional \u00b7 COVID-19 \u00b7 Antivirales \u00b7 Vigilancia"}}};
+var D=/*__D_JSON__*/{"t11":[{"n":"E1","noShuffle":false,"img":null,"q":"cu\u00e1l es el principal objetivo de la medicina preventiva en el adulto mayor?","o":["Curar enfermedades cr\u00f3nicas","Retrasar la progresi\u00f3n de enfermedades y mantener la funcionalidad","Aumentar el uso de medicamentos","Reducir el n\u00famero de consultas m\u00e9dicas"],"c":2,"e":"El objetivo de la medicina preventiva en el anciano es <b>retrasar la progresi\u00f3n de enfermedades y mantener la funcionalidad</b>, preservando la independencia y calidad de vida. Curar enfermedades cr\u00f3nicas suele ser inalcanzable; el enfoque es funcional y preventivo, no curativo."},{"n":"E2","noShuffle":false,"img":null,"q":"cu\u00e1l de los siguientes es un factor de riesgo modificable clave para el envejecimiento saludable?","o":["Edad cronol\u00f3gica","Gen\u00e9tica","Sedentarismo","Sexo biol\u00f3gico"],"c":3,"e":"El <b>sedentarismo</b> es el principal factor de riesgo modificable: el ejercicio regular reduce la mortalidad cardiovascular, la sarcopenia, las ca\u00eddas y el deterioro cognitivo. La edad, la gen\u00e9tica y el sexo son factores no modificables que no pueden intervenirse."},{"n":"E3","noShuffle":false,"img":null,"q":"mujer de 80 a\u00f1os con hipertensi\u00f3n bien controlada y sin deterioro cognitivo. \u00bfcu\u00e1l es la recomendaci\u00f3n m\u00e1s adecuada respecto al ejercicio f\u00edsico?","o":["Evitar ejercicio por riesgo de ca\u00eddas","Realizar solo ejercicios aer\u00f3bicos suaves","Incluir entrenamiento de fuerza y equilibrio","Limitar la actividad a paseos ocasionales"],"c":3,"e":"Las gu\u00edas recomiendan incluir <b>entrenamiento de fuerza y equilibrio</b> en ancianos, ya que reduce el riesgo de ca\u00eddas y sarcopenia. Evitar el ejercicio por miedo a ca\u00eddas es contraproducente. El ejercicio aer\u00f3bico solo es insuficiente sin el componente de fuerza y propiocepci\u00f3n."},{"n":"E4","noShuffle":false,"img":null,"q":"en relaci\u00f3n con el cribado en poblaci\u00f3n anciana, se\u00f1ale la opci\u00f3n correcta:","o":["Debe mantenerse de forma sistem\u00e1tica independientemente de la esperanza de vida","Est\u00e1 contraindicado en mayores de 75 a\u00f1os","Debe individualizarse seg\u00fan funcionalidad y expectativa de vida","Solo depende de la edad cronol\u00f3gica"],"c":3,"e":"El cribado en ancianos debe <b>individualizarse seg\u00fan funcionalidad, comorbilidad y expectativa de vida</b>. No tiene sentido cribar c\u00e1ncer de colon en un paciente con esperanza de vida de 2 a\u00f1os. La edad cronol\u00f3gica aislada no es el criterio determinante."},{"n":"E5","noShuffle":false,"img":null,"q":"mujer de 96 a\u00f1os polimedicada acude para revisi\u00f3n. \u00bfcu\u00e1l es la estrategia m\u00e1s adecuada de prevenci\u00f3n?","o":["A\u00f1adir suplementos vitam\u00ednicos de forma rutinaria","Suspender f\u00e1rmacos potencialmente inapropiados","Aumentar controles anal\u00edticos mensuales","Iniciar tratamiento preventivo con estatinas sin valorar riesgo"],"c":2,"e":"En la anciana polimedicada la prioridad es la <b>deprescripci\u00f3n</b>: suspender f\u00e1rmacos potencialmente inapropiados (criterios Beers/STOPP) reduce efectos adversos, ca\u00eddas e interacciones. A\u00f1adir m\u00e1s f\u00e1rmacos o controles sin indicaci\u00f3n es iatrog\u00e9nico."},{"n":"V1","noShuffle":false,"img":null,"q":"mujer de 38 a\u00f1os acude por cefal\u00e9a inespec\u00edfica. el m\u00e9dico sospecha posible violencia de g\u00e9nero. \u00bfcu\u00e1l es la actuaci\u00f3n inicial m\u00e1s adecuada?","o":["Notificar directamente a la polic\u00eda sin consentimiento","Preguntar de forma directa y en un entorno de privacidad y confidencialidad","Evitar el tema para no incomodar a la paciente","Solicitar un parte judicial sin entrevistar a la paciente"],"c":2,"e":"La actuaci\u00f3n inicial ante sospecha de violencia de g\u00e9nero es <b>preguntar directamente en un entorno privado y confidencial</b>, sin la pareja presente. La notificaci\u00f3n policial sin consentimiento o el parte judicial sin entrevista previa son incorrectos en este momento inicial."},{"n":"V2","noShuffle":false,"img":null,"q":"en relaci\u00f3n con el cribado de violencia de g\u00e9nero en el \u00e1mbito sanitario, se\u00f1ale la opci\u00f3n correcta:","o":["Solo debe realizarse si hay signos f\u00edsicos evidentes","Est\u00e1 contraindicado en Atenci\u00f3n Primaria","Puede realizarse de forma oportunista en consultas cl\u00ednicas","Solo corresponde a servicios sociales"],"c":3,"e":"El cribado de violencia de g\u00e9nero <b>puede realizarse de forma oportunista</b> en cualquier consulta sanitaria, especialmente en Atenci\u00f3n Primaria. No requiere signos f\u00edsicos para iniciarlo; la sospecha cl\u00ednica o factores de riesgo son suficientes para explorar la situaci\u00f3n."},{"n":"V3","noShuffle":false,"img":null,"q":"desde la perspectiva de la prevenci\u00f3n primaria, \u00bfcu\u00e1l de las siguientes intervenciones es m\u00e1s efectiva para reducir la violencia de g\u00e9nero?","o":["Tratamiento farmacol\u00f3gico de las v\u00edctimas","Aumento de hospitalizaciones","Campa\u00f1as educativas y promoci\u00f3n de igualdad de g\u00e9nero","Cribado exclusivamente en urgencias"],"c":3,"e":"La <b>prevenci\u00f3n primaria</b> de la violencia de g\u00e9nero actua antes de que ocurra mediante <b>campa\u00f1as educativas y promoci\u00f3n de la igualdad</b>. Las intervenciones sobre v\u00edctimas ya afectadas son prevenci\u00f3n secundaria o terciaria. El enfoque estructural es el de mayor impacto poblacional."},{"n":"V4","noShuffle":false,"img":null,"q":"en relaci\u00f3n con la definici\u00f3n legal en Espa\u00f1a, \u00bfcu\u00e1l de las siguientes situaciones se considera violencia de g\u00e9nero?","o":["Agresi\u00f3n de una mujer a su hermano en el domicilio familiar","Discusi\u00f3n violenta entre dos hermanos varones","Agresi\u00f3n de un hombre a su pareja o expareja mujer en el contexto de relaci\u00f3n afectiva","Maltrato de un hijo a su madre anciana"],"c":3,"e":"Seg\u00fan la <b>Ley Org\u00e1nica 1/2004</b>, la violencia de g\u00e9nero en Espa\u00f1a se define como la ejercida por el <b>hombre sobre la mujer en el contexto de una relaci\u00f3n afectiva</b> (pareja o expareja). Las dem\u00e1s situaciones son violencia dom\u00e9stica pero no violencia de g\u00e9nero en sentido legal."},{"n":"V4b","noShuffle":false,"img":null,"q":"se\u00f1ale la afirmaci\u00f3n correcta respecto a la diferencia entre violencia de g\u00e9nero y violencia dom\u00e9stica:","o":["Son t\u00e9rminos sin\u00f3nimos en el \u00e1mbito legal","La violencia dom\u00e9stica incluye \u00fanicamente la ejercida contra la pareja","La violencia de g\u00e9nero se refiere espec\u00edficamente a la ejercida por el hombre sobre la mujer en el contexto de una relaci\u00f3n afectiva","La violencia dom\u00e9stica excluye a menores y personas mayores"],"c":3,"e":"La <b>violencia de g\u00e9nero</b> es un tipo espec\u00edfico: hombre sobre mujer en relaci\u00f3n afectiva. La <b>violencia dom\u00e9stica</b> es m\u00e1s amplia: incluye cualquier miembro del n\u00facleo familiar (menores, mayores, cualquier g\u00e9nero). No son sin\u00f3nimos; toda violencia de g\u00e9nero es dom\u00e9stica pero no al rev\u00e9s."},{"n":"V5","noShuffle":false,"img":null,"q":"en un caso confirmado de violencia de g\u00e9nero, \u00bfcu\u00e1l es una obligaci\u00f3n del profesional sanitario en Espa\u00f1a?","o":["Guardar secreto profesional en todos los casos","Emitir parte de lesiones al juzgado","Informar \u00fanicamente a la familia","Esperar a que la paciente denuncie"],"c":2,"e":"El profesional sanitario tiene la <b>obligaci\u00f3n legal de emitir parte de lesiones al juzgado</b> ante cualquier lesi\u00f3n, independientemente de que la v\u00edctima denuncie o no. El parte de lesiones no es una denuncia: es una comunicaci\u00f3n m\u00e9dico-legal preceptiva que no vulnera el secreto profesional."},{"n":"AT1","noShuffle":false,"img":null,"q":"var\u00f3n de 19 a\u00f1os con TCE por accidente de moto sin casco. \u00bfqu\u00e9 medida preventiva habr\u00eda sido m\u00e1s eficaz para evitar la gravedad de las lesiones?","o":["Reducci\u00f3n de velocidad en ciudad","Uso de casco homologado","Educaci\u00f3n vial en infancia","Mejora del alumbrado p\u00fablico"],"c":2,"e":"El <b>casco homologado</b> es la medida de protecci\u00f3n individual m\u00e1s eficaz en motoristas: reduce la mortalidad por TCE hasta un 40% y la gravedad de las lesiones en m\u00e1s de un 60%. Es una intervenci\u00f3n de prevenci\u00f3n secundaria (reduce la gravedad del da\u00f1o una vez ocurre el accidente)."},{"n":"AT2","noShuffle":false,"img":null,"q":"se estudia la mortalidad por accidentes de tr\u00e1fico en diferentes pa\u00edses. \u00bfqu\u00e9 indicador es m\u00e1s adecuado para comparar entre poblaciones?","o":["N\u00famero absoluto de fallecidos","Prevalencia de accidentes","Tasa de mortalidad ajustada por edad","N\u00famero de veh\u00edculos matriculados"],"c":3,"e":"Para comparar mortalidad <b>entre poblaciones de distinto tama\u00f1o y estructura etaria</b>, se usa la <b>tasa de mortalidad ajustada por edad</b>. El n\u00famero absoluto depende del tama\u00f1o poblacional; la prevalencia no mide mortalidad; los veh\u00edculos matriculados no son indicador de salud."},{"n":"AT3","noShuffle":false,"img":null,"q":"var\u00f3n de 28 a\u00f1os sufre accidente tras consumo de alcohol. desde el modelo de Haddon, \u00bfen qu\u00e9 fase act\u00faa la limitaci\u00f3n legal de alcoholemia?","o":["Fase postevento","Fase evento","Fase preevento","Fase de rehabilitaci\u00f3n"],"c":3,"e":"El <b>modelo de Haddon</b> divide el accidente en tres fases: preevento, evento y postevento. La limitaci\u00f3n legal de alcoholemia actua en la <b>fase preevento</b>: previene que el conductor ebrio inicie la marcha. El cintur\u00f3n es fase evento; la atenci\u00f3n sanitaria es postevento."},{"n":"AT4","noShuffle":false,"img":null,"q":"en un estudio la tasa de accidentes es mayor en varones que en mujeres. \u00bfqu\u00e9 tipo de factor representa el sexo?","o":["Factor modificable","Factor conductual","Factor no modificable","Factor ambiental"],"c":3,"e":"El <b>sexo biol\u00f3gico</b> es un <b>factor no modificable</b>: no puede cambiarse mediante intervenci\u00f3n. Las diferencias en accidentalidad por sexo se explican tambi\u00e9n por factores conductuales (exposici\u00f3n, asunci\u00f3n de riesgos), pero el sexo en s\u00ed es un determinante fijo."},{"n":"AT5","noShuffle":false,"img":null,"q":"paciente politraumatizado llega a urgencias tras accidente de tr\u00e1fico. la actuaci\u00f3n del sistema de emergencias sanitarias corresponde a:","o":["Prevenci\u00f3n primaria","Prevenci\u00f3n secundaria","Prevenci\u00f3n terciaria","Prevenci\u00f3n cuaternaria"],"c":3,"e":"La atenci\u00f3n sanitaria urgente a un politraumatizado es <b>prevenci\u00f3n terciaria</b>: el da\u00f1o ya ha ocurrido y el objetivo es <b>limitar las secuelas y la discapacidad</b>. La primaria evitar\u00eda el accidente; la secundaria detectar\u00eda factores de riesgo; la cuaternaria evitar\u00eda la iatrogenia."},{"n":"AT6","noShuffle":false,"img":null,"q":"tras implantar una campa\u00f1a de educaci\u00f3n vial en j\u00f3venes, se observa descenso en la incidencia de accidentes. \u00bfqu\u00e9 tipo de prevenci\u00f3n representa esta intervenci\u00f3n?","o":["Prevenci\u00f3n primaria","Prevenci\u00f3n secundaria","Prevenci\u00f3n terciaria","Prevenci\u00f3n cuaternaria"],"c":1,"e":"La educaci\u00f3n vial reduce los <b>factores de riesgo antes de que ocurra el accidente</b>: es <b>prevenci\u00f3n primaria</b>. Actua sobre comportamientos (velocidad, alcohol, distracci\u00f3n) para evitar que el accidente suceda. La prevenci\u00f3n secundaria detectar\u00eda conductores de riesgo ya identificados."},{"n":"AT7","noShuffle":false,"img":null,"q":"un control de velocidad detecta correctamente a la mayor\u00eda de infractores, pero tambi\u00e9n sanciona a algunos conductores que no superaban el l\u00edmite. \u00bfqu\u00e9 caracter\u00edstica del test est\u00e1 disminuida?","o":["Especificidad","Sensibilidad","Valor predictivo negativo","Incidencia"],"c":1,"e":"La <b>especificidad</b> mide la capacidad de identificar correctamente a los NO enfermos (no infractores). Si el sistema sanciona a conductores que no superaban el l\u00edmite, est\u00e1 generando <b>falsos positivos</b>, lo que indica especificidad reducida. La sensibilidad ser\u00eda alta si detecta a la mayor\u00eda de infractores."}],"t12":[{"n":"P1","noShuffle":false,"img":null,"q":"cu\u00e1l de las siguientes define mejor un accidente laboral?","o":["Da\u00f1o causado por exposici\u00f3n prolongada a agentes nocivos en el trabajo","Lesi\u00f3n corporal que ocurre de forma s\u00fabita durante el trabajo","Enfermedad que aparece a\u00f1os despu\u00e9s de trabajar en una empresa","Dolencia gen\u00e9tica agravada por el trabajo"],"c":2,"e":"El <b>accidente laboral</b> se define como lesi\u00f3n corporal de <b>aparici\u00f3n s\u00fabita</b> durante el trabajo o por consecuencia de \u00e9l. La exposici\u00f3n prolongada con da\u00f1o diferido es la enfermedad profesional. La gen\u00e9tica agravada por trabajo puede ser contingencia com\u00fan."},{"n":"P2","noShuffle":false,"img":null,"q":"un trabajador desarrolla p\u00e9rdida auditiva tras a\u00f1os en un entorno ruidoso. esto es:","o":["Accidente laboral","Enfermedad com\u00fan","Enfermedad profesional","Incidente leve"],"c":3,"e":"La <b>hipoacusia por ruido</b> es una <b>enfermedad profesional</b> cl\u00e1sica: resulta de la <b>exposici\u00f3n prolongada</b> a un agente laboral (ruido) y est\u00e1 recogida en el cuadro oficial de enfermedades profesionales. No es accidente (no es s\u00fabita) ni enfermedad com\u00fan (tiene causa laboral clara)."},{"n":"P3","noShuffle":false,"img":null,"q":"un operario se cae de una escalera mientras trabaja y se rompe una pierna. esto es:","o":["Enfermedad profesional","Accidente laboral","Enfermedad degenerativa","Contingencia com\u00fan"],"c":2,"e":"La ca\u00edda con fractura durante la jornada laboral es un <b>accidente laboral</b> por su car\u00e1cter <b>s\u00fabito e inesperado</b>, ocurrido en tiempo y lugar de trabajo. Se diferencia de la enfermedad profesional (da\u00f1o por exposici\u00f3n prolongada) y de la contingencia com\u00fan (no relacionada con el trabajo)."},{"n":"P4","noShuffle":false,"img":null,"q":"\u00bfqu\u00e9 caracter\u00edstica es propia de la enfermedad profesional?","o":["Aparici\u00f3n repentina","Origen fuera del trabajo","Exposici\u00f3n prolongada a riesgos laborales","Solo ocurre en accidentes graves"],"c":3,"e":"La <b>enfermedad profesional</b> se caracteriza por la <b>exposici\u00f3n prolongada y repetida</b> a agentes laborales (qu\u00edmicos, f\u00edsicos, biol\u00f3gicos). A diferencia del accidente, el da\u00f1o no es s\u00fabito sino diferido en el tiempo. Adem\u00e1s, debe estar recogida en el cuadro oficial."},{"n":"P5","noShuffle":false,"img":null,"q":"un trabajador sufre una quemadura al manipular una m\u00e1quina en mal estado. se trata de:","o":["Enfermedad profesional","Accidente laboral","Enfermedad com\u00fan","Trastorno psicol\u00f3gico"],"c":2,"e":"La quemadura por manipulaci\u00f3n de maquinaria es un <b>accidente laboral</b>: lesi\u00f3n <b>s\u00fabita</b> ocurrida durante el trabajo. El mal estado de la m\u00e1quina puede ser una causa, pero no cambia la clasificaci\u00f3n. La empresa puede tener responsabilidad por incumplimiento de la Ley 31/1995 de Prevenci\u00f3n de Riesgos Laborales."},{"n":"P6","noShuffle":false,"img":null,"q":"\u00bfcu\u00e1l de los siguientes casos ser\u00eda m\u00e1s probable que se considere enfermedad profesional?","o":["Cortarse con una herramienta","Resbalar en el suelo mojado","Intoxicaci\u00f3n por exposici\u00f3n continua a productos qu\u00edmicos","Golpearse con una puerta"],"c":3,"e":"La <b>intoxicaci\u00f3n por exposici\u00f3n continua a qu\u00edmicos</b> es el ejemplo paradigm\u00e1tico de enfermedad profesional: da\u00f1o por exposici\u00f3n prolongada a un agente laboral. Los dem\u00e1s casos son accidentes laborales (lesi\u00f3n s\u00fabita) no enfermedades profesionales."},{"n":"T1","noShuffle":false,"img":null,"q":"\u00bfcu\u00e1l de estos casos NO ser\u00eda una enfermedad profesional?","o":["Silicosis en un minero","Tendinitis por movimientos repetitivos","Fractura por ca\u00edda desde altura","Asma por exposici\u00f3n a sustancias qu\u00edmicas"],"c":3,"e":"La <b>fractura por ca\u00edda</b> es un <b>accidente laboral</b>, no una enfermedad profesional: es una lesi\u00f3n s\u00fabita, no el resultado de exposici\u00f3n prolongada. La silicosis, la tendinitis por movimientos repetitivos y el asma qu\u00edmico s\u00ed son enfermedades profesionales reconocidas en el cuadro oficial."},{"n":"T2","noShuffle":false,"img":null,"q":"un trabajador sufre un infarto mientras realiza su jornada laboral. \u00bfc\u00f3mo se clasifica?","o":["Enfermedad profesional, porque ocurre en el trabajo","Accidente laboral, si se demuestra relaci\u00f3n con el trabajo","Habitualmente como enfermedad com\u00fan","No es contingencia laboral"],"c":2,"e":"En derecho espa\u00f1ol existe la <b>presunci\u00f3n de laboralidad</b>: toda lesi\u00f3n durante la jornada se presume accidente laboral salvo prueba en contrario. El infarto durante el trabajo puede clasificarse como <b>accidente laboral</b> si se acredita conexi\u00f3n causal con el esfuerzo o estr\u00e9s laboral."},{"n":"T3","noShuffle":false,"img":null,"q":"un empleado se corta con un c\u00fater proporcionado por la empresa mientras trabaja desde casa:","o":["No es accidente laboral por estar en casa","Es enfermedad profesional","Es accidente laboral","Es enfermedad com\u00fan"],"c":3,"e":"El <b>teletrabajo</b> est\u00e1 equiparado al trabajo presencial a efectos de contingencias: el corte con material de la empresa durante la jornada laboral en casa es <b>accidente laboral</b>. La ubicaci\u00f3n f\u00edsica no determina la clasificaci\u00f3n; s\u00ed importa que ocurra en tiempo de trabajo y con medios laborales."},{"n":"T4","noShuffle":false,"img":null,"q":"dolor lumbar tras a\u00f1os levantando peso en el trabajo:","o":["Siempre accidente laboral","Siempre enfermedad profesional","Puede ser enfermedad profesional si est\u00e1 reconocida, si no contingencia com\u00fan","No tiene relaci\u00f3n con el trabajo"],"c":3,"e":"El dolor lumbar por carga cr\u00f3nica <b>puede ser enfermedad profesional</b> si est\u00e1 recogido en el cuadro oficial con la causa laboral demostrada. Si no cumple los requisitos formales, ser\u00e1 contingencia com\u00fan aunque haya relaci\u00f3n con el trabajo. La acreditaci\u00f3n es clave."},{"n":"T5","noShuffle":false,"img":null,"q":"un trabajador sufre un accidente de tr\u00e1fico al ir al trabajo, pero se desv\u00eda para hacer un recado personal:","o":["Accidente laboral siempre","Enfermedad profesional","Puede dejar de considerarse accidente laboral","No es relevante el desv\u00edo"],"c":3,"e":"El <b>accidente in itinere</b> (al ir o volver del trabajo) es accidente laboral, pero el desv\u00edo por motivo personal <b>puede interrumpir el nexo laboral</b> y excluir la protecci\u00f3n. La jurisprudencia valora si el desv\u00edo fue relevante o meramente instrumental para decidir la clasificaci\u00f3n."},{"n":"T6","noShuffle":false,"img":null,"q":"un camarero desarrolla varices tras a\u00f1os trabajando de pie:","o":["Accidente laboral","Enfermedad profesional autom\u00e1ticamente","Enfermedad com\u00fan salvo que est\u00e9 en el cuadro oficial","Accidente \u2018in itinere\u2019"],"c":3,"e":"Las varices no est\u00e1n incluidas en el cuadro oficial de enfermedades profesionales espa\u00f1ol. Por tanto, aunque haya relaci\u00f3n con el trabajo, se clasifican como <b>contingencia com\u00fan</b>. Solo si se demuestra relaci\u00f3n directa y exclusiva con el trabajo y se recoge en el cuadro podr\u00eda reconocerse como EP."},{"n":"T7","noShuffle":false,"img":null,"q":"un trabajador se lesiona jugando al f\u00fatbol en el descanso dentro de la empresa:","o":["Siempre accidente laboral","Nunca accidente laboral","Puede ser accidente laboral seg\u00fan circunstancias","Enfermedad profesional"],"c":3,"e":"La lesi\u00f3n durante el descanso dentro del centro de trabajo <b>puede ser accidente laboral</b> seg\u00fan jurisprudencia, si la actividad est\u00e1 vinculada al \u00e1mbito laboral y ocurre en tiempo y lugar de trabajo. No es autom\u00e1tico: depende de si el empleador hab\u00eda organizado o tolerado la actividad."},{"n":"T8","noShuffle":false,"img":null,"q":"exposici\u00f3n a amianto que provoca enfermedad a\u00f1os despu\u00e9s de dejar el trabajo:","o":["No es laboral porque ya no trabaja all\u00ed","Accidente laboral","Enfermedad profesional","Enfermedad com\u00fan"],"c":3,"e":"El <b>mesotelioma</b> y otras enfermedades por amianto son <b>enfermedades profesionales</b> aunque aparezcan d\u00e9cadas despu\u00e9s de cesar la exposici\u00f3n. El cuadro oficial recoge estas enfermedades de larga latencia; el per\u00edodo de latencia no rompe el nexo causal con la exposici\u00f3n laboral previa."},{"n":"T9","noShuffle":false,"img":null,"q":"un trabajador sufre un golpe leve sin baja m\u00e9dica:","o":["No es accidente laboral","S\u00ed es accidente laboral, aunque no haya baja","Es enfermedad profesional","Solo es incidente sin importancia legal"],"c":2,"e":"La <b>baja m\u00e9dica no es requisito</b> para que una lesi\u00f3n se clasifique como accidente laboral. Todo da\u00f1o que requiera atenci\u00f3n sanitaria, aunque no genere baja, se considera accidente laboral a efectos legales y debe notificarse. El incidente es cuando no hay lesi\u00f3n."},{"n":"T10","noShuffle":false,"img":null,"q":"\u00bfqu\u00e9 condici\u00f3n es imprescindible para que exista enfermedad profesional?","o":["Que ocurra dentro del horario laboral","Que est\u00e9 incluida en el cuadro oficial y haya relaci\u00f3n con el trabajo","Que cause baja m\u00e9dica","Que sea grave"],"c":2,"e":"Para que una enfermedad sea <b>enfermedad profesional</b> en Espa\u00f1a deben cumplirse <b>dos requisitos</b>: que est\u00e9 recogida en el cuadro oficial de enfermedades profesionales (RD 1299/2006) Y que exista relaci\u00f3n causal demostrada con el trabajo. Sin cuadro oficial, ser\u00e1 contingencia com\u00fan aunque haya nexo laboral."}],"t17":[{"n":"1","noShuffle":false,"img":null,"q":"la medida m\u00e1s adecuada en este momento como prevenci\u00f3n primaria vertical es:","o":["Iniciar profilaxis antirretroviral neonatal tras el parto","Realizar serolog\u00eda VIH en el primer trimestre y si procede iniciar tratamiento antirretroviral","Programar ces\u00e1rea electiva","Evitar la lactancia materna"],"c":2,"e":"La <b>prevenci\u00f3n primaria de la transmisi\u00f3n vertical</b> comienza con el <b>diagn\u00f3stico serol\u00f3gico en el primer trimestre</b>: si la madre es VIH positiva, se inicia TAR para conseguir carga viral indetectable antes del parto. La ces\u00e1rea y la profilaxis neonatal son medidas complementarias, no la primera."},{"n":"2","noShuffle":false,"img":null,"q":"\u00bfcu\u00e1l de las siguientes intervenciones reduce de forma m\u00e1s eficaz la transmisi\u00f3n vertical del VIH?","o":["Ces\u00e1rea electiva sistem\u00e1tica","Tratamiento antirretroviral materno eficaz durante el embarazo","Profilaxis antibi\u00f3tica intraparto","Aislamiento neonatal"],"c":2,"e":"El <b>TAR materno eficaz</b> que consigue carga viral indetectable es la intervenci\u00f3n m\u00e1s eficaz para reducir la transmisi\u00f3n vertical: baja la tasa a menos del 1%. La ces\u00e1rea solo se indica si la carga viral es detectable al final del embarazo. El aislamiento neonatal no est\u00e1 indicado."},{"n":"3","noShuffle":false,"img":null,"q":"en relaci\u00f3n con la prevenci\u00f3n primaria de la transmisi\u00f3n horizontal, la medida con mayor impacto poblacional es:","o":["Diagn\u00f3stico precoz y tratamiento antirretroviral de las personas infectadas","Cribado anual de VIH en poblaci\u00f3n general","Seguimiento hospitalario exclusivo","Uso de pruebas confirmatorias de alta especificidad"],"c":1,"e":"El <b>diagn\u00f3stico precoz + TAR</b> es la estrategia de mayor impacto poblacional en VIH: una persona con carga viral indetectable no transmite el virus (<b>U=U: indetectable = intransmisible</b>). El cribado anual universal es costoso; el seguimiento hospitalario solo impacta en diagnosticados."},{"n":"4","noShuffle":false,"img":null,"q":"una prueba de cribado adecuada para VIH debe tener especialmente:","o":["Alta especificidad","Alta sensibilidad","Bajo valor predictivo negativo","Alto coste"],"c":2,"e":"Las pruebas de <b>cribado</b> deben priorizar la <b>alta sensibilidad</b> para no perder casos (minimizar falsos negativos). Un resultado negativo debe descartar la enfermedad con alta seguridad. La especificidad es importante para la confirmaci\u00f3n, pero en cribado lo esencial es no dejar casos sin detectar."},{"n":"5","noShuffle":false,"img":null,"q":"el diagn\u00f3stico precoz de VIH se considera una medida de:","o":["Prevenci\u00f3n primaria","Prevenci\u00f3n secundaria","Prevenci\u00f3n terciaria","Promoci\u00f3n de la salud"],"c":2,"e":"El diagn\u00f3stico precoz es <b>prevenci\u00f3n secundaria</b>: detecta la enfermedad en fase presintom\u00e1tica o temprana para actuar antes de que progrese. La prevenci\u00f3n primaria evitar\u00eda la infecci\u00f3n (condones, PrEP); la terciaria limitar\u00eda las complicaciones de la enfermedad ya establecida."},{"n":"6","noShuffle":false,"img":null,"q":"\u00bfcu\u00e1l de los siguientes grupos se prioriza para cribado de VIH seg\u00fan criterios de salud p\u00fablica?","o":["Poblaci\u00f3n infantil sin factores de riesgo","Poblaci\u00f3n general de bajo riesgo","Personas con mayor probabilidad epidemiol\u00f3gica","Personas ya diagnosticadas"],"c":3,"e":"El cribado de VIH se prioriza en <b>personas con mayor probabilidad epidemiol\u00f3gica</b>: HSH, personas con m\u00faltiples parejas, UDVP, inmigrantes de pa\u00edses de alta prevalencia, gestantes. Las personas ya diagnosticadas est\u00e1n en seguimiento, no en cribado. El cribado universal tiene bajo rendimiento en poblaci\u00f3n de bajo riesgo."},{"n":"7","noShuffle":false,"img":null,"q":"el tratamiento antirretroviral en personas con VIH tiene como beneficio preventivo:","o":["Eliminaci\u00f3n del virus","Prevenci\u00f3n de reca\u00eddas","Reducci\u00f3n de la transmisibilidad","Sustituci\u00f3n del cribado"],"c":3,"e":"El TAR reduce la carga viral hasta niveles indetectables, lo que <b>elimina la transmisibilidad</b> del virus (U=U). Este beneficio preventivo es clave en salud p\u00fablica: tratar a todos los infectados reduce la incidencia poblacional. El TAR no elimina el virus del organismo (no hay cura)."},{"n":"8","noShuffle":false,"img":null,"q":"\u00bfcu\u00e1l de las siguientes afirmaciones sobre la transmisi\u00f3n vertical del VIH es CORRECTA?","o":["Solo ocurre durante el parto","No puede prevenirse","Puede producirse durante embarazo, parto o lactancia","Solo depende del tipo de parto"],"c":3,"e":"La <b>transmisi\u00f3n vertical</b> del VIH puede ocurrir en <b>tres momentos</b>: durante el embarazo (transplacentaria), durante el parto (la m\u00e1s frecuente) y durante la lactancia materna. Por eso el TAR materno durante todo el embarazo, la atenci\u00f3n al parto y evitar la lactancia son estrategias complementarias."},{"n":"9","noShuffle":false,"img":null,"q":"en un programa de cribado, aumentar la sensibilidad de la prueba implica generalmente:","o":["Disminuir los falsos positivos","Disminuir los falsos negativos","Aumentar el valor predictivo positivo","Aumentar la especificidad"],"c":2,"e":"Aumentar la <b>sensibilidad</b> significa detectar m\u00e1s casos verdaderos, lo que <b>disminuye los falsos negativos</b>. Sin embargo, suele reducir la especificidad (aumentan falsos positivos). En cribado se acepta este intercambio para no perder casos. Sensibilidad y especificidad tienen una relaci\u00f3n inversa."},{"n":"10","noShuffle":false,"img":null,"q":"en una mujer con VIH y carga viral indetectable durante el embarazo, la tasa de transmisi\u00f3n vertical es:","o":["Superior al 20%","Entre 5-10%","Inferior al 1%","Similar a poblaci\u00f3n general"],"c":3,"e":"Con <b>carga viral indetectable</b> mantenida durante el embarazo, la tasa de transmisi\u00f3n vertical es <b>inferior al 1%</b> (algunos estudios la sit\u00faan en 0,1-0,3%). Sin tratamiento, la tasa es del 15-40%. El TAR eficaz es la intervenci\u00f3n m\u00e1s transformadora en prevenci\u00f3n de TV del VIH."},{"n":"11","noShuffle":false,"img":null,"q":"desde el punto de vista de salud p\u00fablica, el diagn\u00f3stico precoz del VIH en la gestaci\u00f3n encuadrar\u00eda en:","o":["Prevenci\u00f3n primaria","Prevenci\u00f3n secundaria","Prevenci\u00f3n terciaria","Promoci\u00f3n de la salud"],"c":2,"e":"La serolog\u00eda VIH en el primer trimestre es <b>prevenci\u00f3n secundaria</b>: cribado para detectar precozmente la infecci\u00f3n e intervenir antes de que progrese o se transmita al reci\u00e9n nacido. La prevenci\u00f3n primaria ser\u00eda evitar la infecci\u00f3n de la madre (PrEP, preservativo)."},{"n":"F1","noShuffle":false,"img":null,"q":"\u00bfcu\u00e1l es el principal determinante de riesgo de transmisi\u00f3n vertical del VIH?","o":["V\u00eda de parto","Edad materna","Carga viral materna","Edad gestacional"],"c":3,"e":"La <b>carga viral materna</b> es el principal determinante de la transmisi\u00f3n vertical: a mayor carga viral, mayor riesgo. Por eso el objetivo del TAR durante el embarazo es conseguir carga viral indetectable antes del parto. La v\u00eda de parto solo es relevante si la carga viral es detectable."},{"n":"F2","noShuffle":false,"img":null,"q":"si la paciente resultara VIH negativa, \u00bfqu\u00e9 medida preventiva adicional podr\u00eda considerarse durante el embarazo para reducir el riesgo de adquisici\u00f3n?","o":["Profilaxis postexposici\u00f3n sistem\u00e1tica","Profilaxis preexposici\u00f3n en situaciones seleccionadas","Ces\u00e1rea programada","Profilaxis neonatal prolongada"],"c":2,"e":"En una gestante VIH negativa con pareja VIH positiva (serodiscordante), la <b>profilaxis preexposici\u00f3n (PrEP)</b> puede considerarse en situaciones seleccionadas para reducir el riesgo de adquisici\u00f3n materna y consecuentemente la transmisi\u00f3n vertical. La PEP se usa tras exposici\u00f3n, no de forma sistem\u00e1tica."}],"t19":[{"n":"1","noShuffle":false,"img":null,"q":"sobre la transmisi\u00f3n de la gripe estacional, se\u00f1ale la opci\u00f3n correcta:","o":["Se transmite exclusivamente por contacto con superficies contaminadas","La principal v\u00eda es la transmisi\u00f3n a\u00e9rea por aerosoles de largo alcance","Se transmite principalmente por gotas respiratorias","No existe transmisi\u00f3n persona a persona"],"c":3,"e":"La gripe se transmite principalmente por <b>gotas respiratorias</b> (>5 micras) al hablar, toser o estornudar, a distancias cortas (<1-2 m). La transmisi\u00f3n por aerosoles es posible pero no la principal. El contacto con superficies (fomites) es secundario. La transmisi\u00f3n persona-persona es la clave epidemiol\u00f3gica."},{"n":"2","noShuffle":false,"img":null,"q":"en relaci\u00f3n con el periodo de incubaci\u00f3n:","o":["La gripe tiene un periodo de incubaci\u00f3n m\u00e1s largo que COVID-19","COVID-19 suele tener un periodo de incubaci\u00f3n de 2-14 d\u00edas","Ambos tienen exactamente el mismo periodo de incubaci\u00f3n","La gripe nunca supera las 24 horas de incubaci\u00f3n"],"c":2,"e":"El <b>COVID-19</b> tiene un periodo de incubaci\u00f3n de <b>2 a 14 d\u00edas</b> (media 5-6 d\u00edas). La gripe tiene una incubaci\u00f3n m\u00e1s corta (1-4 d\u00edas). Esta diferencia es relevante para la cuarentena: el COVID-19 requiere mayor periodo de aislamiento preventivo que la gripe."},{"n":"3","noShuffle":false,"img":null,"q":"respecto a la vacunaci\u00f3n frente a la gripe:","o":["Se administra una \u00fanica vez en la vida","Es obligatoria en toda la poblaci\u00f3n","Debe actualizarse anualmente","No es eficaz en mayores de 65 a\u00f1os"],"c":3,"e":"La vacuna antigripal debe <b>actualizarse anualmente</b> porque el virus de la gripe muta constantemente (deriva antig\u00e9nica). La OMS revisa cada a\u00f1o las cepas circulantes y actualiza la composici\u00f3n vacunal. Es especialmente recomendada (no obligatoria) en grupos de riesgo y mayores de 65 a\u00f1os."},{"n":"4","noShuffle":false,"img":null,"q":"en cuanto a las medidas de prevenci\u00f3n no farmacol\u00f3gicas:","o":["Solo son \u00fatiles en gripe, no en COVID-19","Incluyen mascarilla, higiene de manos y ventilaci\u00f3n","No tienen evidencia cient\u00edfica","Son innecesarias si existe vacunaci\u00f3n"],"c":2,"e":"Las <b>medidas no farmacol\u00f3gicas</b> (mascarilla, higiene de manos y ventilaci\u00f3n) son eficaces tanto en gripe como en COVID-19, reduciendo la transmisi\u00f3n por gotas y aerosoles. Tienen s\u00f3lida evidencia cient\u00edfica y son complementarias a la vacunaci\u00f3n, no sustituibles."},{"n":"5","noShuffle":false,"img":null,"q":"\u00bfcu\u00e1l de los siguientes virus pertenece a la familia Orthomyxoviridae?","o":["SARS-CoV-2","Virus de la gripe","VIH","Virus del papiloma humano"],"c":2,"e":"El <b>virus de la gripe (Influenza)</b> pertenece a la familia <b>Orthomyxoviridae</b>. El SARS-CoV-2 es un Coronavirus (Coronaviridae); el VIH es un Retrovirus (Retroviridae); el VPH pertenece a la familia Papillomaviridae. Esta clasificaci\u00f3n viral determina el tipo de respuesta inmune y las estrategias de tratamiento."},{"n":"6","noShuffle":false,"img":null,"q":"sobre la inmunidad de grupo (herd immunity):","o":["Solo se consigue mediante infecci\u00f3n natural","No es relevante en enfermedades respiratorias","Puede lograrse mediante vacunaci\u00f3n masiva","Es inmediata tras el primer caso"],"c":3,"e":"La <b>inmunidad de grupo</b> puede lograrse mediante <b>vacunaci\u00f3n masiva</b> sin necesidad de infecci\u00f3n natural. El umbral var\u00eda seg\u00fan el R0: para sarampi\u00f3n se necesita ~95%; para gripe ~70-80%. Es muy relevante en enfermedades respiratorias para proteger a los no vacunables."},{"n":"7","noShuffle":false,"img":null,"q":"\u00bfcu\u00e1l es la indicaci\u00f3n principal del uso de antivirales como oseltamivir en gripe?","o":["Todos los pacientes con s\u00edntomas leves","Prevenci\u00f3n en poblaci\u00f3n general","Pacientes de riesgo o enfermedad grave en fases precoces","Solo en ni\u00f1os"],"c":3,"e":"El <b>oseltamivir</b> est\u00e1 indicado principalmente en <b>pacientes de riesgo</b> (ancianos, inmunodeprimidos, embarazadas) o con enfermedad grave, iniciado en las primeras 48 horas de s\u00edntomas. No se recomienda para toda la poblaci\u00f3n con gripe leve, ni como profilaxis general, por riesgo de resistencias y coste-efectividad."},{"n":"8","noShuffle":false,"img":null,"q":"\u00bfcu\u00e1l es una complicaci\u00f3n t\u00edpica de la gripe?","o":["Tromboembolismo masivo como primera manifestaci\u00f3n","Sobreinfecci\u00f3n bacteriana respiratoria","Miocarditis autoinmune","Insuficiencia renal aguda"],"c":2,"e":"La complicaci\u00f3n m\u00e1s frecuente de la gripe es la <b>sobreinfecci\u00f3n bacteriana respiratoria</b>, especialmente por <i>Streptococcus pneumoniae</i>, <i>Staphylococcus aureus</i> y <i>Haemophilus influenzae</i>. El da\u00f1o epitelial respiratorio facilita la colonizaci\u00f3n bacteriana y puede provocar neumon\u00eda grave."},{"n":"9","noShuffle":false,"img":null,"q":"en relaci\u00f3n con las vacunas frente a COVID-19:","o":["Todas son de virus vivos atenuados","No requieren dosis de refuerzo","Han demostrado reducir enfermedad grave y mortalidad","No generan respuesta inmune celular"],"c":3,"e":"Las vacunas COVID-19 (ARNm, vector viral, subunitaria) <b>han demostrado s\u00f3lidamente reducir la enfermedad grave y la mortalidad</b>. No son de virus vivos. Las vacunas ARNm s\u00ed generan respuesta inmune celular (linfocitos T). Algunas requieren dosis de refuerzo seg\u00fan el grupo de riesgo y la variante circulante."},{"n":"10","noShuffle":false,"img":null,"q":"\u00bfqu\u00e9 medida es m\u00e1s eficaz para prevenir brotes en residencias de ancianos?","o":["Uso exclusivo de antibi\u00f3ticos profilacticos","Vacunaci\u00f3n y medidas de control de infecciones","Aislamiento solo de pacientes sintom\u00e1ticos","No realizar pruebas diagn\u00f3sticas"],"c":2,"e":"La combinaci\u00f3n de <b>vacunaci\u00f3n de residentes y personal</b> m\u00e1s <b>medidas de control de infecciones</b> (higiene de manos, cohortes, mascarilla) es la estrategia m\u00e1s eficaz para prevenir brotes en residencias. Los antibi\u00f3ticos no previenen virus; aislar solo sintom\u00e1ticos pierde casos asintom\u00e1ticos."},{"n":"11","noShuffle":false,"img":null,"q":"en vigilancia epidemiol\u00f3gica, \u00bfqu\u00e9 indicador mide la proporci\u00f3n de fallecidos entre los casos diagnosticados?","o":["Incidencia","Prevalencia","Letalidad","Mortalidad espec\u00edfica"],"c":3,"e":"La <b>letalidad</b> (o tasa de letalidad, CFR) mide el <b>n\u00famero de muertes entre los casos diagnosticados</b> de una enfermedad. Se diferencia de la mortalidad (muertes por habitante). La letalidad depende del diagn\u00f3stico: si se detectan pocos casos leves, sube artificialmente, como ocurri\u00f3 al inicio del COVID-19."},{"n":"12","noShuffle":false,"img":null,"q":"\u00bfcu\u00e1l es la principal utilidad del uso de mascarillas en estas infecciones?","o":["Evitar totalmente la infecci\u00f3n","Reducir la transmisi\u00f3n de part\u00edculas respiratorias","Sustituir la vacunaci\u00f3n","Eliminar el virus del organismo"],"c":2,"e":"La principal utilidad de las mascarillas es <b>reducir la transmisi\u00f3n de part\u00edculas respiratorias</b> (gotas y aerosoles), tanto en la emisi\u00f3n como en la inhalaci\u00f3n. No eliminan completamente el riesgo ni sustituyen la vacunaci\u00f3n. Son una medida barrera complementaria dentro de la estrategia integral de prevenci\u00f3n."},{"n":"14","noShuffle":false,"img":null,"q":"en un hospital, ante un brote nosocomial de COVID-19, la primera medida es:","o":["Cerrar el hospital indefinidamente","Identificar casos y aislarlos","Administrar antibi\u00f3ticos a todos","Suspender toda actividad asistencial"],"c":2,"e":"Ante un <b>brote nosocomial</b>, la primera medida es <b>identificar todos los casos y aislarlos</b> para cortar la cadena de transmisi\u00f3n. Posteriormente se rastrea contactos, se refuerzan las precauciones y se investiga el foco. Cerrar el hospital o suspender toda actividad son medidas desproporcionadas que causar\u00edan mayor da\u00f1o."}]};
+var IMGS=/*__IMGS_JSON__*/{};
+
+/* ── Estado ── */
+var canSave=typeof localStorage!=='undefined';
+var saved={};try{saved=JSON.parse(localStorage.getItem(KEY)||'null')||{};}catch(e){}
+var state   =saved.state   ||{};
+var qOrd    =saved.qOrd    ||{};
+var oOrd    =saved.oOrd    ||{};
+var starred =saved.starred ||{};
+var failHist=saved.failHist||{};  // {qid: count} entre sesiones
+var darkMode=saved.dark    ||false;
+var timerSec=saved.timerSec||0;   // segundos configurados
+var SECS=Object.keys(META.secciones||{});
+var fFailed={};
+var qIdx={};           // {sec: {n: q}}
+var qNums={};          // {sec: {n: numero_correlativo}}
+var allOrder=null;     // orden mezclado inter-secciones para pestaña Todos
+var activeCid=null;
+var currentTab='all';
+var currentMode='test';
+var saveTimer=null;
+var starsFilter=false;
+var statsVisible=false;
+var timerRunning=false;
+var timerRemaining=timerSec;
+var timerInterval=null;
+
+/* ── INIT ── */
+(function init(){
+  SECS.forEach(function(s){fFailed[s]=false;});
+  injectSecCSS();
+  buildHeader();
+  buildTabs();
+  buildPanels();
+  buildIdx();
+  buildNums();
+  buildAllOrder();
+  SECS.forEach(render);
+  renderAll();
+  updateScores();
+  updateProg();
+  applyTheme();
+  initTimer();
+  setBadge(canSave?'Guardado':'Sin guardado',canSave?'ok':'warn');
+  document.addEventListener('keydown',handleKey);
+  var si=document.getElementById('search-input');
+  if(si)si.addEventListener('keydown',function(e){if(e.key==='Escape'){clearSearch();}});
+})();
+
+/* ── CSS dinámico ── */
+function injectSecCSS(){
+  var css='';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{};
+    var c=m.color||'#1a56db',cd=m.colorDim||'#e8f0fe';
+    css+='.tab.t-'+s+'.on{background:'+cd+';color:'+c+';border-color:'+c+'}\n';
+    css+='.ph.s-'+s+'{border-left:4px solid '+c+'}\n';
+    // Variables CSS por sección para el badge coloreado
+    css+='#panel-'+s+' .qnum.sec-colored{background:'+cd+';color:'+c+'}\n';
+  });
+  var st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+}
+
+/* ── Header ── */
+function buildHeader(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var t=document.getElementById('h-tit');if(t)t.textContent=META.titulo||'Banco MIR';
+  var pt=document.getElementById('page-title');if(pt)pt.textContent=META.titulo||'Banco MIR';
+  var m=document.getElementById('h-meta');
+  if(m){var p=[];if(total)p.push(total+' preguntas');if(META.examen)p.push(META.examen);m.textContent=p.join(' · ');}
+  var d=document.getElementById('ph-gdesc');if(d)d.textContent=META.subtitulo||'';
+  var r=document.getElementById('sc-rem-all');if(r)r.textContent='○ '+total;
+}
+
+/* ── Tabs ── */
+function buildTabs(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var h='<button class="tab t-all on" onclick="showTab(\'all\')">📋 Todos ('+total+')</button>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<button class="tab t-'+s+'" onclick="showTab(\''+s+'\')">'+(m.emoji?m.emoji+' ':'')+escH(m.label||s)+' ('+cnt+')</button>';
+  });
+  var w=document.getElementById('tabs-wrap');if(w)w.innerHTML=h;
+}
+
+/* ── Paneles ── */
+function buildPanels(){
+  var h='<div id="panel-all" class="sec-panel visible"><div id="qs-all"></div><div class="no-results" id="nr-all">No se encontraron preguntas</div></div>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<div id="panel-'+s+'" class="sec-panel">';
+    h+='<div class="ph s-'+s+'">';
+    h+='<div class="ph-left">';
+    h+='<span class="ph-label">'+(m.emoji?m.emoji+'&nbsp;':'')+escH(m.label||s)+'</span>';
+    if(m.desc)h+='<span class="ph-desc">'+escH(m.desc)+'</span>';
+    h+='<div class="score-row">';
+    h+='<span class="sc ok" id="sc-ok-'+s+'">✓ 0</span>';
+    h+='<span class="sc ko" id="sc-ko-'+s+'">✗ 0</span>';
+    h+='<span class="sc rem" id="sc-rem-'+s+'">○ '+cnt+'</span>';
+    h+='</div></div>';
+    h+='<button class="fbtn" id="fb-'+s+'" onclick="toggleFail(\''+s+'\')">Solo falladas</button>';
+    h+='</div>';
+    h+='<div id="qs-'+s+'"></div>';
+    h+='<div class="no-failed" id="nf-'+s+'">Aún no has fallado ninguna 🎉</div>';
+    h+='<div class="no-results" id="nr-'+s+'">No se encontraron preguntas</div>';
+    h+='<div class="sec-actions">';
+    h+='<button class="reset-btn" onclick="resetSec(\''+s+'\')">↺ Reiniciar</button>';
+    h+='<button class="nota-btn" onclick="calcNota(\''+s+'\')">✎ Calcular nota</button>';
+    h+='</div>';
+    h+='<div class="nota-box" id="nota-'+s+'"></div>';
+    h+='</div>';
+  });
+  var pw=document.getElementById('panels-wrap');if(pw)pw.innerHTML=h;
+}
+
+/* ── Índice O(1) + numeración fija ── */
+function buildIdx(){
+  SECS.forEach(function(s){
+    qIdx[s]={};
+    if(D[s])D[s].forEach(function(q){qIdx[s][q.n]=q;});
+  });
+}
+function buildNums(){
+  // Numeración correlativa fija: 1, 2, 3... por sección
+  SECS.forEach(function(s){
+    qNums[s]={};
+    if(D[s])D[s].forEach(function(q,i){qNums[s][q.n]=i+1;});
+  });
+}
+function getNum(sec,n){return qNums[sec]?qNums[sec][n]||n:n;}
+function findQ(qid){
+  var d=qid.indexOf('-'),s=qid.substring(0,d),n=qid.substring(d+1);
+  return(qIdx[s]&&qIdx[s][n])||null;
+}
+function getSecFromQid(qid){return qid.substring(0,qid.indexOf('-'));}
+function getNFromQid(qid){return qid.substring(qid.indexOf('-')+1);}
+
+/* ── Orden inter-secciones para Todos ── */
+function buildAllOrder(){
+  var all=[];
+  SECS.forEach(function(s){if(D[s])D[s].forEach(function(q){all.push({sec:s,n:q.n});});});
+  if(!qOrd['__all__'])qOrd['__all__']=shuffle(all.map(function(x){return x.sec+'|'+x.n;}));
+  allOrder=qOrd['__all__'].map(function(key){
+    var p=key.indexOf('|'),sec=key.substring(0,p),n=key.substring(p+1);
+    return{sec:sec,n:n,q:qIdx[sec]&&qIdx[sec][n]};
+  }).filter(function(x){return x.q;});
+}
+
+/* ── Utilidades ── */
+function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function shuffle(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=b[i];b[i]=b[j];b[j]=t;}return b;}
+function getQOrd(s,qs){if(!qOrd[s])qOrd[s]=shuffle(qs.map(function(q){return q.n;}));return qOrd[s];}
+function getOOrd(qid){
+  var q=findQ(qid);var n=q&&q.o?q.o.length:4;
+  if(q&&q.noShuffle){var a=[];for(var i=0;i<n;i++)a.push(i);return a;}
+  if(!oOrd[qid]){var a=[];for(var i=0;i<n;i++)a.push(i);oOrd[qid]=shuffle(a);}
+  return oOrd[qid];
+}
+function imgHtml(key){
+  if(!IMGS[key]){console.warn('IMGS: clave no encontrada →',key);return'';}
+  return'<div class="clinimg-wrap"><img src="'+IMGS[key]+'" class="clinimg" alt="Imagen clínica" loading="lazy"><div class="clinimg-cap">Imagen clínica</div></div>';
+}
+
+/* ── localStorage debounce ── */
+function saveLocal(){
+  if(!canSave)return;
+  if(saveTimer)clearTimeout(saveTimer);
+  saveTimer=setTimeout(function(){
+    try{
+      localStorage.setItem(KEY,JSON.stringify({state:state,qOrd:qOrd,oOrd:oOrd,starred:starred,failHist:failHist,dark:darkMode,timerSec:timerSec}));
+      setBadge('Guardado','ok');
+    }catch(e){setBadge('Sin guardado','warn');}
+  },300);
+}
+function setBadge(t,c){var b=document.getElementById('save-badge');if(b){b.textContent=t;b.className='sbadge '+c;}}
+
+/* ── Construcción de tarjeta ── */
+function buildCard(q,sec,inAll,allPos){
+  var qid=sec+'-'+q.n;
+  var cid=(inAll?'A-':'S-')+qid;
+  var num=inAll?(allPos+1):getNum(sec,q.n);
+  var oo=getOOrd(qid);
+  var sOpts=oo.map(function(i){return q.o[i];});
+  var nc=oo.indexOf(q.c-1)+1;
+  var ans=state[qid];
+  var cc=ans?(ans.r?' answered-ok':' answered-wrong'):'';
+  var badgeCls='qnum'+(inAll?'':' sec-colored');
+  var h='<div class="qcard s-'+sec+cc+'" id="card-'+cid+'">';
+  h+='<div class="qhead" id="h-'+cid+'" data-cid="'+cid+'" data-qid="'+qid+'" data-sec="'+sec+'" onclick="tog(this.dataset.cid)">';
+  h+='<span class="'+badgeCls+'">'+num+'</span>';
+  h+='<span class="qtxt">'+q.q+(ans?'<span class="atag '+(ans.r?'ok':'ko')+'">'+(ans.r?'✓ acertada':'✗ fallada')+'</span>':'')+'</span>';
+  h+='<button class="star-btn'+(starred[qid]?' on':'')+'\" id="star-'+cid+'" onclick="event.stopPropagation();toggleStar(\''+qid+'\')" title="Marcar (S)"><span class="si">\u2606</span><span class="sf">\u2605</span></button>';
+  h+='<span class="chev">▾</span>';
+  h+='</div>';
+  h+='<div class="qbody" id="b-'+cid+'">';
+  if(q.img)h+=imgHtml(q.img);
+  if(currentMode==='quick'){
+    h+='<div class="quick-card"><div class="quick-rc">✓ Respuesta correcta: opción '+nc+' — '+escH(q.o[q.c-1])+'</div><div class="expbox">'+q.e+'</div></div>';
+  } else {
+    h+='<ul class="opts" id="opts-'+cid+'">';
+    h+=sOpts.map(function(o,i){
+      var p=i+1,oc='opt';
+      if(ans){oc+=' done';if(p===nc)oc+=' correct';else if(p===ans.c&&!ans.r)oc+=' wrong';}
+      return'<li class="'+oc+'" data-qid="'+qid+'" data-pos="'+p+'" data-sec="'+sec+'" onclick="answer(this.dataset.qid,+this.dataset.pos,this.dataset.sec)"><span class="onum">'+p+'.</span><span>'+o+'</span></li>';
+    }).join('');
+    h+='</ul>';
+    if(ans){h+='<div class="expbox"><span class="et">'+(ans.r?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e+'</div>';}
+  }
+  h+='</div></div>';
+  return h;
+}
+
+/* ── Render sección ── */
+function render(sec){
+  var qs=D[sec];if(!qs)return;
+  var ord=getQOrd(sec,qs);
+  var sorted=ord.map(function(n){return qIdx[sec]&&qIdx[sec][n];}).filter(Boolean);
+  var el=document.getElementById('qs-'+sec);
+  if(el)el.innerHTML=sorted.map(function(q){return buildCard(q,sec,false,0);}).join('');
+}
+
+/* ── Render Todos (mezcla inter-secciones) ── */
+function renderAll(){
+  if(!allOrder)buildAllOrder();
+  var el=document.getElementById('qs-all');
+  if(el)el.innerHTML=allOrder.map(function(x,i){return buildCard(x.q,x.sec,true,i);}).join('');
+}
+
+/* ── Toggle open/close ── */
+function tog(cid){
+  var b=document.getElementById('b-'+cid),h=document.getElementById('h-'+cid);
+  if(!b||!h)return;
+  var opening=!b.classList.contains('open');
+  b.classList.toggle('open');h.classList.toggle('open');
+  if(opening){
+    if(activeCid&&activeCid!==cid){var pc=document.getElementById('card-'+activeCid);if(pc)pc.classList.remove('kb-focus');}
+    activeCid=cid;
+    var card=document.getElementById('card-'+cid);if(card)card.classList.add('kb-focus');
+  }else{
+    if(activeCid===cid){activeCid=null;var card=document.getElementById('card-'+cid);if(card)card.classList.remove('kb-focus');}
+  }
+}
+
+/* ── Responder ── */
+function answer(qid,pos,sec){
+  if(state[qid])return;
+  var q=findQ(qid);if(!q)return;
+  var oo=getOOrd(qid);
+  var nc=oo.indexOf(q.c-1)+1;
+  var isRight=pos===nc;
+  state[qid]={c:pos,r:isRight};
+  // Registro de errores
+  if(!isRight){failHist[qid]=(failHist[qid]||0)+1;}
+  saveLocal();
+  // Actualizar todas las instancias del card (panel sección + panel all)
+  // Actualizar opciones en todas las instancias del card
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var optsEl=document.querySelectorAll('#opts-'+cid+' .opt');
+    optsEl.forEach(function(el,i){
+      el.classList.add('done');
+      if(i+1===nc)el.classList.add('correct');
+      else if(i+1===pos&&!isRight)el.classList.add('wrong');
+    });
+    var bdy=document.getElementById('b-'+cid);
+    if(bdy){
+      var eb=bdy.querySelector('.expbox');
+      if(!eb){eb=document.createElement('div');eb.className='expbox';bdy.appendChild(eb);}
+      eb.innerHTML='<span class="et">'+(isRight?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e;
+    }
+    var hd=document.getElementById('h-'+cid);
+    if(hd){var qt=hd.querySelector('.qtxt');if(qt&&!qt.querySelector('.atag')){var at=document.createElement('span');at.className='atag '+(isRight?'ok':'ko');at.innerHTML=isRight?'✓ acertada':'✗ fallada';qt.appendChild(at);}}
+    var card=document.getElementById('card-'+cid);
+    if(card)card.classList.add(isRight?'answered-ok':'answered-wrong');
+  });
+  updateScores();updateProg();
+  if(fFailed[sec]&&isRight){
+    var fcard=document.getElementById('card-S-'+qid);
+    if(fcard)fcard.style.display='none';
+    refreshNF(sec);
+  }
+}
+
+/* ── Estrella ── */
+function toggleStar(qid){
+  starred[qid]=!starred[qid];
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var btn=document.getElementById('star-'+cid);
+    if(btn)btn.classList.toggle('on',starred[qid]);
+  });
+  saveLocal();
+}
+function filterStarred(){
+  starsFilter=!starsFilter;
+  var btn=document.getElementById('btn-stars');
+  if(btn){btn.style.background=starsFilter?'#fef3c7':'';btn.style.fontWeight=starsFilter?'700':'';}
+  document.querySelectorAll('.qcard').forEach(function(card){
+    if(starsFilter){
+      var hd=card.querySelector('.qhead');
+      var qid=hd?hd.dataset.qid:'';
+      card.style.display=starred[qid]?'':'none';
+    }else{card.style.display='';}
+  });
+}
+
+/* ── Filtro falladas ── */
+function refreshNF(sec){
+  var c=document.getElementById('qs-'+sec);if(!c||!fFailed[sec])return;
+  var n=c.querySelectorAll('.qcard.answered-wrong').length;
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',n===0);
+}
+function toggleFail(sec){
+  fFailed[sec]=!fFailed[sec];
+  var btn=document.getElementById('fb-'+sec);
+  if(btn){btn.classList.toggle('on',fFailed[sec]);btn.textContent=fFailed[sec]?'← Ver todas':'Solo falladas';}
+  var c=document.getElementById('qs-'+sec);if(!c)return;
+  var nf=0;
+  c.querySelectorAll('.qcard').forEach(function(card){
+    if(fFailed[sec]){var show=card.classList.contains('answered-wrong');card.style.display=show?'':'none';if(show)nf++;}
+    else{card.style.display='';}
+  });
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',fFailed[sec]&&nf===0);
+}
+
+/* ── Scores y progreso ── */
+function updateScores(){
+  var tok=0,tok2=0,tok3=0;
+  SECS.forEach(function(sec){
+    var ok=0,ko=0;
+    if(D[sec])D[sec].forEach(function(q){var a=state[sec+'-'+q.n];if(a){if(a.r)ok++;else ko++;}});
+    var tot=D[sec]?D[sec].length:0,rem=tot-ok-ko;
+    tok+=ok;tok2+=ko;tok3+=rem;
+    var eok=document.getElementById('sc-ok-'+sec),eko=document.getElementById('sc-ko-'+sec),erm=document.getElementById('sc-rem-'+sec);
+    if(eok)eok.textContent='✓ '+ok;if(eko)eko.textContent='✗ '+ko;if(erm)erm.textContent='○ '+rem;
+  });
+  var eok=document.getElementById('sc-ok-all'),eko=document.getElementById('sc-ko-all'),erm=document.getElementById('sc-rem-all');
+  if(eok)eok.textContent='✓ '+tok;if(eko)eko.textContent='✗ '+tok2;if(erm)erm.textContent='○ '+tok3;
+}
+function updateProg(){
+  var total=0,done=Object.keys(state).length;
+  SECS.forEach(function(s){if(D[s])total+=D[s].length;});
+  var pct=total>0?Math.round(done/total*100):0;
+  var bar=document.getElementById('prog-bar');if(bar)bar.style.width=pct+'%';
+}
+
+/* ── Tabs ── */
+function showTab(t){
+  currentTab=t;
+  document.querySelectorAll('.tab').forEach(function(b){b.classList.remove('on');});
+  var tb=document.querySelector('.tab.t-'+t);if(tb)tb.classList.add('on');
+  var mc=document.getElementById('main-cont');if(mc)mc.setAttribute('data-tab',t);
+  var panelAll=document.getElementById('panel-all');
+  if(panelAll)panelAll.classList.toggle('visible',t==='all');
+  SECS.forEach(function(s){
+    var p=document.getElementById('panel-'+s);
+    if(p)p.classList.toggle('visible',t===s);
+  });
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  clearSearch();
+}
+
+/* ── Reset ── */
+function resetSec(sec){
+  if(D[sec])D[sec].forEach(function(q){var qid=sec+'-'+q.n;delete state[qid];delete oOrd[qid];});
+  delete qOrd[sec];fFailed[sec]=false;activeCid=null;
+  var btn=document.getElementById('fb-'+sec);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+  var nb=document.getElementById('nota-'+sec);if(nb){nb.style.display='none';nb.className='nota-box';}
+  saveLocal();render(sec);
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.remove('show');
+  updateScores();updateProg();
+  // Reconstruir panel all para reflejar cambios
+  buildAllOrder();renderAll();
+}
+function resetAll(){
+  Object.keys(state).forEach(function(k){delete state[k];});
+  Object.keys(oOrd).forEach(function(k){delete oOrd[k];});
+  Object.keys(qOrd).forEach(function(k){delete qOrd[k];});
+  activeCid=null;starsFilter=false;allOrder=null;
+  var bs=document.getElementById('btn-stars');if(bs){bs.style.background='';bs.style.fontWeight='';}
+  SECS.forEach(function(s){
+    fFailed[s]=false;
+    var btn=document.getElementById('fb-'+s);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+    var nb=document.getElementById('nota-'+s);if(nb){nb.style.display='none';nb.className='nota-box';}
+  });
+  saveLocal();
+  SECS.forEach(render);
+  buildAllOrder();renderAll();
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  updateScores();updateProg();
+}
+
+/* ── Nota y revisión ── */
+function buildRevList(sec){
+  var qs=D[sec];if(!qs)return'';
+  var failed=qs.filter(function(q){var a=state[sec+'-'+q.n];return a&&!a.r;});
+  if(!failed.length)return'';
+  var html='<div class="review-list"><div class="review-title">📋 '+failed.length+' pregunta'+(failed.length>1?'s':'')+' fallada'+(failed.length>1?'s':'')+' — repasa aquí:</div>';
+  failed.forEach(function(q){
+    var qid=sec+'-'+q.n;var oo=getOOrd(qid);var nc=oo.indexOf(q.c-1)+1;
+    html+='<details class="review-item"><summary><span><b>'+getNum(sec,q.n)+'.</b> '+q.q+'</span></summary>';
+    html+='<div class="review-body"><div class="review-ans">✓ Opción '+nc+': '+escH(q.o[q.c-1]||'')+'</div>';
+    html+='<div class="expbox">'+q.e+'</div></div></details>';
+  });
+  return html+'</div>';
+}
+function calcNota(sec){
+  var qs=D[sec];if(!qs)return;
+  var total=qs.length,ok=0,ko=0,skip=0;
+  qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-'+sec);if(!box)return;
+  box.className='nota-box '+(pass?'pass':'fail');
+  box.innerHTML='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>'
+    +buildRevList(sec);
+  box.style.display='block';
+}
+function calcNotaAll(){
+  var total=0,ok=0,ko=0,skip=0;
+  SECS.forEach(function(sec){
+    var qs=D[sec];if(!qs)return;
+    total+=qs.length;
+    qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  });
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-all');if(!box)return;
+  box.className='global-nota-box '+(pass?'pass':'fail');
+  var html='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10 (global)</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>';
+  SECS.forEach(function(sec){
+    var rv=buildRevList(sec);
+    if(rv){var m=META.secciones[sec]||{};html+='<div class="review-sec-label">'+(m.emoji?m.emoji+' ':'')+escH(m.label||sec)+'</div>'+rv;}
+  });
+  box.innerHTML=html;box.style.display='block';
+}
+
+/* ── Estadísticas de errores ── */
+function toggleStats(){
+  statsVisible=!statsVisible;
+  var btn=document.getElementById('btn-stats');
+  if(btn){btn.style.background=statsVisible?'var(--ko-bg)':'';btn.style.color=statsVisible?'var(--ko-t)':'';}
+  var box=document.getElementById('stats-global');
+  if(!box)return;
+  if(!statsVisible){box.classList.remove('show');return;}
+  var entries=Object.entries(failHist).filter(function(e){return e[1]>0;});
+  if(!entries.length){box.innerHTML='<div class="stats-title">📊 Sin errores registrados todavía</div>';box.classList.add('show');return;}
+  entries.sort(function(a,b){return b[1]-a[1];});
+  var top=entries.slice(0,10);
+  var maxV=top[0][1];
+  var html='<div class="stats-title">📊 Preguntas más falladas (acumulado entre sesiones)</div>';
+  top.forEach(function(e,i){
+    var qid=e[0],count=e[1];
+    var q=findQ(qid);if(!q)return;
+    var sec=getSecFromQid(qid),n=getNFromQid(qid);
+    var m=META.secciones[sec]||{};
+    var pct=Math.round(count/maxV*100);
+    html+='<div class="stats-item">';
+    html+='<span class="stats-n" style="min-width:18px;color:var(--ko-t);font-weight:700">'+(i+1)+'.</span>';
+    html+='<span class="stats-q">'+(m.emoji?m.emoji+' ':'')+getNum(sec,n)+'. '+q.q.substring(0,60)+(q.q.length>60?'…':'')+'</span>';
+    html+='<div class="stats-bar-wrap"><div class="stats-bar" style="width:'+pct+'%"></div></div>';
+    html+='<span class="stats-n">'+count+'✗</span>';
+    html+='</div>';
+  });
+  box.innerHTML=html;box.classList.add('show');
+}
+
+/* ── Buscador ── */
+function onSearch(val){
+  var v=val.trim().toLowerCase();
+  var clr=document.getElementById('search-clear');
+  var cnt=document.getElementById('search-count');
+  if(clr)clr.style.display=v?'block':'none';
+  var found=0,total=0;
+  document.querySelectorAll('.qcard').forEach(function(card){
+    total++;
+    if(!v){card.classList.remove('search-hidden');found++;}
+    else{
+      var qtxt=card.querySelector('.qtxt');
+      var match=qtxt&&qtxt.textContent.toLowerCase().indexOf(v)!==-1;
+      card.classList.toggle('search-hidden',!match);
+      if(match)found++;
+    }
+  });
+  if(cnt){
+    if(v){cnt.textContent=found+' de '+total+' preguntas';cnt.style.display='block';}
+    else{cnt.style.display='none';}
+  }
+  // Mostrar "sin resultados" por panel
+  ['all'].concat(SECS).forEach(function(s){
+    var panel=document.getElementById('panel-'+s);if(!panel||!panel.classList.contains('visible'))return;
+    var cards=panel.querySelectorAll('.qcard:not(.search-hidden)');
+    var nr=document.getElementById('nr-'+s);if(nr)nr.style.display=cards.length===0&&v?'block':'none';
+  });
+}
+function clearSearch(){
+  var si=document.getElementById('search-input');if(si)si.value='';
+  onSearch('');
+}
+
+/* ── Modo ── */
+function setMode(mode){
+  currentMode=mode;
+  document.getElementById('mode-test').classList.toggle('on',mode==='test');
+  document.getElementById('mode-quick').classList.toggle('on',mode==='quick');
+  // Rerenderizar todo
+  SECS.forEach(render);renderAll();
+}
+
+/* ── Modo oscuro ── */
+function applyTheme(){
+  document.documentElement.setAttribute('data-theme',darkMode?'dark':'light');
+  var btn=document.getElementById('btn-dark');if(btn)btn.textContent=darkMode?'☀️':'🌙';
+}
+function toggleDark(){darkMode=!darkMode;applyTheme();saveLocal();}
+
+/* ── Temporizador ── */
+function initTimer(){
+  timerRemaining=timerSec;
+  renderTimer();
+  var disp=document.getElementById('timer-display');
+  if(disp){
+    disp.addEventListener('click',function(){startEditTimer();});
+  }
+}
+function fmtTime(s){
+  var h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60;
+  return h+':'+(m<10?'0':'')+m+':'+(ss<10?'0':'')+ss;
+}
+function renderTimer(){
+  var disp=document.getElementById('timer-display');
+  if(!disp)return;
+  disp.textContent=fmtTime(timerRemaining);
+  disp.classList.toggle('danger',timerSec>0&&timerRemaining===0);
+}
+function timerToggle(){
+  if(timerRunning){
+    clearInterval(timerInterval);timerRunning=false;
+    document.getElementById('btn-tplay').textContent='▶';
+  }else{
+    if(timerRemaining<=0&&timerSec>0)timerRemaining=timerSec;
+    timerRunning=true;
+    document.getElementById('btn-tplay').textContent='⏸';
+    timerInterval=setInterval(function(){
+      if(timerRemaining>0){timerRemaining--;renderTimer();}
+      else{clearInterval(timerInterval);timerRunning=false;document.getElementById('btn-tplay').textContent='▶';renderTimer();}
+    },1000);
+  }
+}
+function timerReset(){
+  clearInterval(timerInterval);timerRunning=false;
+  timerRemaining=timerSec;
+  document.getElementById('btn-tplay').textContent='▶';
+  renderTimer();
+}
+function startEditTimer(){
+  var disp=document.getElementById('timer-display');if(!disp)return;
+  if(timerRunning){timerToggle();}
+  var old=fmtTime(timerRemaining);
+  disp.contentEditable='true';disp.classList.add('editing');
+  disp.textContent=old;
+  disp.focus();
+  var range=document.createRange();range.selectNodeContents(disp);
+  var sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
+  function commit(){
+    disp.contentEditable='false';disp.classList.remove('editing');
+    var txt=disp.textContent.trim();
+    var parts=txt.split(':').map(Number);
+    var secs=0;
+    if(parts.length===3)secs=parts[0]*3600+parts[1]*60+parts[2];
+    else if(parts.length===2)secs=parts[0]*60+parts[1];
+    else if(parts.length===1)secs=parts[0]*60;
+    if(!isNaN(secs)&&secs>=0){timerSec=secs;timerRemaining=secs;saveLocal();}
+    renderTimer();
+  }
+  disp.addEventListener('blur',commit,{once:true});
+  disp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();disp.blur();}});
+}
+
+/* ── Helpers cid ── */
+function cidToQid(cid){return cid.replace(/^[AS]-/,'');}
+
+/* ── Teclado ── */
+function handleKey(e){
+  var tg=e.target.tagName;
+  if(tg==='INPUT'||tg==='TEXTAREA'||e.target.contentEditable==='true')return;
+  var k=e.key;
+  if(k>='1'&&k<='5'){
+    if(activeCid&&!state[cidToQid(activeCid)]){
+      var aqid=cidToQid(activeCid);
+      var pos=parseInt(k),q=findQ(aqid);
+      if(q&&pos<=q.o.length){e.preventDefault();answer(aqid,pos,getSecFromQid(aqid));}
+    }
+  }else if(k==='ArrowDown'||k==='ArrowUp'){
+    e.preventDefault();navigateQ(k==='ArrowDown'?1:-1);
+  }else if(k==='s'||k==='S'){
+    if(activeCid)toggleStar(cidToQid(activeCid));
+  }
+}
+function navigateQ(dir){
+  var cards=Array.from(document.querySelectorAll('.sec-panel.visible .qcard')).filter(function(c){return c.style.display!=='none'&&!c.classList.contains('search-hidden');});
+  var cids=cards.map(function(c){return c.id.replace('card-','');});
+  if(!cids.length)return;
+  var idx=activeCid?cids.indexOf(activeCid):-1;
+  var nidx=Math.max(0,Math.min(cids.length-1,idx+dir));
+  var ncid=cids[nidx];if(!ncid||ncid===activeCid)return;
+  if(activeCid){var ob=document.getElementById('b-'+activeCid);var oh=document.getElementById('h-'+activeCid);if(ob)ob.classList.remove('open');if(oh)oh.classList.remove('open');var oc=document.getElementById('card-'+activeCid);if(oc)oc.classList.remove('kb-focus');}
+  activeCid=ncid;
+  var nb=document.getElementById('b-'+ncid);var nh=document.getElementById('h-'+ncid);
+  if(nb)nb.classList.add('open');if(nh)nh.classList.add('open');
+  var nc2=document.getElementById('card-'+ncid);if(nc2){nc2.classList.add('kb-focus');nc2.scrollIntoView({behavior:'smooth',block:'nearest'});}
+}
+</script>
+</body>
+</html>
