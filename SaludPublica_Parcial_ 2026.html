@@ -1,0 +1,898 @@
+<!--
+=============================================================
+  MOTOR BANCO MIR — v10
+  Novedades respecto a v9:
+  - Numeración correlativa fija por sección (no se mezcla)
+  - Badge neutro en pestaña "Todos" + mezcla real inter-secciones
+  - Temporizador sticky editable en header (play/pausa/reset)
+  - Buscador de texto en tiempo real
+  - Modo repaso rápido (muestra RC + explicación directamente)
+  - Estadísticas de errores recurrentes entre sesiones
+=============================================================
+-->
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title id="page-title">Banco MIR</title>
+<style>
+:root{
+  --bg:#f4f3ef;--surf:#fff;--bd:#e5e5e5;--bd2:#ddd;
+  --txt:#1a1a1a;--txt2:#555;--txt3:#999;--txt4:#666;
+  --hdr:#1a1a1a;--hdr-t:#fff;
+  --ok-bg:#e6f9ef;--ok-t:#0b6e52;--ok-bd:#2da060;
+  --ko-bg:#fdecea;--ko-t:#b91c1c;--ko-bd:#d94f45;
+  --sc-ok:#dcf5ed;--sc-ko:#fdecea;--sc-rem:#f0f0f0;--sc-rem-t:#666;
+  --exp:#fffbe6;--exp-bd:#f0c04a;--exp-t:#5a4500;
+  --prog:#e5e5e5;--prog-fill:#1a56db;
+  --star:#ccc;--star-on:#f59e0b;
+  --hint:#fafafa;--hint-bd:#eee;
+  --tab-bd:#ddd;--tab-t:#555;
+  --all-bg:#e8f0fe;--all-t:#1a56db;--all-bd:#1a56db;
+  --fab:#1a1a1a;--fab-t:#fff;
+  --nota-btn-t:#1a56db;--nota-btn-bd:#1a56db;--nota-btn-bg:var(--surf);
+  --timer-bg:#222;--timer-t:#fff;--timer-danger:#ef4444;
+}
+[data-theme="dark"]{
+  --bg:#0f0f1a;--surf:#1e1e30;--bd:#2a2a45;--bd2:#333355;
+  --txt:#e8e8f0;--txt2:#aaa;--txt3:#555;--txt4:#888;
+  --hdr:#0a0a14;--hdr-t:#e8e8f0;
+  --ok-bg:#0b3020;--ok-t:#4ade80;--ok-bd:#166534;
+  --ko-bg:#2d0a0a;--ko-t:#f87171;--ko-bd:#7f1d1d;
+  --sc-ok:#0b3020;--sc-ko:#2d0a0a;--sc-rem:#252540;--sc-rem-t:#aaa;
+  --exp:#1a1500;--exp-bd:#a37f10;--exp-t:#d4b84a;
+  --prog:#2a2a45;--prog-fill:#60a5fa;
+  --star:#444;--star-on:#f59e0b;
+  --hint:#1a1a2e;--hint-bd:#2a2a45;
+  --tab-bd:#2a2a45;--tab-t:#aaa;
+  --all-bg:#1a2a4a;--all-t:#60a5fa;--all-bd:#3b82f6;
+  --fab:#2a2a50;--fab-t:#e8e8f0;
+  --nota-btn-t:#60a5fa;--nota-btn-bd:#3b82f6;--nota-btn-bg:var(--surf);
+  --timer-bg:#1a1a2e;--timer-t:#e8e8f0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;transition:background .25s,color .25s}
+
+/* ── Header ── */
+header{background:var(--hdr);color:var(--hdr-t);padding:9px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;position:sticky;top:0;z-index:100}
+header h1{font-size:13.5px;font-weight:600;white-space:nowrap}
+.hright{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.hmeta{font-size:11px;color:#888}
+.hbtn{background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:3px 5px;border-radius:5px;transition:background .15s;color:var(--hdr-t)}
+.hbtn:hover{background:rgba(255,255,255,.12)}
+.sbadge{font-size:11px;padding:3px 9px;border-radius:5px;font-weight:500}
+.sbadge.ok{background:#15803d;color:#dcfce7}.sbadge.warn{background:#92400e;color:#fef3c7}
+
+/* ── Temporizador ── */
+#timer-wrap{display:flex;align-items:center;gap:4px;background:var(--timer-bg);border-radius:7px;padding:3px 8px;border:1px solid rgba(255,255,255,.1)}
+#timer-display{font-size:13px;font-weight:700;font-family:monospace;color:var(--timer-t);min-width:58px;text-align:center;cursor:pointer;border-radius:3px;padding:1px 3px}
+#timer-display:hover{background:rgba(255,255,255,.08)}
+#timer-display.editing{background:rgba(255,255,255,.15);outline:none;color:var(--timer-t)}
+#timer-display.danger{color:var(--timer-danger)}
+#timer-wrap button{background:none;border:none;cursor:pointer;color:rgba(255,255,255,.7);font-size:12px;padding:1px 3px;border-radius:3px;line-height:1}
+#timer-wrap button:hover{background:rgba(255,255,255,.12);color:#fff}
+
+/* ── Barra de progreso ── */
+#prog-wrap{height:3px;background:var(--prog);position:sticky;top:40px;z-index:99}
+#prog-bar{height:100%;background:var(--prog-fill);width:0%;transition:width .4s}
+
+/* ── Contenedor ── */
+.container{max-width:820px;margin:0 auto;padding:16px 12px}
+
+/* ── Buscador ── */
+.search-wrap{position:relative;margin-bottom:13px}
+.search-wrap input{width:100%;padding:8px 34px 8px 12px;border:1.5px solid var(--bd2);border-radius:8px;font-size:13px;background:var(--surf);color:var(--txt);outline:none;transition:border-color .15s}
+.search-wrap input:focus{border-color:var(--prog-fill)}
+.search-clear{position:absolute;right:9px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--txt3);font-size:16px;display:none;line-height:1}
+#search-count{font-size:11px;color:var(--txt3);margin-top:4px;display:none}
+
+/* ── Modo repaso ── */
+.mode-bar{display:flex;gap:6px;margin-bottom:12px;align-items:center}
+.mode-btn{padding:5px 12px;border:1.5px solid var(--bd2);border-radius:7px;cursor:pointer;font-size:12px;font-weight:500;background:var(--surf);color:var(--txt2);transition:all .15s}
+.mode-btn:hover{border-color:#999}
+.mode-btn.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Tabs ── */
+.tabs{display:flex;gap:7px;margin-bottom:13px;flex-wrap:wrap}
+.tab{padding:7px 14px;border:1.5px solid var(--tab-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;background:var(--surf);color:var(--tab-t);transition:all .15s}
+.tab:hover{border-color:#999;color:var(--txt)}
+.tab.t-all.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Score global ── */
+.ph-global{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 15px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-left:4px solid var(--prog-fill)}
+.score-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.sc{font-size:12px;font-weight:600;padding:3px 9px;border-radius:6px}
+.sc.ok{background:var(--sc-ok);color:var(--ok-t)}.sc.ko{background:var(--sc-ko);color:var(--ko-t)}.sc.rem{background:var(--sc-rem);color:var(--sc-rem-t)}
+
+/* ── Acciones ── */
+.global-actions{display:none;margin-bottom:10px;gap:7px;flex-wrap:wrap;align-items:center}
+.container[data-tab="all"] .global-actions{display:flex}
+.sec-actions{margin:6px 0 15px;display:flex;gap:7px;flex-wrap:wrap}
+.reset-btn{padding:7px 14px;background:var(--fab);color:var(--fab-t);border:none;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:opacity .15s}
+.reset-btn:hover{opacity:.82}
+.nota-btn{padding:7px 14px;background:var(--nota-btn-bg);color:var(--nota-btn-t);border:1.5px solid var(--nota-btn-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:background .15s}
+.nota-btn:hover{background:var(--all-bg)}
+
+/* ── Nota box ── */
+.nota-box,.global-nota-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:2px solid var(--bd2);font-size:13px;line-height:1.7;display:none}
+.nota-box.pass,.global-nota-box.pass{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t)}
+.nota-box.fail,.global-nota-box.fail{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t)}
+.nota-score{font-size:26px;font-weight:700;display:block;margin-bottom:4px}
+.nota-detail{font-size:12px;opacity:.85;font-family:monospace}
+
+/* ── Vista revisión ── */
+.review-list{margin-top:12px;border-top:1px solid var(--bd2);padding-top:10px}
+.review-title{font-size:12px;font-weight:700;margin-bottom:9px;color:var(--txt)}
+.review-sec-label{font-size:11.5px;font-weight:700;color:var(--txt3);margin:8px 0 5px;padding-top:6px;border-top:1px solid var(--bd)}
+.review-item{background:var(--surf);border-radius:8px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden}
+.review-item summary{padding:9px 12px;cursor:pointer;font-size:12.5px;color:var(--txt);list-style:none;display:flex;gap:8px;align-items:flex-start}
+.review-item summary::-webkit-details-marker{display:none}
+.review-item summary::before{content:'▶';font-size:9px;color:var(--txt3);flex-shrink:0;margin-top:4px;transition:transform .18s}
+details[open] summary::before{transform:rotate(90deg)}
+.review-body{padding:0 12px 11px}
+.review-ans{font-size:12px;color:var(--ok-t);margin-bottom:7px;font-weight:500}
+
+/* ── Estadísticas ── */
+.stats-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:1.5px solid var(--bd2);background:var(--surf);display:none}
+.stats-box.show{display:block}
+.stats-title{font-size:12px;font-weight:700;margin-bottom:10px;color:var(--txt)}
+.stats-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:12.5px}
+.stats-item:last-child{border-bottom:none}
+.stats-bar-wrap{flex:1;background:var(--sc-rem);border-radius:4px;height:6px;overflow:hidden}
+.stats-bar{height:100%;background:var(--ko-bd);border-radius:4px;transition:width .4s}
+.stats-n{font-size:11px;color:var(--txt3);white-space:nowrap}
+.stats-q{flex:2;color:var(--txt);font-size:12px;line-height:1.3}
+
+/* ── Panel secciones ── */
+.sec-panel{display:none}.sec-panel.visible{display:block}
+.ph{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ph-left{flex:1;display:flex;flex-direction:column;gap:5px}
+.ph-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt3);margin-bottom:1px}
+.ph-desc{font-size:12px;color:var(--txt4)}
+.fbtn{padding:6px 12px;font-size:12px;font-weight:500;border:1.5px solid var(--bd2);border-radius:8px;cursor:pointer;background:var(--surf);color:var(--txt2);transition:all .15s;white-space:nowrap}
+.fbtn:hover{border-color:#999;color:var(--txt)}.fbtn.on{background:var(--ko-bg);color:#b91c1c;border-color:#f87171}
+.no-failed{display:none;text-align:center;padding:16px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin-top:4px}
+.no-failed.show{display:block}
+.no-results{display:none;text-align:center;padding:20px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin:8px 0}
+
+/* ── Hint ── */
+.hint{font-size:11px;color:var(--txt3);margin-bottom:15px;padding:7px 11px;background:var(--hint);border-radius:6px;border:1px solid var(--hint-bd)}
+
+/* ── Tarjeta ── */
+.qcard{background:var(--surf);border-radius:10px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden;transition:box-shadow .15s}
+.qcard:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.qcard.kb-focus{outline:2px solid var(--prog-fill);outline-offset:-2px}
+.qcard.search-hidden{display:none}
+.qhead{padding:11px 13px;cursor:pointer;display:flex;align-items:flex-start;gap:9px}
+
+/* ── Badge numérico ── */
+.qnum{font-size:11px;font-weight:700;padding:3px 7px;border-radius:5px;white-space:nowrap;flex-shrink:0;margin-top:2px;background:var(--sc-rem);color:var(--sc-rem-t)}
+/* En pestaña "Todos" siempre neutro; en sección aplica color de sección */
+.qnum.sec-colored{background:var(--sec-dim);color:var(--sec-col)}
+
+.qtxt{font-size:13px;line-height:1.5;flex:1}
+.star-btn{background:none;border:none;cursor:pointer;font-size:15px;color:var(--star);padding:0 2px;flex-shrink:0;margin-top:2px;line-height:1;transition:color .15s,transform .15s}
+.star-btn:hover{transform:scale(1.2)}
+.star-btn .si{display:inline}.star-btn .sf{display:none}
+.star-btn.on .si{display:none}.star-btn.on .sf{display:inline;color:var(--star-on)}
+.chev{font-size:15px;color:var(--bd2);flex-shrink:0;margin-top:2px;transition:transform .2s}
+.qhead.open .chev{transform:rotate(180deg)}
+.qbody{display:none;padding:0 13px 13px}.qbody.open{display:block}
+
+/* ── Imagen ── */
+.clinimg-wrap{margin:9px 0 7px;background:#111;border-radius:8px;overflow:hidden;border:1px solid var(--bd2);text-align:center}
+.clinimg{max-width:100%;max-height:340px;object-fit:contain;display:block;margin:0 auto}
+.clinimg-cap{font-size:11px;color:var(--txt3);padding:4px 0 5px;background:var(--hint);border-top:1px solid var(--bd)}
+
+/* ── Opciones ── */
+.opts{list-style:none;margin-top:9px;display:flex;flex-direction:column;gap:5px}
+.opt{padding:9px 12px;border-radius:8px;border:1.5px solid var(--bd2);cursor:pointer;display:flex;align-items:flex-start;gap:9px;color:var(--txt);font-size:13px;line-height:1.45;transition:border-color .12s,background .12s;user-select:none}
+.opt:hover:not(.done){border-color:#999;background:var(--hint)}
+.opt.correct{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t);font-weight:500;cursor:default}
+.opt.wrong{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t);cursor:default}
+.opt.done:not(.correct):not(.wrong){cursor:default;opacity:.7}
+.onum{font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px;min-width:15px}
+
+/* ── Modo repaso rápido ── */
+.quick-card{padding:9px 12px;border-radius:8px;border:1.5px solid var(--ok-bd);background:var(--ok-bg);margin-top:8px}
+.quick-rc{font-size:12.5px;font-weight:600;color:var(--ok-t);margin-bottom:6px}
+
+/* ── Explicación ── */
+.expbox{margin-top:10px;padding:10px 12px;background:var(--exp);border-left:4px solid var(--exp-bd);border-radius:0 8px 8px 0;font-size:12.5px;color:var(--exp-t);line-height:1.65}
+.expbox b,.expbox strong{font-weight:600}
+.et{display:block;margin-bottom:4px;font-weight:600;font-size:13px}
+.atag{font-size:10px;padding:2px 6px;border-radius:4px;margin-left:5px;vertical-align:middle}
+.atag.ok{background:var(--sc-ok);color:var(--ok-t)}.atag.ko{background:var(--sc-ko);color:#c0392b}
+
+/* ── All-tab CSS ── */
+.container[data-tab="all"] .ph{display:none!important}
+.container[data-tab="all"] .sec-actions{display:none!important}
+.container[data-tab="all"] .no-failed{display:none!important}
+.container[data-tab="all"] .nota-box{display:none!important}
+.container:not([data-tab="all"]) .global-nota-box{display:none!important}
+.container:not([data-tab="all"]) #stats-global{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="h-tit">Banco MIR</h1>
+  <div class="hright">
+    <span class="hmeta" id="h-meta"></span>
+    <!-- Temporizador -->
+    <div id="timer-wrap" title="Haz clic en el tiempo para editar">
+      <span id="timer-display">0:00:00</span>
+      <button id="btn-tplay" onclick="timerToggle()" title="Play/Pausa">▶</button>
+      <button onclick="timerReset()" title="Reset">↺</button>
+    </div>
+    <button class="hbtn" id="btn-dark" onclick="toggleDark()" title="Modo oscuro">🌙</button>
+    <span id="save-badge" class="sbadge"></span>
+  </div>
+</header>
+<div id="prog-wrap"><div id="prog-bar"></div></div>
+
+<div class="container" id="main-cont" data-tab="all">
+  <!-- Buscador -->
+  <div class="search-wrap">
+    <input type="text" id="search-input" placeholder="🔍 Buscar en enunciados..." oninput="onSearch(this.value)">
+    <button class="search-clear" id="search-clear" onclick="clearSearch()">✕</button>
+  </div>
+  <div id="search-count"></div>
+
+  <!-- Modo -->
+  <div class="mode-bar">
+    <span style="font-size:11.5px;color:var(--txt3);font-weight:600">MODO:</span>
+    <button class="mode-btn on" id="mode-test" onclick="setMode('test')">📝 Test</button>
+    <button class="mode-btn" id="mode-quick" onclick="setMode('quick')">⚡ Repaso rápido</button>
+    <button class="mode-btn" id="btn-stars" onclick="filterStarred()" style="margin-left:auto;border-color:#f59e0b;color:#b45309">⭐ Marcadas</button>
+    <button class="mode-btn" id="btn-stats" onclick="toggleStats()">📊 Errores</button>
+  </div>
+
+  <!-- Stats globales -->
+  <div class="stats-box" id="stats-global"></div>
+
+  <!-- Tabs -->
+  <div class="tabs" id="tabs-wrap"></div>
+
+  <!-- Score global -->
+  <div class="ph-global">
+    <div class="ph-left">
+      <span class="ph-desc" id="ph-gdesc"></span>
+      <div class="score-row">
+        <span class="sc ok" id="sc-ok-all">✓ 0</span>
+        <span class="sc ko" id="sc-ko-all">✗ 0</span>
+        <span class="sc rem" id="sc-rem-all">○ 0</span>
+      </div>
+    </div>
+  </div>
+  <div class="global-actions">
+    <button class="reset-btn" onclick="resetAll()">↺ Reiniciar y mezclar</button>
+    <button class="nota-btn" onclick="calcNotaAll()">✎ Calcular nota global</button>
+  </div>
+  <div class="global-nota-box" id="nota-all"></div>
+  <p class="hint">💡 <b>1–5</b> responde · <b>↑↓</b> navega · <b>S</b> marca ⭐ · Progreso guardado automáticamente</p>
+
+  <div id="panels-wrap"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════ MOTOR v10 ═══════════════════════════════════════ */
+
+var KEY="mir_saludpub_parcial2526_v1";
+var META=/*__META_JSON__*/{"titulo":"Salud P\u00fablica \u2014 Parcial 2025-26","subtitulo":"Epidemiolog\u00eda \u00b7 Modelos sanitarios \u00b7 Vacunas \u00b7 C\u00e1ncer \u00b7 Demograf\u00eda \u00b7 DANA","examen":"Parcial 2025-26 \u00b7 CEU Castell\u00f3n","secciones":{"spub":{"label":"Salud P\u00fablica","emoji":"\ud83c\udfe5","color":"#0369a1","colorDim":"#e0f2fe","desc":"Epidemiolog\u00eda \u00b7 Modelos sanitarios \u00b7 Vacunas \u00b7 C\u00e1ncer \u00b7 Demograf\u00eda \u00b7 DANA"}}};
+var D=/*__D_JSON__*/{"spub":[{"n":"1","noShuffle":false,"img":null,"q":"en la historia natural de la tuberculosis:","o":["La infecci\u00f3n implica siempre enfermedad activa","Todos los expuestos desarrollan s\u00edntomas","Puede existir infecci\u00f3n latente sin s\u00edntomas","La infecci\u00f3n siempre es transmisible"],"c":3,"e":"La mayor\u00eda de personas infectadas por <b>Mycobacterium tuberculosis</b> desarrollan <b>infecci\u00f3n latente</b> (ITBL): no tienen s\u00edntomas ni son contagiosas. Solo el 5-10% progresar\u00e1n a enfermedad activa a lo largo de su vida, especialmente ante inmunosupresi\u00f3n."},{"n":"2","noShuffle":false,"img":null,"q":"el concepto de \u2018nudging\u2019 en Promoci\u00f3n de la Salud consiste en:","o":["Obligar a adoptar conductas saludables","Penalizar conductas de riesgo","Modificar el entorno de decisi\u00f3n manteniendo libertad de elecci\u00f3n","Educar mediante campa\u00f1as informativas"],"c":3,"e":"El <b>nudging</b> (\u2018empuj\u00f3n\u2019) es una estrategia de arquitectura de la decisi\u00f3n que <b>facilita conductas saludables sin prohibir ni obligar</b>, preservando la libertad de elecci\u00f3n. Ejemplo: colocar la fruta a la altura de los ojos en una cafeter\u00eda. Es diferente de la educaci\u00f3n sanitaria cl\u00e1sica."},{"n":"3","noShuffle":false,"img":null,"q":"\u00bfcu\u00e1l de los siguientes factores aumenta el riesgo de transmisi\u00f3n de tuberculosis?","o":["Espacios abiertos","Buena ventilaci\u00f3n","Contacto breve","Hacinamiento y mala ventilaci\u00f3n"],"c":4,"e":"La <b>tuberculosis</b> se transmite por v\u00eda a\u00e9rea mediante n\u00facleos de Wells (<5 micras). Los factores que aumentan el riesgo de transmisi\u00f3n son: <b>hacinamiento, mala ventilaci\u00f3n, contacto prolongado</b> y espacios cerrados. Los espacios abiertos y la buena ventilaci\u00f3n reducen el riesgo."},{"n":"4","noShuffle":false,"img":null,"q":"un pa\u00eds implanta cribado de c\u00e1ncer colorrectal. A los 10 a\u00f1os: aumenta la incidencia registrada, disminuye la mortalidad y aumenta la prevalencia. \u00bfCu\u00e1l es la interpretaci\u00f3n epidemiol\u00f3gica m\u00e1s adecuada?","o":["El cribado ha fracasado porque aumenta la incidencia","El aumento de incidencia refleja peor control de factores de riesgo","Diagn\u00f3stico precoz y mejor supervivencia explican los cambios","La prevalencia no deber\u00eda modificarse"],"c":3,"e":"El aumento de <b>incidencia registrada</b> en un programa de cribado es esperado: se detectan casos que antes no se diagnosticaban. La <b>disminuci\u00f3n de mortalidad</b> y el <b>aumento de prevalencia</b> (m\u00e1s supervivientes) confirman el \u00e9xito del programa: diagn\u00f3stico precoz + mejor supervivencia."},{"n":"5","noShuffle":false,"img":null,"q":"en relaci\u00f3n con la vigilancia epidemiol\u00f3gica de las IRAS, se\u00f1ale la afirmaci\u00f3n CORRECTA:","o":["La vigilancia basada en prevalencia permite detectar mejor brotes epid\u00e9micos agudos","El sistema PREVINE se basa en estudios transversales puntuales","El estudio EPINE-EPPS permite estimar carga global pero no incidencia","La vigilancia de incidencia no permite evaluar tendencias temporales"],"c":3,"e":"El estudio <b>EPINE-EPPS</b> es un estudio de prevalencia puntual de infecciones relacionadas con la asistencia sanitaria: estima la <b>carga global</b> en un momento dado pero <b>no mide incidencia</b> (no sigue cohortes en el tiempo). La vigilancia de incidencia s\u00ed permite evaluar tendencias temporales."},{"n":"6","noShuffle":false,"img":null,"q":"respecto a los modelos sanitarios, se\u00f1ale la CORRECTA:","o":["El modelo Beveridge se basa en seguros laborales","El modelo Bismarck garantiza siempre cobertura universal","El modelo liberal prioriza la equidad","El modelo Beveridge tiende a mayor equidad"],"c":4,"e":"El modelo <b>Beveridge</b> (SNS tipo brit\u00e1nico) financia la sanidad v\u00eda impuestos y ofrece cobertura universal gratuita, lo que lo hace m\u00e1s <b>equitativo</b>. El modelo <b>Bismarck</b> se basa en seguros laborales (no Beveridge). El modelo liberal prioriza el mercado, no la equidad."},{"n":"7","noShuffle":false,"img":null,"q":"la afirmaci\u00f3n \u2018el riesgo ambiental est\u00e1 socialmente distribuido\u2019 implica que:","o":["Solo depende de factores gen\u00e9ticos","Existen desigualdades seg\u00fan nivel socioecon\u00f3mico","Solo afecta a pa\u00edses en desarrollo","La exposici\u00f3n es homog\u00e9nea en la poblaci\u00f3n"],"c":2,"e":"Decir que el riesgo ambiental est\u00e1 <b>socialmente distribuido</b> significa que la exposici\u00f3n a contaminantes y factores ambientales <b>no es igual para todos</b>: los grupos de menor nivel socioecon\u00f3mico sufren mayor exposici\u00f3n. Es el concepto de <b>justicia ambiental</b>."},{"n":"8","noShuffle":false,"img":null,"q":"respecto a la infecci\u00f3n tuberculosa latente (ITL):","o":["Es altamente contagiosa","Presenta cl\u00ednica respiratoria t\u00edpica","No tiene relevancia epidemiol\u00f3gica","Puede reactivarse en determinadas condiciones"],"c":4,"e":"La <b>ITL</b> es as\u00edntom\u00e1tica y <b>no contagiosa</b> (el bacilo est\u00e1 contenido por el sistema inmune). Sin embargo, tiene gran relevancia epidemiol\u00f3gica porque puede <b>reactivarse</b> ante inmunosupresi\u00f3n (VIH, anti-TNF, corticoides, edad avanzada), pasando a enfermedad activa y transmisible."},{"n":"9","noShuffle":false,"img":null,"q":"respecto a la incidencia de enfermedad cardiovascular por sexo:","o":["Es mayor en mujeres en edades j\u00f3venes","Es similar en ambos sexos en todas las edades","Es mayor en varones en edades medias","Es mayor en mujeres en todas las edades"],"c":3,"e":"La enfermedad cardiovascular es m\u00e1s frecuente en <b>varones en edades medias</b>, con una ventaja protectora estrog\u00e9nica en mujeres premenop\u00e1usicas. Tras la menopausia, el riesgo femenino se iguala y puede superar al masculino. En j\u00f3venes, los varones tienen mayor incidencia."},{"n":"10","noShuffle":false,"img":null,"q":"seg\u00fan el modelo multicausal de la enfermedad cardiovascular:","o":["Existe una causa principal claramente identificable","La enfermedad se explica por un \u00fanico factor dominante","Es el resultado de la interacci\u00f3n de m\u00faltiples factores","Solo intervienen factores biol\u00f3gicos"],"c":3,"e":"El modelo <b>multicausal</b> establece que la enfermedad cardiovascular resulta de la <b>interacci\u00f3n de m\u00faltiples factores</b> (gen\u00e9ticos, ambientales, conductuales, sociales). No hay una causa \u00fanica dominante. Este modelo supera al unicausal y es la base de la epidemiolog\u00eda moderna."},{"n":"11","noShuffle":false,"img":null,"q":"\u00bfcu\u00e1l de los siguientes sistemas presenta mayor riesgo de inequidad?","o":["Beveridge","Bismarck","Liberal","Sistema nacional de salud"],"c":3,"e":"El modelo <b>liberal</b> basa el acceso a la sanidad en la capacidad de pago y el mercado privado, lo que genera mayor <b>inequidad</b>: quien no puede pagar no recibe atenci\u00f3n. Beveridge y el SNS son los m\u00e1s equitativos por su cobertura universal financiada p\u00fablicamente."},{"n":"12","noShuffle":false,"img":null,"q":"\u00bfcu\u00e1l de los siguientes elementos forma parte de la din\u00e1mica poblacional?","o":["Nivel educativo","Renta","Migraciones","Gen\u00e9tica"],"c":3,"e":"La <b>din\u00e1mica poblacional</b> estudia los cambios en el tama\u00f1o y estructura de las poblaciones. Sus componentes son: <b>natalidad, mortalidad y migraciones</b>. El nivel educativo, la renta y la gen\u00e9tica son determinantes de salud, pero no elementos de la din\u00e1mica poblacional."},{"n":"13","noShuffle":false,"img":null,"q":"\u00bfcu\u00e1l es la principal diferencia entre Educaci\u00f3n para la Salud y Promoci\u00f3n de la Salud?","o":["La Educaci\u00f3n para la Salud act\u00faa sobre estructuras","La Promoci\u00f3n de la Salud act\u00faa solo a nivel individual","La Educaci\u00f3n para la Salud es una estrategia global","La Promoci\u00f3n de la Salud act\u00faa sobre contextos y estructuras"],"c":4,"e":"La <b>Educaci\u00f3n para la Salud</b> act\u00faa principalmente a nivel individual (informaci\u00f3n, actitudes, conductas). La <b>Promoci\u00f3n de la Salud</b> es m\u00e1s amplia: act\u00faa sobre <b>contextos, estructuras y pol\u00edticas</b> que condicionan la salud (Carta de Ottawa, 1986). La EPS es una herramienta dentro de la PS."},{"n":"14","noShuffle":false,"img":null,"q":"inmunizaci\u00f3n activa vs pasiva. \u00bfcu\u00e1l de las siguientes combinaciones es correcta?","o":["Activa \u2192 anticuerpos preformados","Pasiva \u2192 memoria inmunol\u00f3gica","Activa \u2192 respuesta propia con memoria","Pasiva \u2192 protecci\u00f3n duradera"],"c":3,"e":"La <b>inmunizaci\u00f3n activa</b> (vacunaci\u00f3n) estimula el propio sistema inmune generando <b>anticuerpos propios y memoria inmunol\u00f3gica</b>. La <b>inmunizaci\u00f3n pasiva</b> administra anticuerpos preformados (sueros, inmunoglobulinas): protecci\u00f3n inmediata pero sin memoria y de corta duraci\u00f3n."},{"n":"15","noShuffle":false,"img":null,"q":"en relaci\u00f3n con el medio ambiente como determinante de salud, se\u00f1ale la opci\u00f3n CORRECTA:","o":["Tiene exclusivamente efectos negativos","Solo act\u00faa a nivel individual","No interact\u00faa con factores sociales","Incluye factores f\u00edsicos, qu\u00edmicos y biol\u00f3gicos"],"c":4,"e":"El medio ambiente como determinante de salud engloba <b>factores f\u00edsicos</b> (temperatura, radiaciones), <b>qu\u00edmicos</b> (contaminantes, pesticidas) y <b>biol\u00f3gicos</b> (vectores, microorganismos). Tiene efectos tanto positivos como negativos, act\u00faa a nivel poblacional e interact\u00faa con factores sociales."},{"n":"16","noShuffle":false,"img":null,"q":"\u00bfcu\u00e1l es la definici\u00f3n cl\u00e1sica de Salud P\u00fablica seg\u00fan Winslow?","o":["La atenci\u00f3n individual de enfermedades agudas","La ciencia que estudia exclusivamente las enfermedades infecciosas","La ciencia y el arte de prevenir la enfermedad, prolongar la vida y promover la salud mediante esfuerzos organizados de la comunidad","El conjunto de t\u00e9cnicas hospitalarias para el tratamiento"],"c":3,"e":"<b>Winslow (1920)</b> defini\u00f3 la Salud P\u00fablica como \u2018la ciencia y el arte de prevenir la enfermedad, prolongar la vida y promover la salud mediante los esfuerzos organizados de la comunidad\u2019. Es la definici\u00f3n cl\u00e1sica que enfatiza el car\u00e1cter colectivo y organizativo de la salud p\u00fablica."},{"n":"17","noShuffle":false,"img":null,"q":"\u00bfqu\u00e9 porcentaje aproximado de c\u00e1nceres podr\u00edan prevenirse?","o":["Menos del 10%","10-20%","30-50%","M\u00e1s del 90%"],"c":3,"e":"Seg\u00fan la OMS y la IARC, aproximadamente el <b>30-50% de los c\u00e1nceres</b> son prevenibles modificando factores de riesgo: tabaco, alcohol, obesidad, sedentarismo, infecciones (VPH, VHB), radiaci\u00f3n UV y contaminaci\u00f3n. El tabaco es el principal factor prevenible individual."},{"n":"18","noShuffle":false,"img":null,"q":"\u00bfqu\u00e9 estudio eval\u00faa la prevalencia de infecciones relacionadas con la asistencia sanitaria en hospitales?","o":["EPINE-EPPS","INE","ECDC b\u00e1sico","ENS"],"c":1,"e":"El estudio <b>EPINE-EPPS</b> (Estudio de Prevalencia de las Infecciones Nosocomiales en Espa\u00f1a \u2014 European Point Prevalence Survey) eval\u00faa la <b>prevalencia puntual</b> de infecciones relacionadas con la asistencia sanitaria en hospitales espa\u00f1oles. Se realiza anualmente coordinado con el ECDC."},{"n":"19","noShuffle":false,"img":null,"q":"una pir\u00e1mide poblacional regresiva se caracteriza por:","o":["Alta natalidad","Crecimiento r\u00e1pido","Envejecimiento poblacional","Alta mortalidad infantil"],"c":3,"e":"La <b>pir\u00e1mide regresiva</b> (o invertida) tiene la base estrecha y la c\u00faspide ancha, reflejo de <b>baja natalidad y baja mortalidad</b> con alta esperanza de vida. Es caracter\u00edstica de pa\u00edses desarrollados y se asocia a <b>envejecimiento poblacional</b>. La pir\u00e1mide expansiva es la de alta natalidad."},{"n":"20","noShuffle":false,"img":null,"q":"estrategia poblacional. el calendario vacunal en Espa\u00f1a se caracteriza por:","o":["Ser exclusivamente pedi\u00e1trico","Ser universal y a lo largo de la vida","Ser voluntario sin organizaci\u00f3n","Basarse en financiaci\u00f3n privada"],"c":2,"e":"El calendario vacunal espa\u00f1ol es <b>universal, gratuito y a lo largo de toda la vida</b>: incluye vacunas desde el nacimiento hasta la vejez (gripe anual en mayores, neumococo, herpes z\u00f3ster...). No es exclusivamente pedi\u00e1trico ni voluntario sin organizaci\u00f3n; es una estrategia p\u00fablica coordinada."},{"n":"21","noShuffle":false,"img":null,"q":"\u00bfcu\u00e1l es la intervenci\u00f3n de prevenci\u00f3n primaria m\u00e1s eficaz en c\u00e1ncer a nivel poblacional?","o":["Cribado poblacional","Quimioterapia precoz","Control del tabaquismo","Diagn\u00f3stico precoz"],"c":3,"e":"El <b>control del tabaquismo</b> es la intervenci\u00f3n de prevenci\u00f3n primaria m\u00e1s eficaz en c\u00e1ncer a nivel poblacional: el tabaco causa el 30% de las muertes por c\u00e1ncer. El cribado y el diagn\u00f3stico precoz son prevenci\u00f3n secundaria. La quimioterapia es tratamiento, no prevenci\u00f3n primaria."},{"n":"22","noShuffle":false,"img":null,"q":"en la historia natural de la diabetes tipo 2, \u00bfcu\u00e1l de las siguientes secuencias es la m\u00e1s correcta?","o":["Fallo de c\u00e9lula beta \u2192 resistencia a insulina \u2192 adiposidad \u2192 hiperinsulinemia","Exceso energ\u00e9tico cr\u00f3nico \u2192 adiposidad \u2192 resistencia a insulina \u2192 disfunci\u00f3n progresiva de c\u00e9lulas beta","Hiperglucemia \u2192 adiposidad \u2192 resistencia a insulina \u2192 normoglucemia","Prediabetes \u2192 exceso energ\u00e9tico \u2192 s\u00edndrome metab\u00f3lico \u2192 normoglucemia"],"c":2,"e":"La secuencia fisiopatol\u00f3gica de la DM tipo 2 es: <b>exceso energ\u00e9tico cr\u00f3nico \u2192 adiposidad visceral \u2192 resistencia a la insulina \u2192 hiperinsulinemia compensadora \u2192 agotamiento progresivo de la c\u00e9lula beta \u2192 hiperglucemia</b>. El fallo de c\u00e9lula beta es el evento final, no el inicial."},{"n":"23","noShuffle":false,"img":null,"q":"vacunolog\u00eda social. \u00bfcu\u00e1l de los siguientes elementos refleja mejor el enfoque de vacunolog\u00eda social?","o":["La vacunaci\u00f3n depende solo de la eficacia biol\u00f3gica","Solo importa el ant\u00edgeno utilizado","Interacci\u00f3n entre vacuna, individuo, profesional y contexto social","La vacunaci\u00f3n es exclusivamente un acto cl\u00ednico individual"],"c":3,"e":"La <b>vacunolog\u00eda social</b> considera que la vacunaci\u00f3n no depende solo de la eficacia biol\u00f3gica, sino de la <b>interacci\u00f3n entre la vacuna, el individuo, el profesional sanitario y el contexto social y cultural</b>. Factores como la confianza, el acceso y las desigualdades determinan el \u00e9xito vacunal."},{"n":"24","noShuffle":false,"img":null,"q":"impacto poblacional. \u00bfcu\u00e1l de los siguientes mecanismos explica la protecci\u00f3n indirecta de las vacunas?","o":["Respuesta inmune innata","Disminuci\u00f3n de la virulencia","Inmunidad de grupo","Variabilidad gen\u00e9tica"],"c":3,"e":"La <b>inmunidad de grupo</b> (o de rebao) es el mecanismo que explica la protecci\u00f3n indirecta de las vacunas: cuando una proporci\u00f3n suficiente de la poblaci\u00f3n est\u00e1 inmunizada, se interrumpe la cadena de transmisi\u00f3n y se protege tambi\u00e9n a los no vacunados (inmunocomprometidos, reci\u00e9n nacidos)."},{"n":"25","noShuffle":false,"img":null,"q":"en Espa\u00f1a, el crecimiento poblacional reciente se explica por:","o":["Alta natalidad","Disminuci\u00f3n de mortalidad exclusivamente","Migraciones que compensan la baja natalidad","Aumento de fecundidad"],"c":3,"e":"Espa\u00f1a tiene una de las tasas de fecundidad m\u00e1s bajas de Europa (~1,2 hijos por mujer). El crecimiento poblacional reciente se explica principalmente por la <b>inmigraci\u00f3n</b>, que compensa la baja natalidad y el envejecimiento. Sin migraciones, la poblaci\u00f3n espa\u00f1ola estar\u00eda en decrecimiento."},{"n":"26","noShuffle":false,"img":null,"q":"modelo de Rose (estrategia poblacional vs alto riesgo). un programa interviene solo en individuos con obesidad severa (IMC\u226535) para reducir diabetes tipo 2. la incidencia en la poblaci\u00f3n general apenas disminuye. \u00bfcu\u00e1l es la explicaci\u00f3n m\u00e1s probable?","o":["La obesidad severa no se asocia a diabetes tipo 2","La mayor\u00eda de los casos de diabetes tipo 2 provienen de individuos con riesgo moderado","La intervenci\u00f3n ha sido insuficiente en intensidad","La diabetes tipo 2 es fundamentalmente gen\u00e9tica"],"c":2,"e":"El <b>modelo de Rose</b> explica que aunque los individuos de muy alto riesgo tienen mayor probabilidad individual de enfermar, la <b>mayor\u00eda de casos poblacionales provienen de personas con riesgo moderado</b> (son muchos m\u00e1s). Intervenir solo en los extremos tiene poco impacto poblacional."},{"n":"27","noShuffle":false,"img":null,"q":"el modelo PRECEDE-PROCEED fue formulado por:","o":["Prochaska y DiClemente","Rosenstock y Hochbaum","Green y Kreuter","Fishbein y Ajzen"],"c":3,"e":"El modelo <b>PRECEDE-PROCEED</b> fue desarrollado por <b>Lawrence Green y Marshall Kreuter</b> en los a\u00f1os 70-80. Es un marco para planificar programas de salud analizando factores predisponentes, facilitadores y reforzadores. Prochaska dise\u00f1\u00f3 el modelo transte\u00f3rico; Rosenstock el modelo de creencias de salud."},{"n":"28","noShuffle":false,"img":null,"q":"\u00bfcu\u00e1l de los siguientes c\u00e1nceres es m\u00e1s caracter\u00edstico de pa\u00edses de bajos ingresos?","o":["Mama","Pr\u00f3stata","Colon","C\u00e9rvix"],"c":4,"e":"El c\u00e1ncer de <b>c\u00e9rvix</b> es m\u00e1s frecuente en pa\u00edses de bajos ingresos por la alta prevalencia de <b>VPH</b>, menor acceso a cribado (citolog\u00eda) y menor cobertura vacunal. Los c\u00e1nceres de mama, pr\u00f3stata y colon son m\u00e1s prevalentes en pa\u00edses de altos ingresos."},{"n":"29","noShuffle":false,"img":null,"q":"\u00bfcu\u00e1l de los siguientes factores explica parcialmente las diferencias territoriales en incidencia cardiovascular?","o":["Variabilidad gen\u00e9tica exclusivamente","Diferencias en acceso a recursos sanitarios","Edad media poblacional \u00fanicamente","Variabilidad clim\u00e1tica exclusivamente"],"c":2,"e":"Las <b>diferencias territoriales en incidencia cardiovascular</b> se explican por m\u00faltiples factores: h\u00e1bitos diet\u00e9ticos, tabaquismo, sedentarismo, nivel socioecon\u00f3mico y <b>diferencias en acceso a recursos sanitarios</b> (prevenci\u00f3n, diagn\u00f3stico, tratamiento). Ninguno de estos factores act\u00faa de forma exclusiva."},{"n":"30","noShuffle":false,"img":null,"q":"\u00bfqu\u00e9 modelo sanitario facilita mayor control del gasto p\u00fablico?","o":["Liberal","Bismarck","Beveridge","Privado mixto"],"c":3,"e":"El modelo <b>Beveridge</b> (SNS financiado por impuestos) facilita mayor <b>control del gasto p\u00fablico</b> porque el Estado es el pagador \u00fanico y puede regular precios, planificar recursos y priorizar inversiones. El modelo liberal y el mixto dependen del mercado, con menor control estatal del gasto."},{"n":"31","noShuffle":false,"img":null,"q":"\u00bfcu\u00e1l de los siguientes sistemas se utiliza para la vigilancia de infecciones nosocomiales?","o":["SEMERGEN","PREVINE","SNS","OMS"],"c":2,"e":"<b>PREVINE</b> (Programa de Vigilancia y Control de las Infecciones Nosocomiales en Espa\u00f1a) es el sistema de vigilancia de infecciones relacionadas con la asistencia sanitaria. SEMERGEN es una sociedad m\u00e9dica; el SNS es el sistema de salud; la OMS es el organismo internacional de salud."},{"n":"32","noShuffle":false,"img":null,"q":"sobre los factores de riesgo del c\u00e1ncer:","o":["Act\u00faan siempre de forma independiente","No existe interacci\u00f3n entre ellos","Pueden actuar de forma sin\u00e9rgica","Solo los factores gen\u00e9ticos son relevantes"],"c":3,"e":"Los factores de riesgo del c\u00e1ncer <b>pueden actuar de forma sin\u00e9rgica</b>: su efecto combinado supera la suma de efectos individuales. El ejemplo cl\u00e1sico es tabaco + asbesto en c\u00e1ncer de pulm\u00f3n, cuyo riesgo combinado es mucho mayor que la suma de ambos por separado."},{"n":"33","noShuffle":false,"img":null,"q":"\u00bfcu\u00e1l de las siguientes exposiciones ambientales se asocia a patolog\u00eda respiratoria y cardiovascular?","o":["Temperatura ambiental leve","Contaminaci\u00f3n atmosf\u00e9rica","Radiaciones ionizantes exclusivamente","Ruido ambiental"],"c":2,"e":"La <b>contaminaci\u00f3n atmosf\u00e9rica</b> (part\u00edculas PM2.5, NO2, ozono) es el principal factor ambiental asociado a <b>enfermedad respiratoria y cardiovascular</b>: aumenta el riesgo de EPOC, asma, infarto e ictus. Es la mayor causa de muerte ambiental seg\u00fan la OMS (7 millones de muertes/a\u00f1o)."},{"n":"34","noShuffle":false,"img":null,"q":"el libro \u2018A Journal of the Plague Year\u2019 (\u2018Diario del a\u00f1o de la peste\u2019), publicado en 1722, fue escrito por:","o":["Willem Defoe","Robinson Crusoe","Daniel Defoe","Robert Louis Stevenson"],"c":3,"e":"<b>Daniel Defoe</b> escribi\u00f3 \u2018A Journal of the Plague Year\u2019 (1722), relato semificticio sobre la peste bubb\u00f3nica de Londres de 1665. Es una obra cl\u00e1sica de la literatura sobre epidemias. Robinson Crusoe es un personaje de otra novela del mismo autor, no el autor. Willem no existe."},{"n":"35","noShuffle":false,"img":null,"q":"en relaci\u00f3n con la tuberculosis en la transici\u00f3n epidemiol\u00f3gica, se\u00f1ale la opci\u00f3n CORRECTA:","o":["Ha desaparecido como problema de salud p\u00fablica","Es una enfermedad exclusivamente de pa\u00edses desarrollados","Sigue siendo una de las principales causas de mortalidad infecciosa","Solo afecta a poblaci\u00f3n anciana"],"c":3,"e":"La <b>tuberculosis</b> sigue siendo la segunda causa de muerte por enfermedad infecciosa en el mundo (tras el VIH/SIDA), con ~1,5 millones de muertes anuales. No ha desaparecido y afecta principalmente a pa\u00edses de bajos y medianos ingresos, adultos j\u00f3venes e inmunocomprometidos."},{"n":"36","noShuffle":false,"img":null,"q":"respecto a la prediabetes, se\u00f1ale la opci\u00f3n correcta:","o":["Es una fase irreversible sin utilidad preventiva","Solo incluye glucemia basal alterada","Es un estado intermedio con alto riesgo de progresi\u00f3n y riesgo cardiovascular aumentado","Carece de inter\u00e9s cl\u00ednico si el paciente est\u00e1 asintom\u00e1tico"],"c":3,"e":"La <b>prediabetes</b> (glucemia basal alterada y/o intolerancia a la glucosa) es un estado intermedio <b>reversible</b> con riesgo aumentado de progresar a DM2 (~10%/a\u00f1o) y de enfermedad cardiovascular. Es cl\u00ednicamente relevante porque la intervenci\u00f3n sobre estilo de vida puede prevenir o retrasar la DM2."},{"n":"37","noShuffle":false,"img":null,"q":"din\u00e1mica demogr\u00e1fica. en una poblaci\u00f3n con pir\u00e1mide expansiva, \u00bfcu\u00e1l de los siguientes escenarios es esperable a medio plazo si no hay cambios en las tasas?","o":["Disminuci\u00f3n de la poblaci\u00f3n total","Crecimiento poblacional acelerado","Envejecimiento poblacional sostenido","Reducci\u00f3n de la natalidad"],"c":2,"e":"Una <b>pir\u00e1mide expansiva</b> tiene base ancha (alta natalidad) y corresponde a poblaciones j\u00f3venes con alta tasa de crecimiento. Si no hay cambios en las tasas, a medio plazo se espera un <b>crecimiento poblacional acelerado</b> a medida que la gran cohorte joven alcanza la edad reproductiva."},{"n":"38","noShuffle":false,"img":null,"q":"respecto a la relaci\u00f3n entre obesidad y diabetes tipo 2, indique la CORRECTA:","o":["La obesidad es un factor de riesgo menor frente a la gen\u00e9tica","El mecanismo central es la disfunci\u00f3n tiroidea","Existe una relaci\u00f3n dosis-respuesta entre IMC y riesgo de DM tipo 2","La diabetes tipo 2 aparece independientemente de la adiposidad"],"c":3,"e":"Existe una clara <b>relaci\u00f3n dosis-respuesta entre IMC y riesgo de DM tipo 2</b>: a mayor IMC, mayor resistencia a la insulina y mayor probabilidad de desarrollar DM2. El 80-90% de los casos de DM2 se atribuyen al sobrepeso/obesidad. La gen\u00e9tica modula pero no supera al efecto de la adiposidad."},{"n":"39","noShuffle":false,"img":null,"q":"\u00bfqu\u00e9 aport\u00f3 el Estudio de Framingham a la epidemiolog\u00eda cardiovascular?","o":["Identific\u00f3 la causa \u00fanica del infarto","Introdujo el concepto de tratamiento precoz","Estableci\u00f3 el concepto de riesgo acumulativo","Demostr\u00f3 la irrelevancia de los factores de riesgo"],"c":3,"e":"El <b>Estudio de Framingham</b> (1948, cohorte) fue pionero en identificar y cuantificar los <b>factores de riesgo cardiovascular</b> (hipertensi\u00f3n, colesterol, tabaco, diabetes) y en establecer el concepto de <b>riesgo acumulativo</b> a lo largo del tiempo, base de las tablas de riesgo cardiovascular actuales."},{"n":"40","noShuffle":false,"img":null,"q":"el primer cient\u00edfico en demostrar que el c\u00e1ncer puede ser provocado por agentes ambientales, estableciendo una asociaci\u00f3n entre el holl\u00edn y el c\u00e1ncer de escroto, fue:","o":["Sir William Petty","Sir Percivall Pott","Lady Mary Poppins","Sir John Graunt"],"c":2,"e":"<b>Sir Percivall Pott</b> (1775) describi\u00f3 la asociaci\u00f3n entre la exposici\u00f3n al holl\u00edn en deshollinadores y el c\u00e1ncer de escroto, siendo el primer estudio epidemiol\u00f3gico de c\u00e1ncer ocupacional. John Graunt fue pionero de la estad\u00edstica vital; William Petty, de la aritm\u00e9tica pol\u00edtica."},{"n":"41","noShuffle":false,"img":null,"q":"(RESERVA) el siguiente mapa corresponde a las zonas en el continente americano donde es muy recomendado vacunarse contra:","o":["Hepatitis A","Meningitis","C\u00f3lera","Fiebre amarilla"],"c":4,"e":"El mapa muestra la zona end\u00e9mica de <b>fiebre amarilla</b> en Am\u00e9rica del Sur (regi\u00f3n tropical: Colombia, Ecuador, Per\u00fa, Brasil, Bolivia, Venezuela). La vacunaci\u00f3n antiamari\u00edlica es obligatoria o muy recomendada para viajar a estas zonas. Es una vacuna de dosis \u00fanica con protecci\u00f3n de por vida."},{"n":"42","noShuffle":false,"img":null,"q":"en el contexto de cat\u00e1strofe de DANA ocurrida en Comunidad Valenciana, con relaci\u00f3n a la salud mental, \u00bfqu\u00e9 afirmaci\u00f3n NO ES CIERTO?","o":["La tasa de incidencia pre-post fen\u00f3meno clim\u00e1tico de la depresi\u00f3n se mantuvo estable tanto en zona DANA como en zona no DANA","La tasa de incidencia pre-post fen\u00f3meno clim\u00e1tico en zona DANA de trastornos por estr\u00e9s s\u00ed se increment\u00f3 en, al menos, un 40%","La tasa de incidencia pre-post fen\u00f3meno clim\u00e1tico de la ansiedad aument\u00f3 en zona DANA, mientras que en zona no DANA disminuy\u00f3 levemente","Existen datos de la tasa de incidencia pre-post fen\u00f3meno clim\u00e1tico de depresi\u00f3n, ansiedad y trastornos del estr\u00e9s tanto en zona DANA como en zona no DANA"],"c":1,"e":"Tras la <b>DANA en la Comunidad Valenciana</b>, los estudios muestran que la tasa de depresi\u00f3n <b>s\u00ed aument\u00f3</b> en la zona afectada, no se mantuvo estable. Las cat\u00e1strofes naturales producen incrementos significativos de depresi\u00f3n, ansiedad y estr\u00e9s postraum\u00e1tico en las poblaciones afectadas."},{"n":"43","noShuffle":false,"img":null,"q":"riesgos sanitarios en viajes. \u00bfcu\u00e1l de las siguientes enfermedades se transmite por vectores?","o":["Dengue","Tuberculosis","Hepatitis A","Fiebre tifoidea"],"c":1,"e":"El <b>dengue</b> se transmite por picadura del mosquito <i>Aedes aegypti</i> (vector). La tuberculosis se transmite por v\u00eda a\u00e9rea; la hepatitis A y la fiebre tifoidea por v\u00eda fecal-oral (agua y alimentos contaminados). En medicina del viajero, el control vectorial es clave en zonas tropicales."},{"n":"44","noShuffle":false,"img":null,"q":"en el escenario pre-post DANA ocurrida en Comunidad Valenciana, la tasa media de consultas por trastornos del estr\u00e9s y ansiedad en la zona afectada, se\u00f1ale la opci\u00f3n CORRECTA:","o":["Aument\u00f3 en el grupo etario de 15 a 45 a\u00f1os y se mantuvo estable en el grupo de 46 a 85 a\u00f1os","Aument\u00f3 en sexo masculino pero no en sexo femenino","No aument\u00f3 seg\u00fan sexo y edad","Aument\u00f3 en el grupo etario de 15 a 75 a\u00f1os"],"c":4,"e":"Tras la <b>DANA</b>, las consultas por trastornos del estr\u00e9s y ansiedad aumentaron de forma transversal en la zona afectada, con mayor impacto en el <b>grupo de 15 a 75 a\u00f1os</b>. El aumento afect\u00f3 a ambos sexos y a un amplio rango de edad, reflejando el impacto generalizado de la cat\u00e1strofe."}]};
+var IMGS=/*__IMGS_JSON__*/{};
+
+/* ── Estado ── */
+var canSave=typeof localStorage!=='undefined';
+var saved={};try{saved=JSON.parse(localStorage.getItem(KEY)||'null')||{};}catch(e){}
+var state   =saved.state   ||{};
+var qOrd    =saved.qOrd    ||{};
+var oOrd    =saved.oOrd    ||{};
+var starred =saved.starred ||{};
+var failHist=saved.failHist||{};  // {qid: count} entre sesiones
+var darkMode=saved.dark    ||false;
+var timerSec=saved.timerSec||0;   // segundos configurados
+var SECS=Object.keys(META.secciones||{});
+var fFailed={};
+var qIdx={};           // {sec: {n: q}}
+var qNums={};          // {sec: {n: numero_correlativo}}
+var allOrder=null;     // orden mezclado inter-secciones para pestaña Todos
+var activeCid=null;
+var currentTab='all';
+var currentMode='test';
+var saveTimer=null;
+var starsFilter=false;
+var statsVisible=false;
+var timerRunning=false;
+var timerRemaining=timerSec;
+var timerInterval=null;
+
+/* ── INIT ── */
+(function init(){
+  SECS.forEach(function(s){fFailed[s]=false;});
+  injectSecCSS();
+  buildHeader();
+  buildTabs();
+  buildPanels();
+  buildIdx();
+  buildNums();
+  buildAllOrder();
+  SECS.forEach(render);
+  renderAll();
+  updateScores();
+  updateProg();
+  applyTheme();
+  initTimer();
+  setBadge(canSave?'Guardado':'Sin guardado',canSave?'ok':'warn');
+  document.addEventListener('keydown',handleKey);
+  var si=document.getElementById('search-input');
+  if(si)si.addEventListener('keydown',function(e){if(e.key==='Escape'){clearSearch();}});
+})();
+
+/* ── CSS dinámico ── */
+function injectSecCSS(){
+  var css='';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{};
+    var c=m.color||'#1a56db',cd=m.colorDim||'#e8f0fe';
+    css+='.tab.t-'+s+'.on{background:'+cd+';color:'+c+';border-color:'+c+'}\n';
+    css+='.ph.s-'+s+'{border-left:4px solid '+c+'}\n';
+    // Variables CSS por sección para el badge coloreado
+    css+='#panel-'+s+' .qnum.sec-colored{background:'+cd+';color:'+c+'}\n';
+  });
+  var st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+}
+
+/* ── Header ── */
+function buildHeader(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var t=document.getElementById('h-tit');if(t)t.textContent=META.titulo||'Banco MIR';
+  var pt=document.getElementById('page-title');if(pt)pt.textContent=META.titulo||'Banco MIR';
+  var m=document.getElementById('h-meta');
+  if(m){var p=[];if(total)p.push(total+' preguntas');if(META.examen)p.push(META.examen);m.textContent=p.join(' · ');}
+  var d=document.getElementById('ph-gdesc');if(d)d.textContent=META.subtitulo||'';
+  var r=document.getElementById('sc-rem-all');if(r)r.textContent='○ '+total;
+}
+
+/* ── Tabs ── */
+function buildTabs(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var h='<button class="tab t-all on" onclick="showTab(\'all\')">📋 Todos ('+total+')</button>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<button class="tab t-'+s+'" onclick="showTab(\''+s+'\')">'+(m.emoji?m.emoji+' ':'')+escH(m.label||s)+' ('+cnt+')</button>';
+  });
+  var w=document.getElementById('tabs-wrap');if(w)w.innerHTML=h;
+}
+
+/* ── Paneles ── */
+function buildPanels(){
+  var h='<div id="panel-all" class="sec-panel visible"><div id="qs-all"></div><div class="no-results" id="nr-all">No se encontraron preguntas</div></div>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<div id="panel-'+s+'" class="sec-panel">';
+    h+='<div class="ph s-'+s+'">';
+    h+='<div class="ph-left">';
+    h+='<span class="ph-label">'+(m.emoji?m.emoji+'&nbsp;':'')+escH(m.label||s)+'</span>';
+    if(m.desc)h+='<span class="ph-desc">'+escH(m.desc)+'</span>';
+    h+='<div class="score-row">';
+    h+='<span class="sc ok" id="sc-ok-'+s+'">✓ 0</span>';
+    h+='<span class="sc ko" id="sc-ko-'+s+'">✗ 0</span>';
+    h+='<span class="sc rem" id="sc-rem-'+s+'">○ '+cnt+'</span>';
+    h+='</div></div>';
+    h+='<button class="fbtn" id="fb-'+s+'" onclick="toggleFail(\''+s+'\')">Solo falladas</button>';
+    h+='</div>';
+    h+='<div id="qs-'+s+'"></div>';
+    h+='<div class="no-failed" id="nf-'+s+'">Aún no has fallado ninguna 🎉</div>';
+    h+='<div class="no-results" id="nr-'+s+'">No se encontraron preguntas</div>';
+    h+='<div class="sec-actions">';
+    h+='<button class="reset-btn" onclick="resetSec(\''+s+'\')">↺ Reiniciar</button>';
+    h+='<button class="nota-btn" onclick="calcNota(\''+s+'\')">✎ Calcular nota</button>';
+    h+='</div>';
+    h+='<div class="nota-box" id="nota-'+s+'"></div>';
+    h+='</div>';
+  });
+  var pw=document.getElementById('panels-wrap');if(pw)pw.innerHTML=h;
+}
+
+/* ── Índice O(1) + numeración fija ── */
+function buildIdx(){
+  SECS.forEach(function(s){
+    qIdx[s]={};
+    if(D[s])D[s].forEach(function(q){qIdx[s][q.n]=q;});
+  });
+}
+function buildNums(){
+  // Numeración correlativa fija: 1, 2, 3... por sección
+  SECS.forEach(function(s){
+    qNums[s]={};
+    if(D[s])D[s].forEach(function(q,i){qNums[s][q.n]=i+1;});
+  });
+}
+function getNum(sec,n){return qNums[sec]?qNums[sec][n]||n:n;}
+function findQ(qid){
+  var d=qid.indexOf('-'),s=qid.substring(0,d),n=qid.substring(d+1);
+  return(qIdx[s]&&qIdx[s][n])||null;
+}
+function getSecFromQid(qid){return qid.substring(0,qid.indexOf('-'));}
+function getNFromQid(qid){return qid.substring(qid.indexOf('-')+1);}
+
+/* ── Orden inter-secciones para Todos ── */
+function buildAllOrder(){
+  var all=[];
+  SECS.forEach(function(s){if(D[s])D[s].forEach(function(q){all.push({sec:s,n:q.n});});});
+  if(!qOrd['__all__'])qOrd['__all__']=shuffle(all.map(function(x){return x.sec+'|'+x.n;}));
+  allOrder=qOrd['__all__'].map(function(key){
+    var p=key.indexOf('|'),sec=key.substring(0,p),n=key.substring(p+1);
+    return{sec:sec,n:n,q:qIdx[sec]&&qIdx[sec][n]};
+  }).filter(function(x){return x.q;});
+}
+
+/* ── Utilidades ── */
+function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function shuffle(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=b[i];b[i]=b[j];b[j]=t;}return b;}
+function getQOrd(s,qs){if(!qOrd[s])qOrd[s]=shuffle(qs.map(function(q){return q.n;}));return qOrd[s];}
+function getOOrd(qid){
+  var q=findQ(qid);var n=q&&q.o?q.o.length:4;
+  if(q&&q.noShuffle){var a=[];for(var i=0;i<n;i++)a.push(i);return a;}
+  if(!oOrd[qid]){var a=[];for(var i=0;i<n;i++)a.push(i);oOrd[qid]=shuffle(a);}
+  return oOrd[qid];
+}
+function imgHtml(key){
+  if(!IMGS[key]){console.warn('IMGS: clave no encontrada →',key);return'';}
+  return'<div class="clinimg-wrap"><img src="'+IMGS[key]+'" class="clinimg" alt="Imagen clínica" loading="lazy"><div class="clinimg-cap">Imagen clínica</div></div>';
+}
+
+/* ── localStorage debounce ── */
+function saveLocal(){
+  if(!canSave)return;
+  if(saveTimer)clearTimeout(saveTimer);
+  saveTimer=setTimeout(function(){
+    try{
+      localStorage.setItem(KEY,JSON.stringify({state:state,qOrd:qOrd,oOrd:oOrd,starred:starred,failHist:failHist,dark:darkMode,timerSec:timerSec}));
+      setBadge('Guardado','ok');
+    }catch(e){setBadge('Sin guardado','warn');}
+  },300);
+}
+function setBadge(t,c){var b=document.getElementById('save-badge');if(b){b.textContent=t;b.className='sbadge '+c;}}
+
+/* ── Construcción de tarjeta ── */
+function buildCard(q,sec,inAll,allPos){
+  var qid=sec+'-'+q.n;
+  var cid=(inAll?'A-':'S-')+qid;
+  var num=inAll?(allPos+1):getNum(sec,q.n);
+  var oo=getOOrd(qid);
+  var sOpts=oo.map(function(i){return q.o[i];});
+  var nc=oo.indexOf(q.c-1)+1;
+  var ans=state[qid];
+  var cc=ans?(ans.r?' answered-ok':' answered-wrong'):'';
+  var badgeCls='qnum'+(inAll?'':' sec-colored');
+  var h='<div class="qcard s-'+sec+cc+'" id="card-'+cid+'">';
+  h+='<div class="qhead" id="h-'+cid+'" data-cid="'+cid+'" data-qid="'+qid+'" data-sec="'+sec+'" onclick="tog(this.dataset.cid)">';
+  h+='<span class="'+badgeCls+'">'+num+'</span>';
+  h+='<span class="qtxt">'+q.q+(ans?'<span class="atag '+(ans.r?'ok':'ko')+'">'+(ans.r?'✓ acertada':'✗ fallada')+'</span>':'')+'</span>';
+  h+='<button class="star-btn'+(starred[qid]?' on':'')+'\" id="star-'+cid+'" onclick="event.stopPropagation();toggleStar(\''+qid+'\')" title="Marcar (S)"><span class="si">\u2606</span><span class="sf">\u2605</span></button>';
+  h+='<span class="chev">▾</span>';
+  h+='</div>';
+  h+='<div class="qbody" id="b-'+cid+'">';
+  if(q.img)h+=imgHtml(q.img);
+  if(currentMode==='quick'){
+    h+='<div class="quick-card"><div class="quick-rc">✓ Respuesta correcta: opción '+nc+' — '+escH(q.o[q.c-1])+'</div><div class="expbox">'+q.e+'</div></div>';
+  } else {
+    h+='<ul class="opts" id="opts-'+cid+'">';
+    h+=sOpts.map(function(o,i){
+      var p=i+1,oc='opt';
+      if(ans){oc+=' done';if(p===nc)oc+=' correct';else if(p===ans.c&&!ans.r)oc+=' wrong';}
+      return'<li class="'+oc+'" data-qid="'+qid+'" data-pos="'+p+'" data-sec="'+sec+'" onclick="answer(this.dataset.qid,+this.dataset.pos,this.dataset.sec)"><span class="onum">'+p+'.</span><span>'+o+'</span></li>';
+    }).join('');
+    h+='</ul>';
+    if(ans){h+='<div class="expbox"><span class="et">'+(ans.r?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e+'</div>';}
+  }
+  h+='</div></div>';
+  return h;
+}
+
+/* ── Render sección ── */
+function render(sec){
+  var qs=D[sec];if(!qs)return;
+  var ord=getQOrd(sec,qs);
+  var sorted=ord.map(function(n){return qIdx[sec]&&qIdx[sec][n];}).filter(Boolean);
+  var el=document.getElementById('qs-'+sec);
+  if(el)el.innerHTML=sorted.map(function(q){return buildCard(q,sec,false,0);}).join('');
+}
+
+/* ── Render Todos (mezcla inter-secciones) ── */
+function renderAll(){
+  if(!allOrder)buildAllOrder();
+  var el=document.getElementById('qs-all');
+  if(el)el.innerHTML=allOrder.map(function(x,i){return buildCard(x.q,x.sec,true,i);}).join('');
+}
+
+/* ── Toggle open/close ── */
+function tog(cid){
+  var b=document.getElementById('b-'+cid),h=document.getElementById('h-'+cid);
+  if(!b||!h)return;
+  var opening=!b.classList.contains('open');
+  b.classList.toggle('open');h.classList.toggle('open');
+  if(opening){
+    if(activeCid&&activeCid!==cid){var pc=document.getElementById('card-'+activeCid);if(pc)pc.classList.remove('kb-focus');}
+    activeCid=cid;
+    var card=document.getElementById('card-'+cid);if(card)card.classList.add('kb-focus');
+  }else{
+    if(activeCid===cid){activeCid=null;var card=document.getElementById('card-'+cid);if(card)card.classList.remove('kb-focus');}
+  }
+}
+
+/* ── Responder ── */
+function answer(qid,pos,sec){
+  if(state[qid])return;
+  var q=findQ(qid);if(!q)return;
+  var oo=getOOrd(qid);
+  var nc=oo.indexOf(q.c-1)+1;
+  var isRight=pos===nc;
+  state[qid]={c:pos,r:isRight};
+  // Registro de errores
+  if(!isRight){failHist[qid]=(failHist[qid]||0)+1;}
+  saveLocal();
+  // Actualizar todas las instancias del card (panel sección + panel all)
+  // Actualizar opciones en todas las instancias del card
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var optsEl=document.querySelectorAll('#opts-'+cid+' .opt');
+    optsEl.forEach(function(el,i){
+      el.classList.add('done');
+      if(i+1===nc)el.classList.add('correct');
+      else if(i+1===pos&&!isRight)el.classList.add('wrong');
+    });
+    var bdy=document.getElementById('b-'+cid);
+    if(bdy){
+      var eb=bdy.querySelector('.expbox');
+      if(!eb){eb=document.createElement('div');eb.className='expbox';bdy.appendChild(eb);}
+      eb.innerHTML='<span class="et">'+(isRight?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e;
+    }
+    var hd=document.getElementById('h-'+cid);
+    if(hd){var qt=hd.querySelector('.qtxt');if(qt&&!qt.querySelector('.atag')){var at=document.createElement('span');at.className='atag '+(isRight?'ok':'ko');at.innerHTML=isRight?'✓ acertada':'✗ fallada';qt.appendChild(at);}}
+    var card=document.getElementById('card-'+cid);
+    if(card)card.classList.add(isRight?'answered-ok':'answered-wrong');
+  });
+  updateScores();updateProg();
+  if(fFailed[sec]&&isRight){
+    var fcard=document.getElementById('card-S-'+qid);
+    if(fcard)fcard.style.display='none';
+    refreshNF(sec);
+  }
+}
+
+/* ── Estrella ── */
+function toggleStar(qid){
+  starred[qid]=!starred[qid];
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var btn=document.getElementById('star-'+cid);
+    if(btn)btn.classList.toggle('on',starred[qid]);
+  });
+  saveLocal();
+}
+function filterStarred(){
+  starsFilter=!starsFilter;
+  var btn=document.getElementById('btn-stars');
+  if(btn){btn.style.background=starsFilter?'#fef3c7':'';btn.style.fontWeight=starsFilter?'700':'';}
+  document.querySelectorAll('.qcard').forEach(function(card){
+    if(starsFilter){
+      var hd=card.querySelector('.qhead');
+      var qid=hd?hd.dataset.qid:'';
+      card.style.display=starred[qid]?'':'none';
+    }else{card.style.display='';}
+  });
+}
+
+/* ── Filtro falladas ── */
+function refreshNF(sec){
+  var c=document.getElementById('qs-'+sec);if(!c||!fFailed[sec])return;
+  var n=c.querySelectorAll('.qcard.answered-wrong').length;
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',n===0);
+}
+function toggleFail(sec){
+  fFailed[sec]=!fFailed[sec];
+  var btn=document.getElementById('fb-'+sec);
+  if(btn){btn.classList.toggle('on',fFailed[sec]);btn.textContent=fFailed[sec]?'← Ver todas':'Solo falladas';}
+  var c=document.getElementById('qs-'+sec);if(!c)return;
+  var nf=0;
+  c.querySelectorAll('.qcard').forEach(function(card){
+    if(fFailed[sec]){var show=card.classList.contains('answered-wrong');card.style.display=show?'':'none';if(show)nf++;}
+    else{card.style.display='';}
+  });
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',fFailed[sec]&&nf===0);
+}
+
+/* ── Scores y progreso ── */
+function updateScores(){
+  var tok=0,tok2=0,tok3=0;
+  SECS.forEach(function(sec){
+    var ok=0,ko=0;
+    if(D[sec])D[sec].forEach(function(q){var a=state[sec+'-'+q.n];if(a){if(a.r)ok++;else ko++;}});
+    var tot=D[sec]?D[sec].length:0,rem=tot-ok-ko;
+    tok+=ok;tok2+=ko;tok3+=rem;
+    var eok=document.getElementById('sc-ok-'+sec),eko=document.getElementById('sc-ko-'+sec),erm=document.getElementById('sc-rem-'+sec);
+    if(eok)eok.textContent='✓ '+ok;if(eko)eko.textContent='✗ '+ko;if(erm)erm.textContent='○ '+rem;
+  });
+  var eok=document.getElementById('sc-ok-all'),eko=document.getElementById('sc-ko-all'),erm=document.getElementById('sc-rem-all');
+  if(eok)eok.textContent='✓ '+tok;if(eko)eko.textContent='✗ '+tok2;if(erm)erm.textContent='○ '+tok3;
+}
+function updateProg(){
+  var total=0,done=Object.keys(state).length;
+  SECS.forEach(function(s){if(D[s])total+=D[s].length;});
+  var pct=total>0?Math.round(done/total*100):0;
+  var bar=document.getElementById('prog-bar');if(bar)bar.style.width=pct+'%';
+}
+
+/* ── Tabs ── */
+function showTab(t){
+  currentTab=t;
+  document.querySelectorAll('.tab').forEach(function(b){b.classList.remove('on');});
+  var tb=document.querySelector('.tab.t-'+t);if(tb)tb.classList.add('on');
+  var mc=document.getElementById('main-cont');if(mc)mc.setAttribute('data-tab',t);
+  var panelAll=document.getElementById('panel-all');
+  if(panelAll)panelAll.classList.toggle('visible',t==='all');
+  SECS.forEach(function(s){
+    var p=document.getElementById('panel-'+s);
+    if(p)p.classList.toggle('visible',t===s);
+  });
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  clearSearch();
+}
+
+/* ── Reset ── */
+function resetSec(sec){
+  if(D[sec])D[sec].forEach(function(q){var qid=sec+'-'+q.n;delete state[qid];delete oOrd[qid];});
+  delete qOrd[sec];fFailed[sec]=false;activeCid=null;
+  var btn=document.getElementById('fb-'+sec);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+  var nb=document.getElementById('nota-'+sec);if(nb){nb.style.display='none';nb.className='nota-box';}
+  saveLocal();render(sec);
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.remove('show');
+  updateScores();updateProg();
+  // Reconstruir panel all para reflejar cambios
+  buildAllOrder();renderAll();
+}
+function resetAll(){
+  Object.keys(state).forEach(function(k){delete state[k];});
+  Object.keys(oOrd).forEach(function(k){delete oOrd[k];});
+  Object.keys(qOrd).forEach(function(k){delete qOrd[k];});
+  activeCid=null;starsFilter=false;allOrder=null;
+  var bs=document.getElementById('btn-stars');if(bs){bs.style.background='';bs.style.fontWeight='';}
+  SECS.forEach(function(s){
+    fFailed[s]=false;
+    var btn=document.getElementById('fb-'+s);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+    var nb=document.getElementById('nota-'+s);if(nb){nb.style.display='none';nb.className='nota-box';}
+  });
+  saveLocal();
+  SECS.forEach(render);
+  buildAllOrder();renderAll();
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  updateScores();updateProg();
+}
+
+/* ── Nota y revisión ── */
+function buildRevList(sec){
+  var qs=D[sec];if(!qs)return'';
+  var failed=qs.filter(function(q){var a=state[sec+'-'+q.n];return a&&!a.r;});
+  if(!failed.length)return'';
+  var html='<div class="review-list"><div class="review-title">📋 '+failed.length+' pregunta'+(failed.length>1?'s':'')+' fallada'+(failed.length>1?'s':'')+' — repasa aquí:</div>';
+  failed.forEach(function(q){
+    var qid=sec+'-'+q.n;var oo=getOOrd(qid);var nc=oo.indexOf(q.c-1)+1;
+    html+='<details class="review-item"><summary><span><b>'+getNum(sec,q.n)+'.</b> '+q.q+'</span></summary>';
+    html+='<div class="review-body"><div class="review-ans">✓ Opción '+nc+': '+escH(q.o[q.c-1]||'')+'</div>';
+    html+='<div class="expbox">'+q.e+'</div></div></details>';
+  });
+  return html+'</div>';
+}
+function calcNota(sec){
+  var qs=D[sec];if(!qs)return;
+  var total=qs.length,ok=0,ko=0,skip=0;
+  qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-'+sec);if(!box)return;
+  box.className='nota-box '+(pass?'pass':'fail');
+  box.innerHTML='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>'
+    +buildRevList(sec);
+  box.style.display='block';
+}
+function calcNotaAll(){
+  var total=0,ok=0,ko=0,skip=0;
+  SECS.forEach(function(sec){
+    var qs=D[sec];if(!qs)return;
+    total+=qs.length;
+    qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  });
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-all');if(!box)return;
+  box.className='global-nota-box '+(pass?'pass':'fail');
+  var html='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10 (global)</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>';
+  SECS.forEach(function(sec){
+    var rv=buildRevList(sec);
+    if(rv){var m=META.secciones[sec]||{};html+='<div class="review-sec-label">'+(m.emoji?m.emoji+' ':'')+escH(m.label||sec)+'</div>'+rv;}
+  });
+  box.innerHTML=html;box.style.display='block';
+}
+
+/* ── Estadísticas de errores ── */
+function toggleStats(){
+  statsVisible=!statsVisible;
+  var btn=document.getElementById('btn-stats');
+  if(btn){btn.style.background=statsVisible?'var(--ko-bg)':'';btn.style.color=statsVisible?'var(--ko-t)':'';}
+  var box=document.getElementById('stats-global');
+  if(!box)return;
+  if(!statsVisible){box.classList.remove('show');return;}
+  var entries=Object.entries(failHist).filter(function(e){return e[1]>0;});
+  if(!entries.length){box.innerHTML='<div class="stats-title">📊 Sin errores registrados todavía</div>';box.classList.add('show');return;}
+  entries.sort(function(a,b){return b[1]-a[1];});
+  var top=entries.slice(0,10);
+  var maxV=top[0][1];
+  var html='<div class="stats-title">📊 Preguntas más falladas (acumulado entre sesiones)</div>';
+  top.forEach(function(e,i){
+    var qid=e[0],count=e[1];
+    var q=findQ(qid);if(!q)return;
+    var sec=getSecFromQid(qid),n=getNFromQid(qid);
+    var m=META.secciones[sec]||{};
+    var pct=Math.round(count/maxV*100);
+    html+='<div class="stats-item">';
+    html+='<span class="stats-n" style="min-width:18px;color:var(--ko-t);font-weight:700">'+(i+1)+'.</span>';
+    html+='<span class="stats-q">'+(m.emoji?m.emoji+' ':'')+getNum(sec,n)+'. '+q.q.substring(0,60)+(q.q.length>60?'…':'')+'</span>';
+    html+='<div class="stats-bar-wrap"><div class="stats-bar" style="width:'+pct+'%"></div></div>';
+    html+='<span class="stats-n">'+count+'✗</span>';
+    html+='</div>';
+  });
+  box.innerHTML=html;box.classList.add('show');
+}
+
+/* ── Buscador ── */
+function onSearch(val){
+  var v=val.trim().toLowerCase();
+  var clr=document.getElementById('search-clear');
+  var cnt=document.getElementById('search-count');
+  if(clr)clr.style.display=v?'block':'none';
+  var found=0,total=0;
+  document.querySelectorAll('.qcard').forEach(function(card){
+    total++;
+    if(!v){card.classList.remove('search-hidden');found++;}
+    else{
+      var qtxt=card.querySelector('.qtxt');
+      var match=qtxt&&qtxt.textContent.toLowerCase().indexOf(v)!==-1;
+      card.classList.toggle('search-hidden',!match);
+      if(match)found++;
+    }
+  });
+  if(cnt){
+    if(v){cnt.textContent=found+' de '+total+' preguntas';cnt.style.display='block';}
+    else{cnt.style.display='none';}
+  }
+  // Mostrar "sin resultados" por panel
+  ['all'].concat(SECS).forEach(function(s){
+    var panel=document.getElementById('panel-'+s);if(!panel||!panel.classList.contains('visible'))return;
+    var cards=panel.querySelectorAll('.qcard:not(.search-hidden)');
+    var nr=document.getElementById('nr-'+s);if(nr)nr.style.display=cards.length===0&&v?'block':'none';
+  });
+}
+function clearSearch(){
+  var si=document.getElementById('search-input');if(si)si.value='';
+  onSearch('');
+}
+
+/* ── Modo ── */
+function setMode(mode){
+  currentMode=mode;
+  document.getElementById('mode-test').classList.toggle('on',mode==='test');
+  document.getElementById('mode-quick').classList.toggle('on',mode==='quick');
+  // Rerenderizar todo
+  SECS.forEach(render);renderAll();
+}
+
+/* ── Modo oscuro ── */
+function applyTheme(){
+  document.documentElement.setAttribute('data-theme',darkMode?'dark':'light');
+  var btn=document.getElementById('btn-dark');if(btn)btn.textContent=darkMode?'☀️':'🌙';
+}
+function toggleDark(){darkMode=!darkMode;applyTheme();saveLocal();}
+
+/* ── Temporizador ── */
+function initTimer(){
+  timerRemaining=timerSec;
+  renderTimer();
+  var disp=document.getElementById('timer-display');
+  if(disp){
+    disp.addEventListener('click',function(){startEditTimer();});
+  }
+}
+function fmtTime(s){
+  var h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60;
+  return h+':'+(m<10?'0':'')+m+':'+(ss<10?'0':'')+ss;
+}
+function renderTimer(){
+  var disp=document.getElementById('timer-display');
+  if(!disp)return;
+  disp.textContent=fmtTime(timerRemaining);
+  disp.classList.toggle('danger',timerSec>0&&timerRemaining===0);
+}
+function timerToggle(){
+  if(timerRunning){
+    clearInterval(timerInterval);timerRunning=false;
+    document.getElementById('btn-tplay').textContent='▶';
+  }else{
+    if(timerRemaining<=0&&timerSec>0)timerRemaining=timerSec;
+    timerRunning=true;
+    document.getElementById('btn-tplay').textContent='⏸';
+    timerInterval=setInterval(function(){
+      if(timerRemaining>0){timerRemaining--;renderTimer();}
+      else{clearInterval(timerInterval);timerRunning=false;document.getElementById('btn-tplay').textContent='▶';renderTimer();}
+    },1000);
+  }
+}
+function timerReset(){
+  clearInterval(timerInterval);timerRunning=false;
+  timerRemaining=timerSec;
+  document.getElementById('btn-tplay').textContent='▶';
+  renderTimer();
+}
+function startEditTimer(){
+  var disp=document.getElementById('timer-display');if(!disp)return;
+  if(timerRunning){timerToggle();}
+  var old=fmtTime(timerRemaining);
+  disp.contentEditable='true';disp.classList.add('editing');
+  disp.textContent=old;
+  disp.focus();
+  var range=document.createRange();range.selectNodeContents(disp);
+  var sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
+  function commit(){
+    disp.contentEditable='false';disp.classList.remove('editing');
+    var txt=disp.textContent.trim();
+    var parts=txt.split(':').map(Number);
+    var secs=0;
+    if(parts.length===3)secs=parts[0]*3600+parts[1]*60+parts[2];
+    else if(parts.length===2)secs=parts[0]*60+parts[1];
+    else if(parts.length===1)secs=parts[0]*60;
+    if(!isNaN(secs)&&secs>=0){timerSec=secs;timerRemaining=secs;saveLocal();}
+    renderTimer();
+  }
+  disp.addEventListener('blur',commit,{once:true});
+  disp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();disp.blur();}});
+}
+
+/* ── Helpers cid ── */
+function cidToQid(cid){return cid.replace(/^[AS]-/,'');}
+
+/* ── Teclado ── */
+function handleKey(e){
+  var tg=e.target.tagName;
+  if(tg==='INPUT'||tg==='TEXTAREA'||e.target.contentEditable==='true')return;
+  var k=e.key;
+  if(k>='1'&&k<='5'){
+    if(activeCid&&!state[cidToQid(activeCid)]){
+      var aqid=cidToQid(activeCid);
+      var pos=parseInt(k),q=findQ(aqid);
+      if(q&&pos<=q.o.length){e.preventDefault();answer(aqid,pos,getSecFromQid(aqid));}
+    }
+  }else if(k==='ArrowDown'||k==='ArrowUp'){
+    e.preventDefault();navigateQ(k==='ArrowDown'?1:-1);
+  }else if(k==='s'||k==='S'){
+    if(activeCid)toggleStar(cidToQid(activeCid));
+  }
+}
+function navigateQ(dir){
+  var cards=Array.from(document.querySelectorAll('.sec-panel.visible .qcard')).filter(function(c){return c.style.display!=='none'&&!c.classList.contains('search-hidden');});
+  var cids=cards.map(function(c){return c.id.replace('card-','');});
+  if(!cids.length)return;
+  var idx=activeCid?cids.indexOf(activeCid):-1;
+  var nidx=Math.max(0,Math.min(cids.length-1,idx+dir));
+  var ncid=cids[nidx];if(!ncid||ncid===activeCid)return;
+  if(activeCid){var ob=document.getElementById('b-'+activeCid);var oh=document.getElementById('h-'+activeCid);if(ob)ob.classList.remove('open');if(oh)oh.classList.remove('open');var oc=document.getElementById('card-'+activeCid);if(oc)oc.classList.remove('kb-focus');}
+  activeCid=ncid;
+  var nb=document.getElementById('b-'+ncid);var nh=document.getElementById('h-'+ncid);
+  if(nb)nb.classList.add('open');if(nh)nh.classList.add('open');
+  var nc2=document.getElementById('card-'+ncid);if(nc2){nc2.classList.add('kb-focus');nc2.scrollIntoView({behavior:'smooth',block:'nearest'});}
+}
+</script>
+</body>
+</html>
