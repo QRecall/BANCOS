@@ -1,0 +1,898 @@
+<!--
+=============================================================
+  MOTOR BANCO MIR — v10
+  Novedades respecto a v9:
+  - Numeración correlativa fija por sección (no se mezcla)
+  - Badge neutro en pestaña "Todos" + mezcla real inter-secciones
+  - Temporizador sticky editable en header (play/pausa/reset)
+  - Buscador de texto en tiempo real
+  - Modo repaso rápido (muestra RC + explicación directamente)
+  - Estadísticas de errores recurrentes entre sesiones
+=============================================================
+-->
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title id="page-title">Banco MIR</title>
+<style>
+:root{
+  --bg:#f4f3ef;--surf:#fff;--bd:#e5e5e5;--bd2:#ddd;
+  --txt:#1a1a1a;--txt2:#555;--txt3:#999;--txt4:#666;
+  --hdr:#1a1a1a;--hdr-t:#fff;
+  --ok-bg:#e6f9ef;--ok-t:#0b6e52;--ok-bd:#2da060;
+  --ko-bg:#fdecea;--ko-t:#b91c1c;--ko-bd:#d94f45;
+  --sc-ok:#dcf5ed;--sc-ko:#fdecea;--sc-rem:#f0f0f0;--sc-rem-t:#666;
+  --exp:#fffbe6;--exp-bd:#f0c04a;--exp-t:#5a4500;
+  --prog:#e5e5e5;--prog-fill:#1a56db;
+  --star:#ccc;--star-on:#f59e0b;
+  --hint:#fafafa;--hint-bd:#eee;
+  --tab-bd:#ddd;--tab-t:#555;
+  --all-bg:#e8f0fe;--all-t:#1a56db;--all-bd:#1a56db;
+  --fab:#1a1a1a;--fab-t:#fff;
+  --nota-btn-t:#1a56db;--nota-btn-bd:#1a56db;--nota-btn-bg:var(--surf);
+  --timer-bg:#222;--timer-t:#fff;--timer-danger:#ef4444;
+}
+[data-theme="dark"]{
+  --bg:#0f0f1a;--surf:#1e1e30;--bd:#2a2a45;--bd2:#333355;
+  --txt:#e8e8f0;--txt2:#aaa;--txt3:#555;--txt4:#888;
+  --hdr:#0a0a14;--hdr-t:#e8e8f0;
+  --ok-bg:#0b3020;--ok-t:#4ade80;--ok-bd:#166534;
+  --ko-bg:#2d0a0a;--ko-t:#f87171;--ko-bd:#7f1d1d;
+  --sc-ok:#0b3020;--sc-ko:#2d0a0a;--sc-rem:#252540;--sc-rem-t:#aaa;
+  --exp:#1a1500;--exp-bd:#a37f10;--exp-t:#d4b84a;
+  --prog:#2a2a45;--prog-fill:#60a5fa;
+  --star:#444;--star-on:#f59e0b;
+  --hint:#1a1a2e;--hint-bd:#2a2a45;
+  --tab-bd:#2a2a45;--tab-t:#aaa;
+  --all-bg:#1a2a4a;--all-t:#60a5fa;--all-bd:#3b82f6;
+  --fab:#2a2a50;--fab-t:#e8e8f0;
+  --nota-btn-t:#60a5fa;--nota-btn-bd:#3b82f6;--nota-btn-bg:var(--surf);
+  --timer-bg:#1a1a2e;--timer-t:#e8e8f0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;transition:background .25s,color .25s}
+
+/* ── Header ── */
+header{background:var(--hdr);color:var(--hdr-t);padding:9px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;position:sticky;top:0;z-index:100}
+header h1{font-size:13.5px;font-weight:600;white-space:nowrap}
+.hright{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.hmeta{font-size:11px;color:#888}
+.hbtn{background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:3px 5px;border-radius:5px;transition:background .15s;color:var(--hdr-t)}
+.hbtn:hover{background:rgba(255,255,255,.12)}
+.sbadge{font-size:11px;padding:3px 9px;border-radius:5px;font-weight:500}
+.sbadge.ok{background:#15803d;color:#dcfce7}.sbadge.warn{background:#92400e;color:#fef3c7}
+
+/* ── Temporizador ── */
+#timer-wrap{display:flex;align-items:center;gap:4px;background:var(--timer-bg);border-radius:7px;padding:3px 8px;border:1px solid rgba(255,255,255,.1)}
+#timer-display{font-size:13px;font-weight:700;font-family:monospace;color:var(--timer-t);min-width:58px;text-align:center;cursor:pointer;border-radius:3px;padding:1px 3px}
+#timer-display:hover{background:rgba(255,255,255,.08)}
+#timer-display.editing{background:rgba(255,255,255,.15);outline:none;color:var(--timer-t)}
+#timer-display.danger{color:var(--timer-danger)}
+#timer-wrap button{background:none;border:none;cursor:pointer;color:rgba(255,255,255,.7);font-size:12px;padding:1px 3px;border-radius:3px;line-height:1}
+#timer-wrap button:hover{background:rgba(255,255,255,.12);color:#fff}
+
+/* ── Barra de progreso ── */
+#prog-wrap{height:3px;background:var(--prog);position:sticky;top:40px;z-index:99}
+#prog-bar{height:100%;background:var(--prog-fill);width:0%;transition:width .4s}
+
+/* ── Contenedor ── */
+.container{max-width:820px;margin:0 auto;padding:16px 12px}
+
+/* ── Buscador ── */
+.search-wrap{position:relative;margin-bottom:13px}
+.search-wrap input{width:100%;padding:8px 34px 8px 12px;border:1.5px solid var(--bd2);border-radius:8px;font-size:13px;background:var(--surf);color:var(--txt);outline:none;transition:border-color .15s}
+.search-wrap input:focus{border-color:var(--prog-fill)}
+.search-clear{position:absolute;right:9px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--txt3);font-size:16px;display:none;line-height:1}
+#search-count{font-size:11px;color:var(--txt3);margin-top:4px;display:none}
+
+/* ── Modo repaso ── */
+.mode-bar{display:flex;gap:6px;margin-bottom:12px;align-items:center}
+.mode-btn{padding:5px 12px;border:1.5px solid var(--bd2);border-radius:7px;cursor:pointer;font-size:12px;font-weight:500;background:var(--surf);color:var(--txt2);transition:all .15s}
+.mode-btn:hover{border-color:#999}
+.mode-btn.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Tabs ── */
+.tabs{display:flex;gap:7px;margin-bottom:13px;flex-wrap:wrap}
+.tab{padding:7px 14px;border:1.5px solid var(--tab-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;background:var(--surf);color:var(--tab-t);transition:all .15s}
+.tab:hover{border-color:#999;color:var(--txt)}
+.tab.t-all.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Score global ── */
+.ph-global{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 15px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-left:4px solid var(--prog-fill)}
+.score-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.sc{font-size:12px;font-weight:600;padding:3px 9px;border-radius:6px}
+.sc.ok{background:var(--sc-ok);color:var(--ok-t)}.sc.ko{background:var(--sc-ko);color:var(--ko-t)}.sc.rem{background:var(--sc-rem);color:var(--sc-rem-t)}
+
+/* ── Acciones ── */
+.global-actions{display:none;margin-bottom:10px;gap:7px;flex-wrap:wrap;align-items:center}
+.container[data-tab="all"] .global-actions{display:flex}
+.sec-actions{margin:6px 0 15px;display:flex;gap:7px;flex-wrap:wrap}
+.reset-btn{padding:7px 14px;background:var(--fab);color:var(--fab-t);border:none;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:opacity .15s}
+.reset-btn:hover{opacity:.82}
+.nota-btn{padding:7px 14px;background:var(--nota-btn-bg);color:var(--nota-btn-t);border:1.5px solid var(--nota-btn-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:background .15s}
+.nota-btn:hover{background:var(--all-bg)}
+
+/* ── Nota box ── */
+.nota-box,.global-nota-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:2px solid var(--bd2);font-size:13px;line-height:1.7;display:none}
+.nota-box.pass,.global-nota-box.pass{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t)}
+.nota-box.fail,.global-nota-box.fail{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t)}
+.nota-score{font-size:26px;font-weight:700;display:block;margin-bottom:4px}
+.nota-detail{font-size:12px;opacity:.85;font-family:monospace}
+
+/* ── Vista revisión ── */
+.review-list{margin-top:12px;border-top:1px solid var(--bd2);padding-top:10px}
+.review-title{font-size:12px;font-weight:700;margin-bottom:9px;color:var(--txt)}
+.review-sec-label{font-size:11.5px;font-weight:700;color:var(--txt3);margin:8px 0 5px;padding-top:6px;border-top:1px solid var(--bd)}
+.review-item{background:var(--surf);border-radius:8px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden}
+.review-item summary{padding:9px 12px;cursor:pointer;font-size:12.5px;color:var(--txt);list-style:none;display:flex;gap:8px;align-items:flex-start}
+.review-item summary::-webkit-details-marker{display:none}
+.review-item summary::before{content:'▶';font-size:9px;color:var(--txt3);flex-shrink:0;margin-top:4px;transition:transform .18s}
+details[open] summary::before{transform:rotate(90deg)}
+.review-body{padding:0 12px 11px}
+.review-ans{font-size:12px;color:var(--ok-t);margin-bottom:7px;font-weight:500}
+
+/* ── Estadísticas ── */
+.stats-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:1.5px solid var(--bd2);background:var(--surf);display:none}
+.stats-box.show{display:block}
+.stats-title{font-size:12px;font-weight:700;margin-bottom:10px;color:var(--txt)}
+.stats-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:12.5px}
+.stats-item:last-child{border-bottom:none}
+.stats-bar-wrap{flex:1;background:var(--sc-rem);border-radius:4px;height:6px;overflow:hidden}
+.stats-bar{height:100%;background:var(--ko-bd);border-radius:4px;transition:width .4s}
+.stats-n{font-size:11px;color:var(--txt3);white-space:nowrap}
+.stats-q{flex:2;color:var(--txt);font-size:12px;line-height:1.3}
+
+/* ── Panel secciones ── */
+.sec-panel{display:none}.sec-panel.visible{display:block}
+.ph{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ph-left{flex:1;display:flex;flex-direction:column;gap:5px}
+.ph-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt3);margin-bottom:1px}
+.ph-desc{font-size:12px;color:var(--txt4)}
+.fbtn{padding:6px 12px;font-size:12px;font-weight:500;border:1.5px solid var(--bd2);border-radius:8px;cursor:pointer;background:var(--surf);color:var(--txt2);transition:all .15s;white-space:nowrap}
+.fbtn:hover{border-color:#999;color:var(--txt)}.fbtn.on{background:var(--ko-bg);color:#b91c1c;border-color:#f87171}
+.no-failed{display:none;text-align:center;padding:16px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin-top:4px}
+.no-failed.show{display:block}
+.no-results{display:none;text-align:center;padding:20px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin:8px 0}
+
+/* ── Hint ── */
+.hint{font-size:11px;color:var(--txt3);margin-bottom:15px;padding:7px 11px;background:var(--hint);border-radius:6px;border:1px solid var(--hint-bd)}
+
+/* ── Tarjeta ── */
+.qcard{background:var(--surf);border-radius:10px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden;transition:box-shadow .15s}
+.qcard:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.qcard.kb-focus{outline:2px solid var(--prog-fill);outline-offset:-2px}
+.qcard.search-hidden{display:none}
+.qhead{padding:11px 13px;cursor:pointer;display:flex;align-items:flex-start;gap:9px}
+
+/* ── Badge numérico ── */
+.qnum{font-size:11px;font-weight:700;padding:3px 7px;border-radius:5px;white-space:nowrap;flex-shrink:0;margin-top:2px;background:var(--sc-rem);color:var(--sc-rem-t)}
+/* En pestaña "Todos" siempre neutro; en sección aplica color de sección */
+.qnum.sec-colored{background:var(--sec-dim);color:var(--sec-col)}
+
+.qtxt{font-size:13px;line-height:1.5;flex:1}
+.star-btn{background:none;border:none;cursor:pointer;font-size:15px;color:var(--star);padding:0 2px;flex-shrink:0;margin-top:2px;line-height:1;transition:color .15s,transform .15s}
+.star-btn:hover{transform:scale(1.2)}
+.star-btn .si{display:inline}.star-btn .sf{display:none}
+.star-btn.on .si{display:none}.star-btn.on .sf{display:inline;color:var(--star-on)}
+.chev{font-size:15px;color:var(--bd2);flex-shrink:0;margin-top:2px;transition:transform .2s}
+.qhead.open .chev{transform:rotate(180deg)}
+.qbody{display:none;padding:0 13px 13px}.qbody.open{display:block}
+
+/* ── Imagen ── */
+.clinimg-wrap{margin:9px 0 7px;background:#111;border-radius:8px;overflow:hidden;border:1px solid var(--bd2);text-align:center}
+.clinimg{max-width:100%;max-height:340px;object-fit:contain;display:block;margin:0 auto}
+.clinimg-cap{font-size:11px;color:var(--txt3);padding:4px 0 5px;background:var(--hint);border-top:1px solid var(--bd)}
+
+/* ── Opciones ── */
+.opts{list-style:none;margin-top:9px;display:flex;flex-direction:column;gap:5px}
+.opt{padding:9px 12px;border-radius:8px;border:1.5px solid var(--bd2);cursor:pointer;display:flex;align-items:flex-start;gap:9px;color:var(--txt);font-size:13px;line-height:1.45;transition:border-color .12s,background .12s;user-select:none}
+.opt:hover:not(.done){border-color:#999;background:var(--hint)}
+.opt.correct{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t);font-weight:500;cursor:default}
+.opt.wrong{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t);cursor:default}
+.opt.done:not(.correct):not(.wrong){cursor:default;opacity:.7}
+.onum{font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px;min-width:15px}
+
+/* ── Modo repaso rápido ── */
+.quick-card{padding:9px 12px;border-radius:8px;border:1.5px solid var(--ok-bd);background:var(--ok-bg);margin-top:8px}
+.quick-rc{font-size:12.5px;font-weight:600;color:var(--ok-t);margin-bottom:6px}
+
+/* ── Explicación ── */
+.expbox{margin-top:10px;padding:10px 12px;background:var(--exp);border-left:4px solid var(--exp-bd);border-radius:0 8px 8px 0;font-size:12.5px;color:var(--exp-t);line-height:1.65}
+.expbox b,.expbox strong{font-weight:600}
+.et{display:block;margin-bottom:4px;font-weight:600;font-size:13px}
+.atag{font-size:10px;padding:2px 6px;border-radius:4px;margin-left:5px;vertical-align:middle}
+.atag.ok{background:var(--sc-ok);color:var(--ok-t)}.atag.ko{background:var(--sc-ko);color:#c0392b}
+
+/* ── All-tab CSS ── */
+.container[data-tab="all"] .ph{display:none!important}
+.container[data-tab="all"] .sec-actions{display:none!important}
+.container[data-tab="all"] .no-failed{display:none!important}
+.container[data-tab="all"] .nota-box{display:none!important}
+.container:not([data-tab="all"]) .global-nota-box{display:none!important}
+.container:not([data-tab="all"]) #stats-global{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="h-tit">Banco MIR</h1>
+  <div class="hright">
+    <span class="hmeta" id="h-meta"></span>
+    <!-- Temporizador -->
+    <div id="timer-wrap" title="Haz clic en el tiempo para editar">
+      <span id="timer-display">0:00:00</span>
+      <button id="btn-tplay" onclick="timerToggle()" title="Play/Pausa">▶</button>
+      <button onclick="timerReset()" title="Reset">↺</button>
+    </div>
+    <button class="hbtn" id="btn-dark" onclick="toggleDark()" title="Modo oscuro">🌙</button>
+    <span id="save-badge" class="sbadge"></span>
+  </div>
+</header>
+<div id="prog-wrap"><div id="prog-bar"></div></div>
+
+<div class="container" id="main-cont" data-tab="all">
+  <!-- Buscador -->
+  <div class="search-wrap">
+    <input type="text" id="search-input" placeholder="🔍 Buscar en enunciados..." oninput="onSearch(this.value)">
+    <button class="search-clear" id="search-clear" onclick="clearSearch()">✕</button>
+  </div>
+  <div id="search-count"></div>
+
+  <!-- Modo -->
+  <div class="mode-bar">
+    <span style="font-size:11.5px;color:var(--txt3);font-weight:600">MODO:</span>
+    <button class="mode-btn on" id="mode-test" onclick="setMode('test')">📝 Test</button>
+    <button class="mode-btn" id="mode-quick" onclick="setMode('quick')">⚡ Repaso rápido</button>
+    <button class="mode-btn" id="btn-stars" onclick="filterStarred()" style="margin-left:auto;border-color:#f59e0b;color:#b45309">⭐ Marcadas</button>
+    <button class="mode-btn" id="btn-stats" onclick="toggleStats()">📊 Errores</button>
+  </div>
+
+  <!-- Stats globales -->
+  <div class="stats-box" id="stats-global"></div>
+
+  <!-- Tabs -->
+  <div class="tabs" id="tabs-wrap"></div>
+
+  <!-- Score global -->
+  <div class="ph-global">
+    <div class="ph-left">
+      <span class="ph-desc" id="ph-gdesc"></span>
+      <div class="score-row">
+        <span class="sc ok" id="sc-ok-all">✓ 0</span>
+        <span class="sc ko" id="sc-ko-all">✗ 0</span>
+        <span class="sc rem" id="sc-rem-all">○ 0</span>
+      </div>
+    </div>
+  </div>
+  <div class="global-actions">
+    <button class="reset-btn" onclick="resetAll()">↺ Reiniciar y mezclar</button>
+    <button class="nota-btn" onclick="calcNotaAll()">✎ Calcular nota global</button>
+  </div>
+  <div class="global-nota-box" id="nota-all"></div>
+  <p class="hint">💡 <b>1–5</b> responde · <b>↑↓</b> navega · <b>S</b> marca ⭐ · Progreso guardado automáticamente</p>
+
+  <div id="panels-wrap"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════ MOTOR v10 ═══════════════════════════════════════ */
+
+var KEY=/*__KEY__*/'anatpat_final_2020_v1';
+var META=/*__META_JSON__*/{"titulo":"Banco de Anatom\u00eda Patol\u00f3gica","subtitulo":"Patolog\u00eda general y oncol\u00f3gica \u00b7 60 preguntas","examen":"Examen final \u00b7 V0","secciones":{"psb":{"label":"Partes blandas y hueso","emoji":"\ud83e\uddb4","color":"#b45309","colorDim":"#fef3c7","desc":"Kaposi \u00b7 fibromatosis \u00b7 osteocondroma \u00b7 schwannoma \u00b7 leiomioma \u00b7 sarcomas"},"piel":{"label":"Dermatopatolog\u00eda","emoji":"\ud83d\udd2c","color":"#be185d","colorDim":"#fce7f3","desc":"Psoriasis \u00b7 basocelular \u00b7 melanoma \u00b7 escamoso \u00b7 definiciones histol\u00f3gicas"},"resp":{"label":"Respiratorio","emoji":"\ud83e\udec1","color":"#0891b2","colorDim":"#cffafe","desc":"EPOC \u00b7 enfisema \u00b7 carcinoma pulmonar e IHQ"},"dig":{"label":"Digestivo y hep\u00e1tico","emoji":"\ud83e\ude7a","color":"#15803d","colorDim":"#dcfce7","desc":"H\u00edgado \u00b7 g\u00e1strico \u00b7 acalasia \u00b7 hepatitis \u00b7 colitis \u00b7 colon \u00b7 salivares"},"gu":{"label":"Genitourinario","emoji":"\ud83e\uded8","color":"#0369a1","colorDim":"#e0f2fe","desc":"Glomerular \u00b7 vejiga \u00b7 pr\u00f3stata \u00b7 test\u00edculo \u00b7 tumores renales"},"gin":{"label":"Ginecolog\u00eda y mama","emoji":"\ud83c\udf80","color":"#c026d3","colorDim":"#fae8ff","desc":"Ovario \u00b7 mama \u00b7 endometrio \u00b7 ganglio centinela"},"endo":{"label":"Endocrino","emoji":"\ud83e\udd8b","color":"#7c3aed","colorDim":"#ede9fe","desc":"MEN \u00b7 gastrinoma \u00b7 feocromocitoma \u00b7 tiroides"},"hem":{"label":"Hematopatolog\u00eda","emoji":"\ud83e\ude78","color":"#b91c1c","colorDim":"#fee2e2","desc":"Hodgkin \u00b7 linfadenitis reactiva \u00b7 LBDCG"},"snc":{"label":"Neuropatolog\u00eda","emoji":"\ud83e\udde0","color":"#4f46e5","colorDim":"#e0e7ff","desc":"Tumores del sistema nervioso central"},"gen":{"label":"Generalidades y t\u00e9cnicas","emoji":"\ud83d\udcda","color":"#475569","colorDim":"#f1f5f9","desc":"Inflamaci\u00f3n \u00b7 carcinog\u00e9nesis \u00b7 IHQ \u00b7 Bethesda \u00b7 Gleason \u00b7 historia"}}};
+var D=/*__D_JSON__*/{"psb":[{"n":"1","noShuffle":false,"img":null,"q":"Un paciente de 26 a\u00f1os consulta por lesiones cut\u00e1neas rojo-viol\u00e1ceas que forman placas en miembros inferiores de 6 meses de evoluci\u00f3n. Refiere consumo de drogas intravenosas y contacto con m\u00faltiples parejas sexuales sin uso de cond\u00f3n. La biopsia muestra vasos sangu\u00edneos dilatados, irregulares y angulares revestidos por c\u00e9lulas endoteliales y un infiltrado inflamatorio. \u00bfCu\u00e1l es el diagn\u00f3stico m\u00e1s probable?","o":["Tumor gl\u00f3mico","Angiosarcoma","Granuloma pi\u00f3geno","Sarcoma de Kaposi"],"c":4,"e":"El cuadro (var\u00f3n joven, drogas IV, sexo sin protecci\u00f3n) sugiere infecci\u00f3n por <b>VIH/VHH-8</b>. La histolog\u00eda con vasos dilatados, irregulares y angulares revestidos de endotelio e infiltrado inflamatorio es t\u00edpica del <b>sarcoma de Kaposi</b>, neoplasia vascular asociada al herpesvirus humano tipo 8."},{"n":"2","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes afirmaciones sobre la fibromatosis es correcta?","o":["La enfermedad de Ledderhose afecta la fascia palmar de j\u00f3venes","La enfermedad de Peyronie afecta a la fascia plantar en mujeres mayores","La contractura de Dupuytren es el tipo m\u00e1s com\u00fan de fibromatosis","La fibromatosis peneana afecta al cuerpo esponjoso"],"c":3,"e":"La <b>contractura de Dupuytren</b> (fascia palmar) es la fibromatosis superficial m\u00e1s frecuente. La de <b>Ledderhose</b> afecta la fascia plantar y la de <b>Peyronie</b> el cuerpo cavernoso del pene. Las opciones A, B y D invierten o confunden estas localizaciones."},{"n":"3","noShuffle":false,"img":null,"q":"Un ni\u00f1o de 10 a\u00f1os presenta un tumor doloroso en la regi\u00f3n metafisaria distal del f\u00e9mur izquierdo. Se realiza la ex\u00e9resis y al estudio histol\u00f3gico la lesi\u00f3n presenta una corona de cart\u00edlago y un tallo delgado de hueso maduro. \u00bfQu\u00e9 nombre recibe esta lesi\u00f3n?","o":["Condroma","Condrosarcoma","Osteocondroma","Osteosarcoma"],"c":3,"e":"La <b>corona de cart\u00edlago</b> sobre un <b>tallo de hueso maduro</b> continuo con la cortical es patognom\u00f3nica del <b>osteocondroma</b>, el tumor \u00f3seo benigno m\u00e1s frecuente. Aparece en la met\u00e1fisis de huesos largos en j\u00f3venes; puede ser sintom\u00e1tico pero no corresponde a osteosarcoma."},{"n":"4","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l es el tumor de partes blandas en el que podemos identificar los cuerpos de Verocay?","o":["Lipoma","Leiomioma","Neurofibroma","Schwannoma"],"c":4,"e":"Los <b>cuerpos de Verocay</b> (empalizadas nucleares en las \u00e1reas Antoni A) son caracter\u00edsticos del <b>schwannoma</b> (neurilemoma), tumor benigno de la vaina nerviosa derivado de c\u00e9lulas de Schwann S100+. El neurofibroma carece de cuerpos de Verocay bien formados."},{"n":"5","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes afirmaciones acerca de los leiomiomas es FALSA?","o":["Se componen de c\u00e9lulas musculares estriadas bien diferenciadas fusiformes, con citoplasma claro eosin\u00f3filo vacuolado y n\u00facleos romos con forma de cigarro","El \u00fatero suele ser la localizaci\u00f3n m\u00e1s habitual","En tumores grandes pueden hallarse \u00e1reas de infarto o hemorragia","Se clasifican seg\u00fan el lugar de origen como pilar, genital, vascular y originados en tejidos blandos profundos o retroperitoneo"],"c":1,"e":"El leiomioma deriva de <b>m\u00fasculo liso</b>, no estriado: la opci\u00f3n A es falsa por hablar de \"c\u00e9lulas musculares estriadas\". Los n\u00facleos romos en forma de cigarro s\u00ed son t\u00edpicos. El \u00fatero es la localizaci\u00f3n m\u00e1s habitual y se clasifican seg\u00fan su origen, por lo que B, C y D son ciertas."},{"n":"6","noShuffle":false,"img":null,"q":"De los tumores de partes blandas podemos afirmar lo siguiente:","o":["Son tumores que se originan de tejidos no epiteliales, como el tejido adiposo, el sistema nervioso central, m\u00fasculos y cart\u00edlago","La mayor\u00eda de los sarcomas est\u00e1n asociados con mutaciones de la l\u00ednea germinal en genes supresores tumorales","En general los tumores benignos de partes blandas son alrededor de 100 veces m\u00e1s numerosos que los tumores malignos","La mayor\u00eda de los sarcomas son benignos y tienen causa predisponente conocida"],"c":3,"e":"Los tumores benignos de partes blandas <b>superan en unas 100 veces</b> a los sarcomas (Robbins). La mayor\u00eda de sarcomas son espor\u00e1dicos, sin mutaci\u00f3n germinal ni causa conocida. El tejido nervioso central no se incluye entre las partes blandas, lo que invalida la opci\u00f3n A."}],"piel":[{"n":"17","noShuffle":false,"img":null,"q":"La psoriasis es una enfermedad cut\u00e1nea con cambios histopatol\u00f3gicos caracter\u00edsticos. \u00bfCu\u00e1l de los siguientes criterios NO es caracter\u00edstico de un patr\u00f3n inflamatorio cut\u00e1neo psoriasiforme?","o":["Formaci\u00f3n de p\u00fastulas espongiformes de Kogoj","Acantosis papilomatosa regular epid\u00e9rmica","Borramiento de la basal epid\u00e9rmica","Paraqueratosis confluente"],"c":3,"e":"En la psoriasis se conservan la capa basal y la uni\u00f3n dermoepid\u00e9rmica. El <b>borramiento de la basal</b> es propio de las dermatosis de interfase (liquen plano), no del patr\u00f3n psoriasiforme, que muestra p\u00fastulas espongiformes de Kogoj, acantosis regular y paraqueratosis confluente."},{"n":"18","noShuffle":false,"img":null,"q":"De los patrones de carcinoma basocelular enumerados a continuaci\u00f3n, \u00bfcu\u00e1l presenta un menor riesgo de recidiva local?","o":["Patr\u00f3n infiltrativo","Patr\u00f3n micronodular","Patr\u00f3n superficial","Patr\u00f3n nodular"],"c":4,"e":"Los patrones <b>infiltrativo, micronodular</b> y morfeiforme son agresivos y recidivan con frecuencia. El <b>patr\u00f3n nodular</b>, bien circunscrito, presenta el menor riesgo de recidiva local. El superficial, por su multifocalidad y m\u00e1rgenes mal definidos, recidiva con m\u00e1s facilidad."},{"n":"19","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes enfermedades NO se caracteriza por lesiones granulomatosas?","o":["Sarcoidosis","Tuberculosis","Dermatitis eccematosa","Enfermedad de Crohn"],"c":3,"e":"Sarcoidosis, tuberculosis y enfermedad de Crohn cursan con <b>inflamaci\u00f3n granulomatosa</b>. La <b>dermatitis eccematosa</b> es un proceso <b>espongi\u00f3tico</b>, no granulomatoso, por lo que es la excepci\u00f3n."},{"n":"20","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de los siguientes enunciados es falso respecto a las lesiones melanoc\u00edticas cut\u00e1neas?","o":["El nevus displ\u00e1sico y el melanoma in situ son sin\u00f3nimos","Una de las alteraciones moleculares implicadas en la fisiopatogenia del melanoma es la mutaci\u00f3n V600E del gen BRAF","La fase de crecimiento vertical del melanoma requiere de mitosis y/o nidos grandes en profundidad","El nevus cong\u00e9nito est\u00e1 presente desde el nacimiento"],"c":1,"e":"El <b>nevus displ\u00e1sico</b> no es sin\u00f3nimo de <b>melanoma in situ</b>: es un marcador de riesgo con atipia, pero una lesi\u00f3n distinta (opci\u00f3n A falsa). La mutaci\u00f3n <b>BRAF V600E</b>, la fase de crecimiento vertical y el nevus cong\u00e9nito presente al nacer son afirmaciones correctas."},{"n":"21","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de los siguientes NO es un tipo de carcinoma de c\u00e9lulas escamosas?","o":["Carcinoma de Merkel","Queratosis act\u00ednica","Enfermedad de Bowen","Queratoacantoma"],"c":1,"e":"Queratosis act\u00ednica, enfermedad de Bowen (carcinoma in situ) y queratoacantoma pertenecen al espectro del <b>carcinoma escamoso</b>. El <b>carcinoma de Merkel</b> es un tumor <b>neuroendocrino</b> cut\u00e1neo, no escamoso."},{"n":"22","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de los siguientes criterios no es necesario conocer para realizar el estadiaje pTNM del melanoma cut\u00e1neo invasor?","o":["Ulceraci\u00f3n","\u00cdndice de Breslow (espesor tumoral)","N\u00famero de mitosis d\u00e9rmicas","Nivel de Clark"],"c":4,"e":"El estadiaje <b>pTNM</b> del melanoma (AJCC 8\u00aa) se basa en el <b>\u00edndice de Breslow</b> y la ulceraci\u00f3n. El <b>nivel de Clark</b> ya no se emplea en la estadificaci\u00f3n actual, por lo que no es necesario conocerlo."},{"n":"23","noShuffle":false,"img":null,"q":"Identifique el enunciado falso:","o":["La exocitosis es la infiltraci\u00f3n epid\u00e9rmica de c\u00e9lulas inflamatorias","Conocemos como paraqueratosis la presencia de n\u00facleos picn\u00f3ticos en el estrato c\u00f3rneo epid\u00e9rmico","En la espongiosis hay p\u00e9rdida de las conexiones intercelulares entre los queratinocitos","El patr\u00f3n de distribuci\u00f3n celular lineal por la basal epid\u00e9rmica se conoce como lentiginoso"],"c":3,"e":"La <b>espongiosis</b> es <b>edema intercelular</b> que separa los queratinocitos estirando los puentes; la p\u00e9rdida de conexiones intercelulares corresponde a la <b>acant\u00f3lisis</b>, por lo que la opci\u00f3n C es falsa. Exocitosis, paraqueratosis y patr\u00f3n lentiginoso est\u00e1n bien definidos."}],"resp":[{"n":"15","noShuffle":false,"img":null,"q":"En relaci\u00f3n a la Enfermedad Pulmonar Obstructiva Cr\u00f3nica (EPOC), es falso que:","o":["La base histopatol\u00f3gica del enfisema es una inflamaci\u00f3n severa con fibrosis y linfocitos en los tabiques alveolares","La bronquitis cr\u00f3nica viene definida histol\u00f3gicamente por hiperplasia de gl\u00e1ndulas mucosecretoras (\u00edndice de Reid >0,4)","El tabaco es la causa principal","El enfisema panacinar suele estar causado por un d\u00e9ficit de alfa-1-antitripsina"],"c":1,"e":"El <b>enfisema</b> se define por destrucci\u00f3n de las paredes alveolares <b>sin fibrosis</b> significativa; la opci\u00f3n A es falsa al describir fibrosis y linfocitos. La bronquitis cr\u00f3nica (\u00edndice de Reid >0,4), el tabaco como causa y el enfisema panacinar por d\u00e9ficit de <b>alfa-1-antitripsina</b> son ciertos."},{"n":"16","noShuffle":false,"img":null,"q":"Ante un carcinoma pulmonar pobremente diferenciado con perfil inmunohistoqu\u00edmico p63-, CK5/6-, TTF1+, CK7+, sinaptofisina- y cromogranina-, el diagn\u00f3stico histopatol\u00f3gico ser\u00e1:","o":["Carcinoma pulmonar tipo carcinoma de c\u00e9lulas escamosas","Carcinoma pulmonar tipo adenocarcinoma","Carcinoma pulmonar tipo carcinoma neuroendocrino","Carcinoma de c\u00e9lulas escamosas metast\u00e1sico en pulm\u00f3n"],"c":2,"e":"El perfil <b>TTF1+, CK7+</b> con marcadores escamosos (p63, CK5/6) y neuroendocrinos (sinaptofisina, cromogranina) negativos define un <b>adenocarcinoma pulmonar</b> primario. TTF1 es el marcador clave del adenocarcinoma de pulm\u00f3n."}],"dig":[{"n":"10","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes afirmaciones sobre los adenomas hep\u00e1ticos es incorrecta?","o":["Se asocia con s\u00edndrome de Klinefelter","Se asocia con el consumo de esteroides anab\u00f3licos","El 95% de los casos se presenta en hombres","Se presenta en pacientes con condiciones hormonales o metab\u00f3licas anormales"],"c":3,"e":"El <b>adenoma hep\u00e1tico</b> predomina ampliamente en <b>mujeres</b> (anticonceptivos orales), por lo que afirmar que el 95% aparece en hombres es incorrecto. Se asocia a esteroides anabolizantes y a alteraciones hormonales o metab\u00f3licas como la glucogenosis."},{"n":"11","noShuffle":false,"img":null,"q":"De los siguientes, \u00bfcu\u00e1l NO se considera factor de riesgo para el desarrollo de colangiocarcinomas intrahep\u00e1ticos?","o":["Infecci\u00f3n por VHB y VHC","Infestaci\u00f3n por par\u00e1sitos de las especies de Opisthorchis y Clonorchis","Adenomas","Cirrosis"],"c":3,"e":"Son factores de riesgo de <b>colangiocarcinoma intrahep\u00e1tico</b> las hepatitis VHB/VHC, los par\u00e1sitos <b>Opisthorchis y Clonorchis</b>, la cirrosis, la colangitis esclerosante y la litiasis. Los <b>adenomas</b> hepatocelulares no son lesi\u00f3n precursora ni factor de riesgo de colangiocarcinoma."},{"n":"12","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de los siguientes cambios gen\u00e9ticos NO se relaciona con el desarrollo de los tumores pancre\u00e1ticos?","o":["Activaci\u00f3n del gen supresor de tumores p16","Acortamiento de los tel\u00f3meros","Mutaciones del oncog\u00e9n KRAS","Inactivaci\u00f3n del gen supresor de tumores TP53"],"c":1,"e":"Los <b>genes supresores</b> como p16 (CDKN2A) y TP53 se <b>inactivan</b>, no se activan, en la carcinog\u00e9nesis pancre\u00e1tica. La activaci\u00f3n del oncog\u00e9n KRAS y el acortamiento telom\u00e9rico s\u00ed participan. Por ello \"activaci\u00f3n del supresor p16\" no forma parte del proceso."},{"n":"14","noShuffle":false,"img":null,"q":"Los siguientes son mecanismos que protegen a la mucosa g\u00e1strica:","o":["Secreci\u00f3n de moco, alto pH g\u00e1strico, secreci\u00f3n de gastrina","Secreci\u00f3n de bicarbonato, secreci\u00f3n de moco, rico suministro de sangre","Secreci\u00f3n de gastrina, secreci\u00f3n de bicarbonato, alto pH g\u00e1strico","Secreci\u00f3n de moco, pobre suministro de sangre, secreci\u00f3n de gastrina"],"c":2,"e":"La defensa de la mucosa g\u00e1strica se basa en la <b>secreci\u00f3n de moco y bicarbonato</b> y un <b>rico aporte sangu\u00edneo</b> que neutraliza el H+ retrodifundido (m\u00e1s prostaglandinas). La gastrina estimula el \u00e1cido y un pH alto no es mecanismo protector, lo que descarta el resto."},{"n":"52","noShuffle":false,"img":null,"q":"La acalasia se caracteriza por las siguientes anomal\u00edas, excepto:","o":["Aperistaltismo","Relajaci\u00f3n parcial o incompleta del EEI","Separaci\u00f3n de los pilares diafragm\u00e1ticos","Tono en reposo aumentado"],"c":3,"e":"La <b>acalasia</b> cursa con aperistaltismo, relajaci\u00f3n incompleta del EEI y aumento del tono en reposo. La <b>separaci\u00f3n de los pilares diafragm\u00e1ticos</b> describe la <b>hernia de hiato</b>, no la acalasia, por lo que es la excepci\u00f3n."},{"n":"53","noShuffle":false,"img":null,"q":"Del adenocarcinoma g\u00e1strico de tipo difuso podemos afirmar:","o":["Se relaciona principalmente con la infecci\u00f3n por Helicobacter pylori","Se denominan \"carcinoides\" porque crecen m\u00e1s lentamente que los carcinomas","Se desarrolla de las c\u00e9lulas intersticiales de Cajal","Puede presentar apariencia de \"bota de cuero\" denominada linitis pl\u00e1stica"],"c":4,"e":"El <b>adenocarcinoma g\u00e1strico difuso</b> (c\u00e9lulas en anillo de sello, p\u00e9rdida de E-cadherina) infiltra difusamente la pared y puede dar el aspecto en \"<b>bota de cuero</b>\" o <b>linitis pl\u00e1stica</b>. Se relaciona m\u00e1s con mutaciones de CDH1 que con H. pylori (propio del tipo intestinal)."},{"n":"55","noShuffle":false,"img":null,"q":"Tres semanas despu\u00e9s de comer en un bar, un chico de 23 a\u00f1os desarrolla ictericia de la conjuntiva ocular, fatiga y p\u00e9rdida del apetito. Despu\u00e9s de tres semanas los s\u00edntomas desaparecen. \u00bfCu\u00e1l de los siguientes hallazgos de laboratorio es m\u00e1s probable que presente?","o":["Anticuerpo IgM de Hepatitis A","Anticuerpo de superficie de Hepatitis B","Anticuerpo de la Hepatitis C","Anticuerpo IgM de Hepatitis D"],"c":1,"e":"Ingesta en un bar (v\u00eda fecal-oral), incubaci\u00f3n de semanas y cuadro <b>autolimitado</b> sin cronicidad: <b>hepatitis A</b>. El hallazgo serol\u00f3gico de infecci\u00f3n aguda es el <b>anticuerpo IgM anti-VHA</b>."},{"n":"56","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l es el tumor benigno m\u00e1s frecuente de las gl\u00e1ndulas salivares?","o":["Oncocitoma","Tumor de Warthin","Adenoma pleomorfo","Adenoma de c\u00e9lulas basales"],"c":3,"e":"El <b>adenoma pleomorfo</b> (tumor mixto) es el tumor benigno m\u00e1s frecuente de las gl\u00e1ndulas salivares, t\u00edpicamente de la <b>par\u00f3tida</b>. Combina un componente epitelial y un estroma mixoide o condroide."},{"n":"57","noShuffle":false,"img":null,"q":"Acude un paciente con cuadro de diarreas mucosanguinolentas que muestra endosc\u00f3picamente una mucosa rectosigmoidea de superficie granular continua, que histopatol\u00f3gicamente se corresponde con un infiltrado inflamatorio neutrof\u00edlico superficial con presencia de microabscesos cr\u00edpticos y distorsi\u00f3n arquitectural glandular. El diagn\u00f3stico m\u00e1s probable ser\u00e1:","o":["Colitis microsc\u00f3pica tipo colitis col\u00e1gena","Colitis microsc\u00f3pica tipo colitis linfocitaria","Colitis ulcerosa","Enfermedad de Crohn"],"c":3,"e":"La afectaci\u00f3n <b>continua</b> del recto-sigma, los <b>microabscesos cr\u00edpticos</b> y la distorsi\u00f3n arquitectural con diarrea mucosanguinolenta definen la <b>colitis ulcerosa</b>. La enfermedad de Crohn ser\u00eda transmural, segmentaria y con granulomas."},{"n":"58","noShuffle":false,"img":null,"q":"Ante un paciente con adenocarcinoma de colon ascendente, de tipo morfol\u00f3gico intestinal, moderadamente diferenciado, que infiltra la mucosa, submucosa, capa muscular propia y tejido adiposo subseroso, sin alcanzar la serosa peritoneal; y tras el estudio exhaustivo de los ganglios linf\u00e1ticos regionales no se observa met\u00e1stasis en ninguno de los 23 ganglios estudiados, \u00bfqu\u00e9 estadificaci\u00f3n pTNM ser\u00eda la adecuada?","o":["pT2 N0","pT2 N1","pT3 N0","pT3 N1"],"c":3,"e":"La invasi\u00f3n a trav\u00e9s de la muscular propia hasta el tejido adiposo subseroso sin alcanzar la serosa corresponde a <b>pT3</b>; la ausencia de met\u00e1stasis en los 23 ganglios estudiados es <b>N0</b>. El estadio es <b>pT3 N0</b>."}],"gu":[{"n":"7","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l es la enfermedad glomerular primaria m\u00e1s frecuente en ni\u00f1os causante de s\u00edndrome nefr\u00f3tico?","o":["Enfermedad de cambios m\u00ednimos","Glomeruloesclerosis focal segmentaria","Nefropat\u00eda membranosa","Glomerulonefritis membranoproliferativa"],"c":1,"e":"La <b>enfermedad de cambios m\u00ednimos</b> es la causa m\u00e1s frecuente de <b>s\u00edndrome nefr\u00f3tico en ni\u00f1os</b>. Cursa con borramiento difuso de los pedicelos en microscop\u00eda electr\u00f3nica y excelente respuesta a corticoides, con microscop\u00eda \u00f3ptica casi normal."},{"n":"8","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes afirmaciones sobre la nefropat\u00eda por IgA es FALSA?","o":["Es una de las causas m\u00e1s comunes de hematuria recidivante","Es la enfermedad renal m\u00e1s com\u00fan diagnosticada por biopsia","Es una nefropat\u00eda frecuente en ancianos e inmunodeprimidos","Hay dep\u00f3sitos de IgA en el mesangio"],"c":3,"e":"La <b>nefropat\u00eda por IgA</b> (enfermedad de Berger) es la glomerulonefritis m\u00e1s frecuente, t\u00edpica de <b>adultos j\u00f3venes</b>, no de ancianos ni inmunodeprimidos (opci\u00f3n C falsa). Causa hematuria recidivante y muestra dep\u00f3sitos mesangiales de IgA."},{"n":"9","noShuffle":false,"img":null,"q":"El s\u00edndrome nefr\u00f3tico presenta las siguientes caracter\u00edsticas, excepto:","o":["Edema","Hematuria","Hipoproteinemia","Proteinuria"],"c":2,"e":"La <b>hematuria</b> es propia del s\u00edndrome <b>nefr\u00edtico</b>, no del nefr\u00f3tico. El s\u00edndrome nefr\u00f3tico se define por proteinuria masiva (>3,5 g/d\u00eda), hipoproteinemia, edema e hiperlipidemia, por lo que la hematuria es la excepci\u00f3n."},{"n":"41","noShuffle":false,"img":null,"q":"La clasificaci\u00f3n de la OMS de neoplasias no invasivas de vejiga urinaria incluye los siguientes grupos excepto uno:","o":["Carcinoma urotelial de alto grado","Papiloma urotelial","Neoplasia vesical escamosa","Neoplasia urotelial de bajo potencial maligno"],"c":3,"e":"Las neoplasias uroteliales no invasivas (OMS) incluyen papiloma, neoplasia de bajo potencial maligno y carcinoma papilar de bajo y alto grado. La <b>neoplasia vesical escamosa</b> no forma parte de esta clasificaci\u00f3n urotelial, por lo que es la excepci\u00f3n."},{"n":"42","noShuffle":false,"img":null,"q":"Las neoplasias testiculares suelen extirparse quir\u00fargicamente sin biopsia preoperatoria. El motivo de ello es:","o":["La frecuencia de patrones combinados que en una biopsia peque\u00f1a no son identificables","La alta proporci\u00f3n de necrosis en los tumores que impide su diagn\u00f3stico en biopsias limitadas","El riesgo de diseminaci\u00f3n neopl\u00e1sica con la biopsia","La elevada tasa de infecciones tras biopsias"],"c":3,"e":"La biopsia testicular preoperatoria se evita por el <b>riesgo de diseminaci\u00f3n tumoral</b> a trav\u00e9s del trayecto y la violaci\u00f3n escrotal, que altera las v\u00edas de drenaje. Por ello se practica orquiectom\u00eda radical inguinal directa."},{"n":"43","noShuffle":false,"img":null,"q":"La mayor tasa de mortalidad por c\u00e1ncer de pr\u00f3stata se sit\u00faa en la franja de edad de:","o":["Mayores de 85 a\u00f1os","75-85 a\u00f1os","65-75 a\u00f1os","55-65 a\u00f1os"],"c":3,"e":"El <b>c\u00e1ncer de pr\u00f3stata</b> es muy prevalente en varones de edad avanzada; seg\u00fan los datos del enunciado, la mayor tasa de mortalidad se sit\u00faa en la franja de <b>65-75 a\u00f1os</b>, grupo en el que se concentra gran parte del diagn\u00f3stico y la mortalidad por esta neoplasia."},{"n":"47","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l es la patolog\u00eda prost\u00e1tica benigna m\u00e1s frecuente?","o":["Atrofia segmentaria","Hiperplasia nodular","Estenosis","Metaplasia escamosa"],"c":2,"e":"La <b>hiperplasia nodular benigna</b> de pr\u00f3stata (HBP) es la patolog\u00eda prost\u00e1tica benigna m\u00e1s frecuente; afecta la zona de transici\u00f3n y produce s\u00edntomas obstructivos urinarios en varones de edad avanzada."},{"n":"48","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes afirmaciones es falsa en relaci\u00f3n al c\u00e1ncer vesical?","o":["El tabaco es un factor de riesgo","Son m\u00e1s frecuentes en hombres","El papiloma urotelial es m\u00e1s com\u00fan que el carcinoma","La cistectom\u00eda se practica en tumores que invaden la capa muscular o la grasa perivesical"],"c":3,"e":"Es falsa la opci\u00f3n C: el <b>carcinoma urotelial</b> es mucho m\u00e1s frecuente que el <b>papiloma urotelial</b> (benigno y raro). El tabaco es factor de riesgo, predomina en hombres y la cistectom\u00eda se indica en tumores m\u00fasculo-invasivos."},{"n":"49","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l es el tumor testicular de c\u00e9lulas germinales m\u00e1s com\u00fan antes de la pubertad?","o":["Tumor del seno endod\u00e9rmico","Seminoma","Carcinoma embrionario","Teratocarcinoma"],"c":1,"e":"El <b>tumor del seno endod\u00e9rmico (saco vitelino)</b> es el tumor germinal testicular m\u00e1s frecuente <b>antes de la pubertad</b>. Eleva la alfa-fetoprote\u00edna y muestra los caracter\u00edsticos cuerpos de Schiller-Duval."},{"n":"50","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de los siguientes tumores renales no es caracter\u00edstico de la edad infantil?","o":["Nefroma mesobl\u00e1stico","Oncocitoma","Sarcoma de c\u00e9lulas claras","Tumor rabdoide"],"c":2,"e":"Nefroma mesobl\u00e1stico, sarcoma de c\u00e9lulas claras y tumor rabdoide son tumores renales de la <b>edad infantil</b>. El <b>oncocitoma</b> es un tumor renal benigno propio del <b>adulto</b>, por lo que es la excepci\u00f3n."}],"gin":[{"n":"31","noShuffle":false,"img":null,"q":"\u00bfA qu\u00e9 categor\u00eda pertenecen los tumores ov\u00e1ricos de c\u00e9lulas de Leydig?","o":["Tumores epiteliales","Tumores de c\u00e9lulas germinales","Tumores derivados de los cordones sexuales-estroma","Tumores metast\u00e1sicos"],"c":3,"e":"Los tumores ov\u00e1ricos de <b>c\u00e9lulas de Leydig</b> (y los de Sertoli-Leydig) derivan de los <b>cordones sexuales-estroma</b>. Pueden ser funcionantes y producir andr\u00f3genos, causando virilizaci\u00f3n."},{"n":"32","noShuffle":false,"img":null,"q":"El tratamiento del c\u00e1ncer de mama con tamoxifeno se limita a qu\u00e9 tipo de tumores?","o":["Los que expresan receptores hormonales estrog\u00e9nicos","Los que expresan HER2","Los que presentan mutaciones en los genes BRCA1 o BRCA2","Los que tienen un \u00edndice de proliferaci\u00f3n medido con Ki67 superior al 20%"],"c":1,"e":"El <b>tamoxifeno</b> es un modulador del receptor estrog\u00e9nico, por lo que solo beneficia a los tumores con <b>receptores hormonales (estr\u00f3geno) positivos</b>. Los HER2+ se tratan con trastuzumab y las mutaciones BRCA no determinan su indicaci\u00f3n."},{"n":"35","noShuffle":false,"img":null,"q":"La hiperplasia endometrial se considera lesi\u00f3n precursora de qu\u00e9 tipo de c\u00e1ncer uterino:","o":["Sarcoma estromal endometrial","Adenocarcinoma endometrioide","Adenocarcinoma papilar seroso","Tumor m\u00fclleriano mixto maligno"],"c":2,"e":"La <b>hiperplasia endometrial</b> (sobre todo con atipia) es la lesi\u00f3n precursora del <b>adenocarcinoma endometrioide</b> (tipo I, estr\u00f3geno-dependiente). El carcinoma seroso papilar deriva de carcinoma intraepitelial sobre endometrio atr\u00f3fico."},{"n":"39","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 tama\u00f1o define las micromet\u00e1stasis en ganglios centinelas mamarios?","o":["Menores de 1 mm","Menores de 1 cm","Entre 1 y 2 mm","Entre 0,2 y 2 mm"],"c":4,"e":"Las <b>micromet\u00e1stasis</b> en el ganglio centinela mamario miden <b>entre 0,2 y 2 mm</b>. Por debajo de 0,2 mm se consideran c\u00e9lulas tumorales aisladas y por encima de 2 mm, macromet\u00e1stasis."},{"n":"40","noShuffle":false,"img":null,"q":"En patolog\u00eda mamaria, \u00bfqu\u00e9 define mejor el comedocarcinoma?","o":["Carcinoma lobulillar in situ s\u00f3lido","Componente intraductal de la enfermedad de Paget","Carcinoma intraductal de alto grado con necrosis central","Malignizaci\u00f3n de un papiloma intraductal"],"c":3,"e":"El <b>comedocarcinoma</b> es un <b>carcinoma ductal in situ de alto grado con necrosis central</b> que rellena las luces ductales. No es un carcinoma lobulillar in situ ni guarda relaci\u00f3n con la enfermedad de Paget ni con el papiloma."},{"n":"54","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de los siguientes procesos celulares es m\u00e1s probable que ocurra en el endometrio justo antes del inicio del sangrado menstrual?","o":["Atrofia","Necrosis caseosa","Apoptosis","Necrosis licuefactiva"],"c":3,"e":"Justo antes de la menstruaci\u00f3n, la ca\u00edda de progesterona provoca isquemia y <b>apoptosis</b> de las c\u00e9lulas endometriales, que conduce a la descamaci\u00f3n funcional. No se trata de atrofia ni de necrosis caseosa o licuefactiva."}],"endo":[{"n":"27","noShuffle":false,"img":null,"q":"Se\u00f1ale la afirmaci\u00f3n correcta respecto a los s\u00edndromes de Neoplasias Endocrinas M\u00faltiples (MEN):","o":["La presencia de insulinomas asociados a adenomas hipofisarios es caracter\u00edstica del MEN 1","El carcinoma medular de tiroides est\u00e1 presente en el MEN 2A pero no en el MEN 1 ni en el MEN 2B","Un hiperparatiroidismo secundario asociado a feocromocitoma suprarrenal orienta hacia el diagn\u00f3stico de MEN 2B","En caso de paciente con carcinoma medular de tiroides y feocromocitoma sincr\u00f3nicos el diagn\u00f3stico m\u00e1s probable ser\u00e1 un MEN 1"],"c":1,"e":"El <b>MEN 1</b> (Wermer) asocia tumores de paratiroides, p\u00e1ncreas (<b>insulinoma</b>) e <b>hip\u00f3fisis</b>, por lo que A es correcta. El carcinoma medular de tiroides aparece en MEN 2A y 2B, y su asociaci\u00f3n con feocromocitoma orienta a MEN 2, no a MEN 1 ni 2B."},{"n":"28","noShuffle":false,"img":null,"q":"Ante un paciente con cl\u00ednica de gastritis de largo tiempo de evoluci\u00f3n se le diagnostica un gastrinoma. \u00bfCu\u00e1l de los siguientes enunciados es cierto?","o":["La tumoraci\u00f3n se localizar\u00e1 en el est\u00f3mago","Podr\u00eda formar parte del s\u00edndrome de Wermer (MEN 1)","La celularidad que compone el tumor presentar\u00e1 abundante queratina","No se trata de un tumor neuroendocrino"],"c":2,"e":"El <b>gastrinoma</b> es un tumor neuroendocrino que se localiza en duodeno o p\u00e1ncreas (no en est\u00f3mago) y puede integrarse en el <b>s\u00edndrome de Wermer (MEN 1)</b>. Expresa cromogranina y sinaptofisina, no queratina abundante."},{"n":"29","noShuffle":false,"img":null,"q":"Se\u00f1ale la respuesta falsa respecto al feocromocitoma:","o":["El paraganglioma es un tipo de feocromocitoma de localizaci\u00f3n extrasuprarrenal","Existen unas c\u00e9lulas sustentaculares que se marcan con S100+","Son tumores neuroendocrinos de la m\u00e9dula suprarrenal","Caracter\u00edsticamente son cromogranina- sinaptofisina- y calcitonina +"],"c":4,"e":"El <b>feocromocitoma</b> es cromogranina+ y sinaptofisina+, con c\u00e9lulas sustentaculares S100+. La afirmaci\u00f3n D es falsa: son cromogranina/sinaptofisina <b>positivos</b> y calcitonina <b>negativos</b> (la calcitonina marca el carcinoma medular de tiroides)."},{"n":"30","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes caracter\u00edsticas es cierta en relaci\u00f3n a los tumores tiroideos?","o":["Los criterios citol\u00f3gicos NO permiten diferenciar entre adenoma y carcinoma folicular de tiroides y por ello la PAAF NO es \u00fatil para el diagn\u00f3stico diferencial de estas dos entidades","Hendiduras nucleares \"en grano de caf\u00e9\", inclusiones intranucleares y n\u00facleos \u00f3pticamente vac\u00edos son hallazgos t\u00edpicos del carcinoma anapl\u00e1sico de tiroides","El carcinoma papilar de tiroides suele metastatizar v\u00eda hem\u00e1tica","El carcinoma anapl\u00e1sico de tiroides tiene buen pron\u00f3stico"],"c":1,"e":"La <b>citolog\u00eda (PAAF)</b> no distingue el adenoma del <b>carcinoma folicular</b>, pues el diagn\u00f3stico exige demostrar invasi\u00f3n capsular o vascular en la histolog\u00eda. Las hendiduras y pseudoinclusiones son del carcinoma <b>papilar</b> (que metastatiza v\u00eda linf\u00e1tica); el anapl\u00e1sico tiene mal pron\u00f3stico."}],"hem":[{"n":"24","noShuffle":false,"img":null,"q":"En relaci\u00f3n al Linfoma/Enfermedad de Hodgkin, es cierto que:","o":["El subtipo celularidad mixta es el m\u00e1s frecuente","El subtipo esclerosis nodular tiene muy mal pron\u00f3stico","Las c\u00e9lulas de Reed-Sternberg son c\u00e9lulas peque\u00f1as, at\u00edpicas, con cromatina granular y sin nucleolo","Puede observarse inmunoexpresi\u00f3n del virus de Epstein-Barr en algunos subtipos"],"c":4,"e":"En el <b>linfoma de Hodgkin</b> puede detectarse el <b>virus de Epstein-Barr</b>, sobre todo en la celularidad mixta. El subtipo m\u00e1s frecuente es la esclerosis nodular (buen pron\u00f3stico) y las c\u00e9lulas de <b>Reed-Sternberg</b> son grandes, con nucl\u00e9olos prominentes \"en ojo de b\u00faho\"."},{"n":"25","noShuffle":false,"img":null,"q":"En el estudio histol\u00f3gico de una ex\u00e9resis de ganglio linf\u00e1tico observamos una proliferaci\u00f3n con patr\u00f3n multinodular/folicular constituida por linfocitos de peque\u00f1o tama\u00f1o y que en las \u00e1reas centrofoliculares presentan macr\u00f3fagos con cuerpos tingibles. La celularidad linfoide centrofolicular muestra: CD20+, BCL6+, BCL2-, Ciclina D1-. \u00bfCu\u00e1l ser\u00eda el diagn\u00f3stico?","o":["Linfadenitis reactiva","Linfoma folicular grado 2","Linfoma de Hodgkin tipo rico en linfocitos","Linfoma de c\u00e9lulas del manto con patr\u00f3n multinodular"],"c":1,"e":"El patr\u00f3n folicular con <b>macr\u00f3fagos de cuerpos tingibles</b> y <b>BCL2 negativo</b> indica hiperplasia folicular reactiva (<b>linfadenitis reactiva</b>). El linfoma folicular ser\u00eda BCL2+ y sin cuerpos tingibles; la ciclina D1 negativa descarta el linfoma del manto."},{"n":"26","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 alteraci\u00f3n molecular NO es t\u00edpica de un linfoma B difuso de c\u00e9lulas grandes (LBDCG)?","o":["Reordenamiento de BCL2","Reordenamiento de BCL6","Reordenamiento de C-KIT","Reordenamiento de MYC"],"c":3,"e":"El <b>linfoma B difuso de c\u00e9lulas grandes</b> presenta reordenamientos de <b>BCL2, BCL6 y MYC</b> (linfomas doble/triple hit). El <b>C-KIT</b> es propio del GIST y de la mastocitosis, no del LBDCG."}],"snc":[{"n":"37","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de los siguientes tumores no tiene un componente neopl\u00e1sico neuronal principal o secundario?","o":["Neurocitoma","Ganglioglioma","Gangliocitoma","Glioblastoma"],"c":4,"e":"Neurocitoma, ganglioglioma y gangliocitoma poseen <b>componente neuronal</b>. El <b>glioblastoma</b> es un tumor exclusivamente <b>glial (astrocitario) de alto grado</b>, sin componente neopl\u00e1sico neuronal."},{"n":"38","noShuffle":false,"img":null,"q":"Uno de los siguientes tumores no suele tener un comportamiento benigno:","o":["Hemangioblastoma","Subependimoma","Meningioma","Astrocitoma difuso"],"c":4,"e":"Hemangioblastoma, subependimoma y meningioma suelen ser benignos (grado I de la OMS). El <b>astrocitoma difuso</b> es infiltrante, con potencial de progresi\u00f3n a grados superiores, por lo que <b>no suele comportarse de forma benigna</b>."}],"gen":[{"n":"13","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes c\u00e9lulas no participa en la producci\u00f3n de histamina durante la inflamaci\u00f3n?","o":["Mastocitos","C\u00e9lulas plasm\u00e1ticas","Bas\u00f3filos","Plaquetas"],"c":2,"e":"La histamina la liberan <b>mastocitos, bas\u00f3filos y plaquetas</b>. Las <b>c\u00e9lulas plasm\u00e1ticas</b> producen inmunoglobulinas, no histamina, por lo que no participan en su liberaci\u00f3n durante la inflamaci\u00f3n."},{"n":"33","noShuffle":false,"img":null,"q":"Entre los precursores de la Anatom\u00eda Patol\u00f3gica espa\u00f1ola anteriores a Cajal, destaca la realizaci\u00f3n de autopsias anatomocl\u00ednicas durante una epidemia de peste en Zaragoza en el siglo XVI. \u00bfQui\u00e9n las llev\u00f3 a cabo?","o":["P\u00edo del R\u00edo Hortega","Nicol\u00e1s Ach\u00facarro","Juan Tom\u00e1s Porcell","Miguel Servet"],"c":3,"e":"<b>Juan Tom\u00e1s Porcell</b> realiz\u00f3 autopsias anatomocl\u00ednicas durante la epidemia de peste de <b>Zaragoza (1565)</b>, consider\u00e1ndose un precursor de la anatom\u00eda patol\u00f3gica espa\u00f1ola anterior a Cajal."},{"n":"34","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes afirmaciones es cierta en relaci\u00f3n al grado de Gleason?","o":["Se emplea para establecer una gradaci\u00f3n pron\u00f3stica a partir de patrones histopatol\u00f3gicos de c\u00e1nceres de pr\u00f3stata y vejiga","El grado 1 definido inicialmente por Gleason en la actualidad no se considera maligno","Los tumores m\u00e1s indiferenciados alcanzan un grado m\u00e1ximo de 12 (6+6)","Se utiliza para valorar carcinomas, sarcomas y linfomas"],"c":2,"e":"En la actualidad el <b>patr\u00f3n/grado 1 de Gleason</b> ya no se considera maligno (el m\u00ednimo informado es el patr\u00f3n 3). El sistema se usa solo en <b>pr\u00f3stata</b>, no en vejiga, y la puntuaci\u00f3n m\u00e1xima es 10 (5+5), no 12."},{"n":"36","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 afirmaci\u00f3n es falsa en relaci\u00f3n al Papillomavirus (HPV)?","o":["El tipo con mayor riesgo oncog\u00e9nico es el HPV 16","La prote\u00edna E7 ejerce su efecto oncog\u00e9nico bloqueando p53","La c\u00e1pside del virus es codificada por los genes L1 y L2","El desarrollo de neoplasias requiere infecci\u00f3n persistente e integraci\u00f3n del virus en el DNA celular"],"c":2,"e":"La afirmaci\u00f3n falsa es B: la prote\u00edna <b>E7</b> del VPH inactiva la <b>prote\u00edna Rb</b>, mientras que la <b>E6</b> degrada <b>p53</b>. El VPH 16 es el de mayor riesgo, la c\u00e1pside la codifican L1/L2 y la oncog\u00e9nesis requiere infecci\u00f3n persistente con integraci\u00f3n."},{"n":"44","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de los siguientes es el crom\u00f3geno m\u00e1s usado en inmunohistoqu\u00edmica?","o":["Poliacrilamida","Diaminobencidina","Piruvato deshidrogenasa","Biotina"],"c":2,"e":"La <b>diaminobencidina (DAB)</b> es el crom\u00f3geno m\u00e1s utilizado en inmunohistoqu\u00edmica, generando un precipitado pardo estable. La poliacrilamida y la biotina no son crom\u00f3genos, y la piruvato deshidrogenasa es una enzima metab\u00f3lica."},{"n":"45","noShuffle":false,"img":null,"q":"\u00bfPara qu\u00e9 se usa la clasificaci\u00f3n de Bethesda?","o":["Define los diferentes tipos de carcinoma de c\u00e9rvix y cuerpo uterino","Define las categor\u00edas diagn\u00f3sticas en las citolog\u00edas cervicovaginales","Correlaciona el tipo de HPV con el riesgo de desarrollo neopl\u00e1sico","Clasifica las neoplasias de c\u00e9rvix uterino seg\u00fan el espesor de infiltraci\u00f3n estromal"],"c":2,"e":"El <b>sistema Bethesda</b> estandariza las <b>categor\u00edas diagn\u00f3sticas de la citolog\u00eda cervicovaginal</b> (Papanicolaou). No clasifica tumores por espesor de infiltraci\u00f3n ni correlaciona directamente el tipo de VPH con el riesgo."},{"n":"46","noShuffle":false,"img":null,"q":"Los siguientes autores publicaron tratados que corresponden a los primeros textos modernos de Anatom\u00eda Patol\u00f3gica. Uno de ellos ha continuado hasta la actualidad con nuevas ediciones publicadas por Juan Rosai:","o":["James Ewing","Pier Masson","Lauren Ackerman","Arthur Purdy Stout"],"c":3,"e":"El tratado de patolog\u00eda quir\u00fargica de <b>Lauren Ackerman</b> contin\u00faa hoy en nuevas ediciones a cargo de <b>Juan Rosai</b> (\"Rosai and Ackerman's Surgical Pathology\"), referencia cl\u00e1sica de la anatom\u00eda patol\u00f3gica moderna."},{"n":"51","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes afirmaciones sobre los macr\u00f3fagos es falsa?","o":["La vida \u00fatil de los macr\u00f3fagos tisulares es de varios meses o a\u00f1os","En el h\u00edgado se les llama c\u00e9lulas de Kupffer","Para activarse necesitan otras c\u00e9lulas presentadoras de ant\u00edgenos","Son responsables de gran parte de la lesi\u00f3n tisular en la inflamaci\u00f3n cr\u00f3nica"],"c":3,"e":"Es falsa la opci\u00f3n C: los <b>macr\u00f3fagos son c\u00e9lulas presentadoras de ant\u00edgeno</b> y no requieren otras CPA para activarse (los activan citocinas como el IFN-\u03b3 y productos microbianos). Son de larga vida, se llaman c\u00e9lulas de Kupffer en el h\u00edgado y median da\u00f1o en la inflamaci\u00f3n cr\u00f3nica."},{"n":"59","noShuffle":false,"img":null,"q":"En el proceso de carcinog\u00e9nesis est\u00e1n implicados numerosos eventos moleculares. Indique cu\u00e1l no forma parte del proceso de carcinog\u00e9nesis molecular tumoral:","o":["Aumento de la actividad de genes reguladores de la apoptosis","Activaci\u00f3n de oncogenes","Disminuci\u00f3n de la actividad de genes reparadores del ADN","Inactivaci\u00f3n de genes supresores tumorales"],"c":1,"e":"La carcinog\u00e9nesis implica activaci\u00f3n de oncogenes, inactivaci\u00f3n de supresores y menor reparaci\u00f3n del ADN, junto con <b>evasi\u00f3n de la apoptosis</b>. Un <b>aumento</b> de la actividad de los genes proapopt\u00f3ticos frenar\u00eda el tumor, por lo que no forma parte del proceso."},{"n":"60","noShuffle":false,"img":null,"q":"Seleccione el binomio falso agente carcinogen\u00e9tico-neoplasia que produce:","o":["Fibras de amianto (asbesto) \u2013 mesotelioma pleural","Helicobacter pylori \u2013 linfoma MALT g\u00e1strico","Herpes Virus 8 \u2013 linfoma de Burkitt","Radiaci\u00f3n UV B \u2013 melanoma cut\u00e1neo"],"c":3,"e":"El binomio falso es C: el <b>herpesvirus 8 (VHH-8)</b> causa <b>sarcoma de Kaposi</b>, no linfoma de Burkitt (ligado al <b>VEB</b>). Amianto-mesotelioma, H. pylori-linfoma MALT y UVB-melanoma son asociaciones correctas."}]};
+var IMGS=/*__IMGS_JSON__*/{};
+
+/* ── Estado ── */
+var canSave=typeof localStorage!=='undefined';
+var saved={};try{saved=JSON.parse(localStorage.getItem(KEY)||'null')||{};}catch(e){}
+var state   =saved.state   ||{};
+var qOrd    =saved.qOrd    ||{};
+var oOrd    =saved.oOrd    ||{};
+var starred =saved.starred ||{};
+var failHist=saved.failHist||{};  // {qid: count} entre sesiones
+var darkMode=saved.dark    ||false;
+var timerSec=saved.timerSec||0;   // segundos configurados
+var SECS=Object.keys(META.secciones||{});
+var fFailed={};
+var qIdx={};           // {sec: {n: q}}
+var qNums={};          // {sec: {n: numero_correlativo}}
+var allOrder=null;     // orden mezclado inter-secciones para pestaña Todos
+var activeCid=null;
+var currentTab='all';
+var currentMode='test';
+var saveTimer=null;
+var starsFilter=false;
+var statsVisible=false;
+var timerRunning=false;
+var timerRemaining=timerSec;
+var timerInterval=null;
+
+/* ── INIT ── */
+(function init(){
+  SECS.forEach(function(s){fFailed[s]=false;});
+  injectSecCSS();
+  buildHeader();
+  buildTabs();
+  buildPanels();
+  buildIdx();
+  buildNums();
+  buildAllOrder();
+  SECS.forEach(render);
+  renderAll();
+  updateScores();
+  updateProg();
+  applyTheme();
+  initTimer();
+  setBadge(canSave?'Guardado':'Sin guardado',canSave?'ok':'warn');
+  document.addEventListener('keydown',handleKey);
+  var si=document.getElementById('search-input');
+  if(si)si.addEventListener('keydown',function(e){if(e.key==='Escape'){clearSearch();}});
+})();
+
+/* ── CSS dinámico ── */
+function injectSecCSS(){
+  var css='';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{};
+    var c=m.color||'#1a56db',cd=m.colorDim||'#e8f0fe';
+    css+='.tab.t-'+s+'.on{background:'+cd+';color:'+c+';border-color:'+c+'}\n';
+    css+='.ph.s-'+s+'{border-left:4px solid '+c+'}\n';
+    // Variables CSS por sección para el badge coloreado
+    css+='#panel-'+s+' .qnum.sec-colored{background:'+cd+';color:'+c+'}\n';
+  });
+  var st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+}
+
+/* ── Header ── */
+function buildHeader(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var t=document.getElementById('h-tit');if(t)t.textContent=META.titulo||'Banco MIR';
+  var pt=document.getElementById('page-title');if(pt)pt.textContent=META.titulo||'Banco MIR';
+  var m=document.getElementById('h-meta');
+  if(m){var p=[];if(total)p.push(total+' preguntas');if(META.examen)p.push(META.examen);m.textContent=p.join(' · ');}
+  var d=document.getElementById('ph-gdesc');if(d)d.textContent=META.subtitulo||'';
+  var r=document.getElementById('sc-rem-all');if(r)r.textContent='○ '+total;
+}
+
+/* ── Tabs ── */
+function buildTabs(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var h='<button class="tab t-all on" onclick="showTab(\'all\')">📋 Todos ('+total+')</button>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<button class="tab t-'+s+'" onclick="showTab(\''+s+'\')">'+(m.emoji?m.emoji+' ':'')+escH(m.label||s)+' ('+cnt+')</button>';
+  });
+  var w=document.getElementById('tabs-wrap');if(w)w.innerHTML=h;
+}
+
+/* ── Paneles ── */
+function buildPanels(){
+  var h='<div id="panel-all" class="sec-panel visible"><div id="qs-all"></div><div class="no-results" id="nr-all">No se encontraron preguntas</div></div>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<div id="panel-'+s+'" class="sec-panel">';
+    h+='<div class="ph s-'+s+'">';
+    h+='<div class="ph-left">';
+    h+='<span class="ph-label">'+(m.emoji?m.emoji+'&nbsp;':'')+escH(m.label||s)+'</span>';
+    if(m.desc)h+='<span class="ph-desc">'+escH(m.desc)+'</span>';
+    h+='<div class="score-row">';
+    h+='<span class="sc ok" id="sc-ok-'+s+'">✓ 0</span>';
+    h+='<span class="sc ko" id="sc-ko-'+s+'">✗ 0</span>';
+    h+='<span class="sc rem" id="sc-rem-'+s+'">○ '+cnt+'</span>';
+    h+='</div></div>';
+    h+='<button class="fbtn" id="fb-'+s+'" onclick="toggleFail(\''+s+'\')">Solo falladas</button>';
+    h+='</div>';
+    h+='<div id="qs-'+s+'"></div>';
+    h+='<div class="no-failed" id="nf-'+s+'">Aún no has fallado ninguna 🎉</div>';
+    h+='<div class="no-results" id="nr-'+s+'">No se encontraron preguntas</div>';
+    h+='<div class="sec-actions">';
+    h+='<button class="reset-btn" onclick="resetSec(\''+s+'\')">↺ Reiniciar</button>';
+    h+='<button class="nota-btn" onclick="calcNota(\''+s+'\')">✎ Calcular nota</button>';
+    h+='</div>';
+    h+='<div class="nota-box" id="nota-'+s+'"></div>';
+    h+='</div>';
+  });
+  var pw=document.getElementById('panels-wrap');if(pw)pw.innerHTML=h;
+}
+
+/* ── Índice O(1) + numeración fija ── */
+function buildIdx(){
+  SECS.forEach(function(s){
+    qIdx[s]={};
+    if(D[s])D[s].forEach(function(q){qIdx[s][q.n]=q;});
+  });
+}
+function buildNums(){
+  // Numeración correlativa fija: 1, 2, 3... por sección
+  SECS.forEach(function(s){
+    qNums[s]={};
+    if(D[s])D[s].forEach(function(q,i){qNums[s][q.n]=i+1;});
+  });
+}
+function getNum(sec,n){return qNums[sec]?qNums[sec][n]||n:n;}
+function findQ(qid){
+  var d=qid.indexOf('-'),s=qid.substring(0,d),n=qid.substring(d+1);
+  return(qIdx[s]&&qIdx[s][n])||null;
+}
+function getSecFromQid(qid){return qid.substring(0,qid.indexOf('-'));}
+function getNFromQid(qid){return qid.substring(qid.indexOf('-')+1);}
+
+/* ── Orden inter-secciones para Todos ── */
+function buildAllOrder(){
+  var all=[];
+  SECS.forEach(function(s){if(D[s])D[s].forEach(function(q){all.push({sec:s,n:q.n});});});
+  if(!qOrd['__all__'])qOrd['__all__']=shuffle(all.map(function(x){return x.sec+'|'+x.n;}));
+  allOrder=qOrd['__all__'].map(function(key){
+    var p=key.indexOf('|'),sec=key.substring(0,p),n=key.substring(p+1);
+    return{sec:sec,n:n,q:qIdx[sec]&&qIdx[sec][n]};
+  }).filter(function(x){return x.q;});
+}
+
+/* ── Utilidades ── */
+function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function shuffle(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=b[i];b[i]=b[j];b[j]=t;}return b;}
+function getQOrd(s,qs){if(!qOrd[s])qOrd[s]=shuffle(qs.map(function(q){return q.n;}));return qOrd[s];}
+function getOOrd(qid){
+  var q=findQ(qid);var n=q&&q.o?q.o.length:4;
+  if(q&&q.noShuffle){var a=[];for(var i=0;i<n;i++)a.push(i);return a;}
+  if(!oOrd[qid]){var a=[];for(var i=0;i<n;i++)a.push(i);oOrd[qid]=shuffle(a);}
+  return oOrd[qid];
+}
+function imgHtml(key){
+  if(!IMGS[key]){console.warn('IMGS: clave no encontrada →',key);return'';}
+  return'<div class="clinimg-wrap"><img src="'+IMGS[key]+'" class="clinimg" alt="Imagen clínica" loading="lazy"><div class="clinimg-cap">Imagen clínica</div></div>';
+}
+
+/* ── localStorage debounce ── */
+function saveLocal(){
+  if(!canSave)return;
+  if(saveTimer)clearTimeout(saveTimer);
+  saveTimer=setTimeout(function(){
+    try{
+      localStorage.setItem(KEY,JSON.stringify({state:state,qOrd:qOrd,oOrd:oOrd,starred:starred,failHist:failHist,dark:darkMode,timerSec:timerSec}));
+      setBadge('Guardado','ok');
+    }catch(e){setBadge('Sin guardado','warn');}
+  },300);
+}
+function setBadge(t,c){var b=document.getElementById('save-badge');if(b){b.textContent=t;b.className='sbadge '+c;}}
+
+/* ── Construcción de tarjeta ── */
+function buildCard(q,sec,inAll,allPos){
+  var qid=sec+'-'+q.n;
+  var cid=(inAll?'A-':'S-')+qid;
+  var num=inAll?(allPos+1):getNum(sec,q.n);
+  var oo=getOOrd(qid);
+  var sOpts=oo.map(function(i){return q.o[i];});
+  var nc=oo.indexOf(q.c-1)+1;
+  var ans=state[qid];
+  var cc=ans?(ans.r?' answered-ok':' answered-wrong'):'';
+  var badgeCls='qnum'+(inAll?'':' sec-colored');
+  var h='<div class="qcard s-'+sec+cc+'" id="card-'+cid+'">';
+  h+='<div class="qhead" id="h-'+cid+'" data-cid="'+cid+'" data-qid="'+qid+'" data-sec="'+sec+'" onclick="tog(this.dataset.cid)">';
+  h+='<span class="'+badgeCls+'">'+num+'</span>';
+  h+='<span class="qtxt">'+q.q+(ans?'<span class="atag '+(ans.r?'ok':'ko')+'">'+(ans.r?'✓ acertada':'✗ fallada')+'</span>':'')+'</span>';
+  h+='<button class="star-btn'+(starred[qid]?' on':'')+'\" id="star-'+cid+'" onclick="event.stopPropagation();toggleStar(\''+qid+'\')" title="Marcar (S)"><span class="si">\u2606</span><span class="sf">\u2605</span></button>';
+  h+='<span class="chev">▾</span>';
+  h+='</div>';
+  h+='<div class="qbody" id="b-'+cid+'">';
+  if(q.img)h+=imgHtml(q.img);
+  if(currentMode==='quick'){
+    h+='<div class="quick-card"><div class="quick-rc">✓ Respuesta correcta: opción '+nc+' — '+escH(q.o[q.c-1])+'</div><div class="expbox">'+q.e+'</div></div>';
+  } else {
+    h+='<ul class="opts" id="opts-'+cid+'">';
+    h+=sOpts.map(function(o,i){
+      var p=i+1,oc='opt';
+      if(ans){oc+=' done';if(p===nc)oc+=' correct';else if(p===ans.c&&!ans.r)oc+=' wrong';}
+      return'<li class="'+oc+'" data-qid="'+qid+'" data-pos="'+p+'" data-sec="'+sec+'" onclick="answer(this.dataset.qid,+this.dataset.pos,this.dataset.sec)"><span class="onum">'+p+'.</span><span>'+o+'</span></li>';
+    }).join('');
+    h+='</ul>';
+    if(ans){h+='<div class="expbox"><span class="et">'+(ans.r?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e+'</div>';}
+  }
+  h+='</div></div>';
+  return h;
+}
+
+/* ── Render sección ── */
+function render(sec){
+  var qs=D[sec];if(!qs)return;
+  var ord=getQOrd(sec,qs);
+  var sorted=ord.map(function(n){return qIdx[sec]&&qIdx[sec][n];}).filter(Boolean);
+  var el=document.getElementById('qs-'+sec);
+  if(el)el.innerHTML=sorted.map(function(q){return buildCard(q,sec,false,0);}).join('');
+}
+
+/* ── Render Todos (mezcla inter-secciones) ── */
+function renderAll(){
+  if(!allOrder)buildAllOrder();
+  var el=document.getElementById('qs-all');
+  if(el)el.innerHTML=allOrder.map(function(x,i){return buildCard(x.q,x.sec,true,i);}).join('');
+}
+
+/* ── Toggle open/close ── */
+function tog(cid){
+  var b=document.getElementById('b-'+cid),h=document.getElementById('h-'+cid);
+  if(!b||!h)return;
+  var opening=!b.classList.contains('open');
+  b.classList.toggle('open');h.classList.toggle('open');
+  if(opening){
+    if(activeCid&&activeCid!==cid){var pc=document.getElementById('card-'+activeCid);if(pc)pc.classList.remove('kb-focus');}
+    activeCid=cid;
+    var card=document.getElementById('card-'+cid);if(card)card.classList.add('kb-focus');
+  }else{
+    if(activeCid===cid){activeCid=null;var card=document.getElementById('card-'+cid);if(card)card.classList.remove('kb-focus');}
+  }
+}
+
+/* ── Responder ── */
+function answer(qid,pos,sec){
+  if(state[qid])return;
+  var q=findQ(qid);if(!q)return;
+  var oo=getOOrd(qid);
+  var nc=oo.indexOf(q.c-1)+1;
+  var isRight=pos===nc;
+  state[qid]={c:pos,r:isRight};
+  // Registro de errores
+  if(!isRight){failHist[qid]=(failHist[qid]||0)+1;}
+  saveLocal();
+  // Actualizar todas las instancias del card (panel sección + panel all)
+  // Actualizar opciones en todas las instancias del card
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var optsEl=document.querySelectorAll('#opts-'+cid+' .opt');
+    optsEl.forEach(function(el,i){
+      el.classList.add('done');
+      if(i+1===nc)el.classList.add('correct');
+      else if(i+1===pos&&!isRight)el.classList.add('wrong');
+    });
+    var bdy=document.getElementById('b-'+cid);
+    if(bdy){
+      var eb=bdy.querySelector('.expbox');
+      if(!eb){eb=document.createElement('div');eb.className='expbox';bdy.appendChild(eb);}
+      eb.innerHTML='<span class="et">'+(isRight?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e;
+    }
+    var hd=document.getElementById('h-'+cid);
+    if(hd){var qt=hd.querySelector('.qtxt');if(qt&&!qt.querySelector('.atag')){var at=document.createElement('span');at.className='atag '+(isRight?'ok':'ko');at.innerHTML=isRight?'✓ acertada':'✗ fallada';qt.appendChild(at);}}
+    var card=document.getElementById('card-'+cid);
+    if(card)card.classList.add(isRight?'answered-ok':'answered-wrong');
+  });
+  updateScores();updateProg();
+  if(fFailed[sec]&&isRight){
+    var fcard=document.getElementById('card-S-'+qid);
+    if(fcard)fcard.style.display='none';
+    refreshNF(sec);
+  }
+}
+
+/* ── Estrella ── */
+function toggleStar(qid){
+  starred[qid]=!starred[qid];
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var btn=document.getElementById('star-'+cid);
+    if(btn)btn.classList.toggle('on',starred[qid]);
+  });
+  saveLocal();
+}
+function filterStarred(){
+  starsFilter=!starsFilter;
+  var btn=document.getElementById('btn-stars');
+  if(btn){btn.style.background=starsFilter?'#fef3c7':'';btn.style.fontWeight=starsFilter?'700':'';}
+  document.querySelectorAll('.qcard').forEach(function(card){
+    if(starsFilter){
+      var hd=card.querySelector('.qhead');
+      var qid=hd?hd.dataset.qid:'';
+      card.style.display=starred[qid]?'':'none';
+    }else{card.style.display='';}
+  });
+}
+
+/* ── Filtro falladas ── */
+function refreshNF(sec){
+  var c=document.getElementById('qs-'+sec);if(!c||!fFailed[sec])return;
+  var n=c.querySelectorAll('.qcard.answered-wrong').length;
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',n===0);
+}
+function toggleFail(sec){
+  fFailed[sec]=!fFailed[sec];
+  var btn=document.getElementById('fb-'+sec);
+  if(btn){btn.classList.toggle('on',fFailed[sec]);btn.textContent=fFailed[sec]?'← Ver todas':'Solo falladas';}
+  var c=document.getElementById('qs-'+sec);if(!c)return;
+  var nf=0;
+  c.querySelectorAll('.qcard').forEach(function(card){
+    if(fFailed[sec]){var show=card.classList.contains('answered-wrong');card.style.display=show?'':'none';if(show)nf++;}
+    else{card.style.display='';}
+  });
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',fFailed[sec]&&nf===0);
+}
+
+/* ── Scores y progreso ── */
+function updateScores(){
+  var tok=0,tok2=0,tok3=0;
+  SECS.forEach(function(sec){
+    var ok=0,ko=0;
+    if(D[sec])D[sec].forEach(function(q){var a=state[sec+'-'+q.n];if(a){if(a.r)ok++;else ko++;}});
+    var tot=D[sec]?D[sec].length:0,rem=tot-ok-ko;
+    tok+=ok;tok2+=ko;tok3+=rem;
+    var eok=document.getElementById('sc-ok-'+sec),eko=document.getElementById('sc-ko-'+sec),erm=document.getElementById('sc-rem-'+sec);
+    if(eok)eok.textContent='✓ '+ok;if(eko)eko.textContent='✗ '+ko;if(erm)erm.textContent='○ '+rem;
+  });
+  var eok=document.getElementById('sc-ok-all'),eko=document.getElementById('sc-ko-all'),erm=document.getElementById('sc-rem-all');
+  if(eok)eok.textContent='✓ '+tok;if(eko)eko.textContent='✗ '+tok2;if(erm)erm.textContent='○ '+tok3;
+}
+function updateProg(){
+  var total=0,done=Object.keys(state).length;
+  SECS.forEach(function(s){if(D[s])total+=D[s].length;});
+  var pct=total>0?Math.round(done/total*100):0;
+  var bar=document.getElementById('prog-bar');if(bar)bar.style.width=pct+'%';
+}
+
+/* ── Tabs ── */
+function showTab(t){
+  currentTab=t;
+  document.querySelectorAll('.tab').forEach(function(b){b.classList.remove('on');});
+  var tb=document.querySelector('.tab.t-'+t);if(tb)tb.classList.add('on');
+  var mc=document.getElementById('main-cont');if(mc)mc.setAttribute('data-tab',t);
+  var panelAll=document.getElementById('panel-all');
+  if(panelAll)panelAll.classList.toggle('visible',t==='all');
+  SECS.forEach(function(s){
+    var p=document.getElementById('panel-'+s);
+    if(p)p.classList.toggle('visible',t===s);
+  });
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  clearSearch();
+}
+
+/* ── Reset ── */
+function resetSec(sec){
+  if(D[sec])D[sec].forEach(function(q){var qid=sec+'-'+q.n;delete state[qid];delete oOrd[qid];});
+  delete qOrd[sec];fFailed[sec]=false;activeCid=null;
+  var btn=document.getElementById('fb-'+sec);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+  var nb=document.getElementById('nota-'+sec);if(nb){nb.style.display='none';nb.className='nota-box';}
+  saveLocal();render(sec);
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.remove('show');
+  updateScores();updateProg();
+  // Reconstruir panel all para reflejar cambios
+  buildAllOrder();renderAll();
+}
+function resetAll(){
+  Object.keys(state).forEach(function(k){delete state[k];});
+  Object.keys(oOrd).forEach(function(k){delete oOrd[k];});
+  Object.keys(qOrd).forEach(function(k){delete qOrd[k];});
+  activeCid=null;starsFilter=false;allOrder=null;
+  var bs=document.getElementById('btn-stars');if(bs){bs.style.background='';bs.style.fontWeight='';}
+  SECS.forEach(function(s){
+    fFailed[s]=false;
+    var btn=document.getElementById('fb-'+s);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+    var nb=document.getElementById('nota-'+s);if(nb){nb.style.display='none';nb.className='nota-box';}
+  });
+  saveLocal();
+  SECS.forEach(render);
+  buildAllOrder();renderAll();
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  updateScores();updateProg();
+}
+
+/* ── Nota y revisión ── */
+function buildRevList(sec){
+  var qs=D[sec];if(!qs)return'';
+  var failed=qs.filter(function(q){var a=state[sec+'-'+q.n];return a&&!a.r;});
+  if(!failed.length)return'';
+  var html='<div class="review-list"><div class="review-title">📋 '+failed.length+' pregunta'+(failed.length>1?'s':'')+' fallada'+(failed.length>1?'s':'')+' — repasa aquí:</div>';
+  failed.forEach(function(q){
+    var qid=sec+'-'+q.n;var oo=getOOrd(qid);var nc=oo.indexOf(q.c-1)+1;
+    html+='<details class="review-item"><summary><span><b>'+getNum(sec,q.n)+'.</b> '+q.q+'</span></summary>';
+    html+='<div class="review-body"><div class="review-ans">✓ Opción '+nc+': '+escH(q.o[q.c-1]||'')+'</div>';
+    html+='<div class="expbox">'+q.e+'</div></div></details>';
+  });
+  return html+'</div>';
+}
+function calcNota(sec){
+  var qs=D[sec];if(!qs)return;
+  var total=qs.length,ok=0,ko=0,skip=0;
+  qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-'+sec);if(!box)return;
+  box.className='nota-box '+(pass?'pass':'fail');
+  box.innerHTML='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>'
+    +buildRevList(sec);
+  box.style.display='block';
+}
+function calcNotaAll(){
+  var total=0,ok=0,ko=0,skip=0;
+  SECS.forEach(function(sec){
+    var qs=D[sec];if(!qs)return;
+    total+=qs.length;
+    qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  });
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-all');if(!box)return;
+  box.className='global-nota-box '+(pass?'pass':'fail');
+  var html='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10 (global)</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>';
+  SECS.forEach(function(sec){
+    var rv=buildRevList(sec);
+    if(rv){var m=META.secciones[sec]||{};html+='<div class="review-sec-label">'+(m.emoji?m.emoji+' ':'')+escH(m.label||sec)+'</div>'+rv;}
+  });
+  box.innerHTML=html;box.style.display='block';
+}
+
+/* ── Estadísticas de errores ── */
+function toggleStats(){
+  statsVisible=!statsVisible;
+  var btn=document.getElementById('btn-stats');
+  if(btn){btn.style.background=statsVisible?'var(--ko-bg)':'';btn.style.color=statsVisible?'var(--ko-t)':'';}
+  var box=document.getElementById('stats-global');
+  if(!box)return;
+  if(!statsVisible){box.classList.remove('show');return;}
+  var entries=Object.entries(failHist).filter(function(e){return e[1]>0;});
+  if(!entries.length){box.innerHTML='<div class="stats-title">📊 Sin errores registrados todavía</div>';box.classList.add('show');return;}
+  entries.sort(function(a,b){return b[1]-a[1];});
+  var top=entries.slice(0,10);
+  var maxV=top[0][1];
+  var html='<div class="stats-title">📊 Preguntas más falladas (acumulado entre sesiones)</div>';
+  top.forEach(function(e,i){
+    var qid=e[0],count=e[1];
+    var q=findQ(qid);if(!q)return;
+    var sec=getSecFromQid(qid),n=getNFromQid(qid);
+    var m=META.secciones[sec]||{};
+    var pct=Math.round(count/maxV*100);
+    html+='<div class="stats-item">';
+    html+='<span class="stats-n" style="min-width:18px;color:var(--ko-t);font-weight:700">'+(i+1)+'.</span>';
+    html+='<span class="stats-q">'+(m.emoji?m.emoji+' ':'')+getNum(sec,n)+'. '+q.q.substring(0,60)+(q.q.length>60?'…':'')+'</span>';
+    html+='<div class="stats-bar-wrap"><div class="stats-bar" style="width:'+pct+'%"></div></div>';
+    html+='<span class="stats-n">'+count+'✗</span>';
+    html+='</div>';
+  });
+  box.innerHTML=html;box.classList.add('show');
+}
+
+/* ── Buscador ── */
+function onSearch(val){
+  var v=val.trim().toLowerCase();
+  var clr=document.getElementById('search-clear');
+  var cnt=document.getElementById('search-count');
+  if(clr)clr.style.display=v?'block':'none';
+  var found=0,total=0;
+  document.querySelectorAll('.qcard').forEach(function(card){
+    total++;
+    if(!v){card.classList.remove('search-hidden');found++;}
+    else{
+      var qtxt=card.querySelector('.qtxt');
+      var match=qtxt&&qtxt.textContent.toLowerCase().indexOf(v)!==-1;
+      card.classList.toggle('search-hidden',!match);
+      if(match)found++;
+    }
+  });
+  if(cnt){
+    if(v){cnt.textContent=found+' de '+total+' preguntas';cnt.style.display='block';}
+    else{cnt.style.display='none';}
+  }
+  // Mostrar "sin resultados" por panel
+  ['all'].concat(SECS).forEach(function(s){
+    var panel=document.getElementById('panel-'+s);if(!panel||!panel.classList.contains('visible'))return;
+    var cards=panel.querySelectorAll('.qcard:not(.search-hidden)');
+    var nr=document.getElementById('nr-'+s);if(nr)nr.style.display=cards.length===0&&v?'block':'none';
+  });
+}
+function clearSearch(){
+  var si=document.getElementById('search-input');if(si)si.value='';
+  onSearch('');
+}
+
+/* ── Modo ── */
+function setMode(mode){
+  currentMode=mode;
+  document.getElementById('mode-test').classList.toggle('on',mode==='test');
+  document.getElementById('mode-quick').classList.toggle('on',mode==='quick');
+  // Rerenderizar todo
+  SECS.forEach(render);renderAll();
+}
+
+/* ── Modo oscuro ── */
+function applyTheme(){
+  document.documentElement.setAttribute('data-theme',darkMode?'dark':'light');
+  var btn=document.getElementById('btn-dark');if(btn)btn.textContent=darkMode?'☀️':'🌙';
+}
+function toggleDark(){darkMode=!darkMode;applyTheme();saveLocal();}
+
+/* ── Temporizador ── */
+function initTimer(){
+  timerRemaining=timerSec;
+  renderTimer();
+  var disp=document.getElementById('timer-display');
+  if(disp){
+    disp.addEventListener('click',function(){startEditTimer();});
+  }
+}
+function fmtTime(s){
+  var h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60;
+  return h+':'+(m<10?'0':'')+m+':'+(ss<10?'0':'')+ss;
+}
+function renderTimer(){
+  var disp=document.getElementById('timer-display');
+  if(!disp)return;
+  disp.textContent=fmtTime(timerRemaining);
+  disp.classList.toggle('danger',timerSec>0&&timerRemaining===0);
+}
+function timerToggle(){
+  if(timerRunning){
+    clearInterval(timerInterval);timerRunning=false;
+    document.getElementById('btn-tplay').textContent='▶';
+  }else{
+    if(timerRemaining<=0&&timerSec>0)timerRemaining=timerSec;
+    timerRunning=true;
+    document.getElementById('btn-tplay').textContent='⏸';
+    timerInterval=setInterval(function(){
+      if(timerRemaining>0){timerRemaining--;renderTimer();}
+      else{clearInterval(timerInterval);timerRunning=false;document.getElementById('btn-tplay').textContent='▶';renderTimer();}
+    },1000);
+  }
+}
+function timerReset(){
+  clearInterval(timerInterval);timerRunning=false;
+  timerRemaining=timerSec;
+  document.getElementById('btn-tplay').textContent='▶';
+  renderTimer();
+}
+function startEditTimer(){
+  var disp=document.getElementById('timer-display');if(!disp)return;
+  if(timerRunning){timerToggle();}
+  var old=fmtTime(timerRemaining);
+  disp.contentEditable='true';disp.classList.add('editing');
+  disp.textContent=old;
+  disp.focus();
+  var range=document.createRange();range.selectNodeContents(disp);
+  var sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
+  function commit(){
+    disp.contentEditable='false';disp.classList.remove('editing');
+    var txt=disp.textContent.trim();
+    var parts=txt.split(':').map(Number);
+    var secs=0;
+    if(parts.length===3)secs=parts[0]*3600+parts[1]*60+parts[2];
+    else if(parts.length===2)secs=parts[0]*60+parts[1];
+    else if(parts.length===1)secs=parts[0]*60;
+    if(!isNaN(secs)&&secs>=0){timerSec=secs;timerRemaining=secs;saveLocal();}
+    renderTimer();
+  }
+  disp.addEventListener('blur',commit,{once:true});
+  disp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();disp.blur();}});
+}
+
+/* ── Helpers cid ── */
+function cidToQid(cid){return cid.replace(/^[AS]-/,'');}
+
+/* ── Teclado ── */
+function handleKey(e){
+  var tg=e.target.tagName;
+  if(tg==='INPUT'||tg==='TEXTAREA'||e.target.contentEditable==='true')return;
+  var k=e.key;
+  if(k>='1'&&k<='5'){
+    if(activeCid&&!state[cidToQid(activeCid)]){
+      var aqid=cidToQid(activeCid);
+      var pos=parseInt(k),q=findQ(aqid);
+      if(q&&pos<=q.o.length){e.preventDefault();answer(aqid,pos,getSecFromQid(aqid));}
+    }
+  }else if(k==='ArrowDown'||k==='ArrowUp'){
+    e.preventDefault();navigateQ(k==='ArrowDown'?1:-1);
+  }else if(k==='s'||k==='S'){
+    if(activeCid)toggleStar(cidToQid(activeCid));
+  }
+}
+function navigateQ(dir){
+  var cards=Array.from(document.querySelectorAll('.sec-panel.visible .qcard')).filter(function(c){return c.style.display!=='none'&&!c.classList.contains('search-hidden');});
+  var cids=cards.map(function(c){return c.id.replace('card-','');});
+  if(!cids.length)return;
+  var idx=activeCid?cids.indexOf(activeCid):-1;
+  var nidx=Math.max(0,Math.min(cids.length-1,idx+dir));
+  var ncid=cids[nidx];if(!ncid||ncid===activeCid)return;
+  if(activeCid){var ob=document.getElementById('b-'+activeCid);var oh=document.getElementById('h-'+activeCid);if(ob)ob.classList.remove('open');if(oh)oh.classList.remove('open');var oc=document.getElementById('card-'+activeCid);if(oc)oc.classList.remove('kb-focus');}
+  activeCid=ncid;
+  var nb=document.getElementById('b-'+ncid);var nh=document.getElementById('h-'+ncid);
+  if(nb)nb.classList.add('open');if(nh)nh.classList.add('open');
+  var nc2=document.getElementById('card-'+ncid);if(nc2){nc2.classList.add('kb-focus');nc2.scrollIntoView({behavior:'smooth',block:'nearest'});}
+}
+</script>
+</body>
+</html>
