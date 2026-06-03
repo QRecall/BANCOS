@@ -1,0 +1,898 @@
+<!--
+=============================================================
+  MOTOR BANCO MIR — v10
+  Novedades respecto a v9:
+  - Numeración correlativa fija por sección (no se mezcla)
+  - Badge neutro en pestaña "Todos" + mezcla real inter-secciones
+  - Temporizador sticky editable en header (play/pausa/reset)
+  - Buscador de texto en tiempo real
+  - Modo repaso rápido (muestra RC + explicación directamente)
+  - Estadísticas de errores recurrentes entre sesiones
+=============================================================
+-->
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title id="page-title">Banco MIR</title>
+<style>
+:root{
+  --bg:#f4f3ef;--surf:#fff;--bd:#e5e5e5;--bd2:#ddd;
+  --txt:#1a1a1a;--txt2:#555;--txt3:#999;--txt4:#666;
+  --hdr:#1a1a1a;--hdr-t:#fff;
+  --ok-bg:#e6f9ef;--ok-t:#0b6e52;--ok-bd:#2da060;
+  --ko-bg:#fdecea;--ko-t:#b91c1c;--ko-bd:#d94f45;
+  --sc-ok:#dcf5ed;--sc-ko:#fdecea;--sc-rem:#f0f0f0;--sc-rem-t:#666;
+  --exp:#fffbe6;--exp-bd:#f0c04a;--exp-t:#5a4500;
+  --prog:#e5e5e5;--prog-fill:#1a56db;
+  --star:#ccc;--star-on:#f59e0b;
+  --hint:#fafafa;--hint-bd:#eee;
+  --tab-bd:#ddd;--tab-t:#555;
+  --all-bg:#e8f0fe;--all-t:#1a56db;--all-bd:#1a56db;
+  --fab:#1a1a1a;--fab-t:#fff;
+  --nota-btn-t:#1a56db;--nota-btn-bd:#1a56db;--nota-btn-bg:var(--surf);
+  --timer-bg:#222;--timer-t:#fff;--timer-danger:#ef4444;
+}
+[data-theme="dark"]{
+  --bg:#0f0f1a;--surf:#1e1e30;--bd:#2a2a45;--bd2:#333355;
+  --txt:#e8e8f0;--txt2:#aaa;--txt3:#555;--txt4:#888;
+  --hdr:#0a0a14;--hdr-t:#e8e8f0;
+  --ok-bg:#0b3020;--ok-t:#4ade80;--ok-bd:#166534;
+  --ko-bg:#2d0a0a;--ko-t:#f87171;--ko-bd:#7f1d1d;
+  --sc-ok:#0b3020;--sc-ko:#2d0a0a;--sc-rem:#252540;--sc-rem-t:#aaa;
+  --exp:#1a1500;--exp-bd:#a37f10;--exp-t:#d4b84a;
+  --prog:#2a2a45;--prog-fill:#60a5fa;
+  --star:#444;--star-on:#f59e0b;
+  --hint:#1a1a2e;--hint-bd:#2a2a45;
+  --tab-bd:#2a2a45;--tab-t:#aaa;
+  --all-bg:#1a2a4a;--all-t:#60a5fa;--all-bd:#3b82f6;
+  --fab:#2a2a50;--fab-t:#e8e8f0;
+  --nota-btn-t:#60a5fa;--nota-btn-bd:#3b82f6;--nota-btn-bg:var(--surf);
+  --timer-bg:#1a1a2e;--timer-t:#e8e8f0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;transition:background .25s,color .25s}
+
+/* ── Header ── */
+header{background:var(--hdr);color:var(--hdr-t);padding:9px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;position:sticky;top:0;z-index:100}
+header h1{font-size:13.5px;font-weight:600;white-space:nowrap}
+.hright{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.hmeta{font-size:11px;color:#888}
+.hbtn{background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:3px 5px;border-radius:5px;transition:background .15s;color:var(--hdr-t)}
+.hbtn:hover{background:rgba(255,255,255,.12)}
+.sbadge{font-size:11px;padding:3px 9px;border-radius:5px;font-weight:500}
+.sbadge.ok{background:#15803d;color:#dcfce7}.sbadge.warn{background:#92400e;color:#fef3c7}
+
+/* ── Temporizador ── */
+#timer-wrap{display:flex;align-items:center;gap:4px;background:var(--timer-bg);border-radius:7px;padding:3px 8px;border:1px solid rgba(255,255,255,.1)}
+#timer-display{font-size:13px;font-weight:700;font-family:monospace;color:var(--timer-t);min-width:58px;text-align:center;cursor:pointer;border-radius:3px;padding:1px 3px}
+#timer-display:hover{background:rgba(255,255,255,.08)}
+#timer-display.editing{background:rgba(255,255,255,.15);outline:none;color:var(--timer-t)}
+#timer-display.danger{color:var(--timer-danger)}
+#timer-wrap button{background:none;border:none;cursor:pointer;color:rgba(255,255,255,.7);font-size:12px;padding:1px 3px;border-radius:3px;line-height:1}
+#timer-wrap button:hover{background:rgba(255,255,255,.12);color:#fff}
+
+/* ── Barra de progreso ── */
+#prog-wrap{height:3px;background:var(--prog);position:sticky;top:40px;z-index:99}
+#prog-bar{height:100%;background:var(--prog-fill);width:0%;transition:width .4s}
+
+/* ── Contenedor ── */
+.container{max-width:820px;margin:0 auto;padding:16px 12px}
+
+/* ── Buscador ── */
+.search-wrap{position:relative;margin-bottom:13px}
+.search-wrap input{width:100%;padding:8px 34px 8px 12px;border:1.5px solid var(--bd2);border-radius:8px;font-size:13px;background:var(--surf);color:var(--txt);outline:none;transition:border-color .15s}
+.search-wrap input:focus{border-color:var(--prog-fill)}
+.search-clear{position:absolute;right:9px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--txt3);font-size:16px;display:none;line-height:1}
+#search-count{font-size:11px;color:var(--txt3);margin-top:4px;display:none}
+
+/* ── Modo repaso ── */
+.mode-bar{display:flex;gap:6px;margin-bottom:12px;align-items:center}
+.mode-btn{padding:5px 12px;border:1.5px solid var(--bd2);border-radius:7px;cursor:pointer;font-size:12px;font-weight:500;background:var(--surf);color:var(--txt2);transition:all .15s}
+.mode-btn:hover{border-color:#999}
+.mode-btn.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Tabs ── */
+.tabs{display:flex;gap:7px;margin-bottom:13px;flex-wrap:wrap}
+.tab{padding:7px 14px;border:1.5px solid var(--tab-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;background:var(--surf);color:var(--tab-t);transition:all .15s}
+.tab:hover{border-color:#999;color:var(--txt)}
+.tab.t-all.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Score global ── */
+.ph-global{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 15px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-left:4px solid var(--prog-fill)}
+.score-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.sc{font-size:12px;font-weight:600;padding:3px 9px;border-radius:6px}
+.sc.ok{background:var(--sc-ok);color:var(--ok-t)}.sc.ko{background:var(--sc-ko);color:var(--ko-t)}.sc.rem{background:var(--sc-rem);color:var(--sc-rem-t)}
+
+/* ── Acciones ── */
+.global-actions{display:none;margin-bottom:10px;gap:7px;flex-wrap:wrap;align-items:center}
+.container[data-tab="all"] .global-actions{display:flex}
+.sec-actions{margin:6px 0 15px;display:flex;gap:7px;flex-wrap:wrap}
+.reset-btn{padding:7px 14px;background:var(--fab);color:var(--fab-t);border:none;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:opacity .15s}
+.reset-btn:hover{opacity:.82}
+.nota-btn{padding:7px 14px;background:var(--nota-btn-bg);color:var(--nota-btn-t);border:1.5px solid var(--nota-btn-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:background .15s}
+.nota-btn:hover{background:var(--all-bg)}
+
+/* ── Nota box ── */
+.nota-box,.global-nota-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:2px solid var(--bd2);font-size:13px;line-height:1.7;display:none}
+.nota-box.pass,.global-nota-box.pass{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t)}
+.nota-box.fail,.global-nota-box.fail{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t)}
+.nota-score{font-size:26px;font-weight:700;display:block;margin-bottom:4px}
+.nota-detail{font-size:12px;opacity:.85;font-family:monospace}
+
+/* ── Vista revisión ── */
+.review-list{margin-top:12px;border-top:1px solid var(--bd2);padding-top:10px}
+.review-title{font-size:12px;font-weight:700;margin-bottom:9px;color:var(--txt)}
+.review-sec-label{font-size:11.5px;font-weight:700;color:var(--txt3);margin:8px 0 5px;padding-top:6px;border-top:1px solid var(--bd)}
+.review-item{background:var(--surf);border-radius:8px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden}
+.review-item summary{padding:9px 12px;cursor:pointer;font-size:12.5px;color:var(--txt);list-style:none;display:flex;gap:8px;align-items:flex-start}
+.review-item summary::-webkit-details-marker{display:none}
+.review-item summary::before{content:'▶';font-size:9px;color:var(--txt3);flex-shrink:0;margin-top:4px;transition:transform .18s}
+details[open] summary::before{transform:rotate(90deg)}
+.review-body{padding:0 12px 11px}
+.review-ans{font-size:12px;color:var(--ok-t);margin-bottom:7px;font-weight:500}
+
+/* ── Estadísticas ── */
+.stats-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:1.5px solid var(--bd2);background:var(--surf);display:none}
+.stats-box.show{display:block}
+.stats-title{font-size:12px;font-weight:700;margin-bottom:10px;color:var(--txt)}
+.stats-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:12.5px}
+.stats-item:last-child{border-bottom:none}
+.stats-bar-wrap{flex:1;background:var(--sc-rem);border-radius:4px;height:6px;overflow:hidden}
+.stats-bar{height:100%;background:var(--ko-bd);border-radius:4px;transition:width .4s}
+.stats-n{font-size:11px;color:var(--txt3);white-space:nowrap}
+.stats-q{flex:2;color:var(--txt);font-size:12px;line-height:1.3}
+
+/* ── Panel secciones ── */
+.sec-panel{display:none}.sec-panel.visible{display:block}
+.ph{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ph-left{flex:1;display:flex;flex-direction:column;gap:5px}
+.ph-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt3);margin-bottom:1px}
+.ph-desc{font-size:12px;color:var(--txt4)}
+.fbtn{padding:6px 12px;font-size:12px;font-weight:500;border:1.5px solid var(--bd2);border-radius:8px;cursor:pointer;background:var(--surf);color:var(--txt2);transition:all .15s;white-space:nowrap}
+.fbtn:hover{border-color:#999;color:var(--txt)}.fbtn.on{background:var(--ko-bg);color:#b91c1c;border-color:#f87171}
+.no-failed{display:none;text-align:center;padding:16px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin-top:4px}
+.no-failed.show{display:block}
+.no-results{display:none;text-align:center;padding:20px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin:8px 0}
+
+/* ── Hint ── */
+.hint{font-size:11px;color:var(--txt3);margin-bottom:15px;padding:7px 11px;background:var(--hint);border-radius:6px;border:1px solid var(--hint-bd)}
+
+/* ── Tarjeta ── */
+.qcard{background:var(--surf);border-radius:10px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden;transition:box-shadow .15s}
+.qcard:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.qcard.kb-focus{outline:2px solid var(--prog-fill);outline-offset:-2px}
+.qcard.search-hidden{display:none}
+.qhead{padding:11px 13px;cursor:pointer;display:flex;align-items:flex-start;gap:9px}
+
+/* ── Badge numérico ── */
+.qnum{font-size:11px;font-weight:700;padding:3px 7px;border-radius:5px;white-space:nowrap;flex-shrink:0;margin-top:2px;background:var(--sc-rem);color:var(--sc-rem-t)}
+/* En pestaña "Todos" siempre neutro; en sección aplica color de sección */
+.qnum.sec-colored{background:var(--sec-dim);color:var(--sec-col)}
+
+.qtxt{font-size:13px;line-height:1.5;flex:1}
+.star-btn{background:none;border:none;cursor:pointer;font-size:15px;color:var(--star);padding:0 2px;flex-shrink:0;margin-top:2px;line-height:1;transition:color .15s,transform .15s}
+.star-btn:hover{transform:scale(1.2)}
+.star-btn .si{display:inline}.star-btn .sf{display:none}
+.star-btn.on .si{display:none}.star-btn.on .sf{display:inline;color:var(--star-on)}
+.chev{font-size:15px;color:var(--bd2);flex-shrink:0;margin-top:2px;transition:transform .2s}
+.qhead.open .chev{transform:rotate(180deg)}
+.qbody{display:none;padding:0 13px 13px}.qbody.open{display:block}
+
+/* ── Imagen ── */
+.clinimg-wrap{margin:9px 0 7px;background:#111;border-radius:8px;overflow:hidden;border:1px solid var(--bd2);text-align:center}
+.clinimg{max-width:100%;max-height:340px;object-fit:contain;display:block;margin:0 auto}
+.clinimg-cap{font-size:11px;color:var(--txt3);padding:4px 0 5px;background:var(--hint);border-top:1px solid var(--bd)}
+
+/* ── Opciones ── */
+.opts{list-style:none;margin-top:9px;display:flex;flex-direction:column;gap:5px}
+.opt{padding:9px 12px;border-radius:8px;border:1.5px solid var(--bd2);cursor:pointer;display:flex;align-items:flex-start;gap:9px;color:var(--txt);font-size:13px;line-height:1.45;transition:border-color .12s,background .12s;user-select:none}
+.opt:hover:not(.done){border-color:#999;background:var(--hint)}
+.opt.correct{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t);font-weight:500;cursor:default}
+.opt.wrong{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t);cursor:default}
+.opt.done:not(.correct):not(.wrong){cursor:default;opacity:.7}
+.onum{font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px;min-width:15px}
+
+/* ── Modo repaso rápido ── */
+.quick-card{padding:9px 12px;border-radius:8px;border:1.5px solid var(--ok-bd);background:var(--ok-bg);margin-top:8px}
+.quick-rc{font-size:12.5px;font-weight:600;color:var(--ok-t);margin-bottom:6px}
+
+/* ── Explicación ── */
+.expbox{margin-top:10px;padding:10px 12px;background:var(--exp);border-left:4px solid var(--exp-bd);border-radius:0 8px 8px 0;font-size:12.5px;color:var(--exp-t);line-height:1.65}
+.expbox b,.expbox strong{font-weight:600}
+.et{display:block;margin-bottom:4px;font-weight:600;font-size:13px}
+.atag{font-size:10px;padding:2px 6px;border-radius:4px;margin-left:5px;vertical-align:middle}
+.atag.ok{background:var(--sc-ok);color:var(--ok-t)}.atag.ko{background:var(--sc-ko);color:#c0392b}
+
+/* ── All-tab CSS ── */
+.container[data-tab="all"] .ph{display:none!important}
+.container[data-tab="all"] .sec-actions{display:none!important}
+.container[data-tab="all"] .no-failed{display:none!important}
+.container[data-tab="all"] .nota-box{display:none!important}
+.container:not([data-tab="all"]) .global-nota-box{display:none!important}
+.container:not([data-tab="all"]) #stats-global{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="h-tit">Banco MIR</h1>
+  <div class="hright">
+    <span class="hmeta" id="h-meta"></span>
+    <!-- Temporizador -->
+    <div id="timer-wrap" title="Haz clic en el tiempo para editar">
+      <span id="timer-display">0:00:00</span>
+      <button id="btn-tplay" onclick="timerToggle()" title="Play/Pausa">▶</button>
+      <button onclick="timerReset()" title="Reset">↺</button>
+    </div>
+    <button class="hbtn" id="btn-dark" onclick="toggleDark()" title="Modo oscuro">🌙</button>
+    <span id="save-badge" class="sbadge"></span>
+  </div>
+</header>
+<div id="prog-wrap"><div id="prog-bar"></div></div>
+
+<div class="container" id="main-cont" data-tab="all">
+  <!-- Buscador -->
+  <div class="search-wrap">
+    <input type="text" id="search-input" placeholder="🔍 Buscar en enunciados..." oninput="onSearch(this.value)">
+    <button class="search-clear" id="search-clear" onclick="clearSearch()">✕</button>
+  </div>
+  <div id="search-count"></div>
+
+  <!-- Modo -->
+  <div class="mode-bar">
+    <span style="font-size:11.5px;color:var(--txt3);font-weight:600">MODO:</span>
+    <button class="mode-btn on" id="mode-test" onclick="setMode('test')">📝 Test</button>
+    <button class="mode-btn" id="mode-quick" onclick="setMode('quick')">⚡ Repaso rápido</button>
+    <button class="mode-btn" id="btn-stars" onclick="filterStarred()" style="margin-left:auto;border-color:#f59e0b;color:#b45309">⭐ Marcadas</button>
+    <button class="mode-btn" id="btn-stats" onclick="toggleStats()">📊 Errores</button>
+  </div>
+
+  <!-- Stats globales -->
+  <div class="stats-box" id="stats-global"></div>
+
+  <!-- Tabs -->
+  <div class="tabs" id="tabs-wrap"></div>
+
+  <!-- Score global -->
+  <div class="ph-global">
+    <div class="ph-left">
+      <span class="ph-desc" id="ph-gdesc"></span>
+      <div class="score-row">
+        <span class="sc ok" id="sc-ok-all">✓ 0</span>
+        <span class="sc ko" id="sc-ko-all">✗ 0</span>
+        <span class="sc rem" id="sc-rem-all">○ 0</span>
+      </div>
+    </div>
+  </div>
+  <div class="global-actions">
+    <button class="reset-btn" onclick="resetAll()">↺ Reiniciar y mezclar</button>
+    <button class="nota-btn" onclick="calcNotaAll()">✎ Calcular nota global</button>
+  </div>
+  <div class="global-nota-box" id="nota-all"></div>
+  <p class="hint">💡 <b>1–5</b> responde · <b>↑↓</b> navega · <b>S</b> marca ⭐ · Progreso guardado automáticamente</p>
+
+  <div id="panels-wrap"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════ MOTOR v10 ═══════════════════════════════════════ */
+
+var KEY=/*__KEY__*/'mir_parciales_micro_inm_v1';
+var META=/*__META_JSON__*/{"titulo":"Parciales Microbiolog\u00eda e Inmunolog\u00eda","subtitulo":"Parcial 1 \u00b7 Parcial 2 \u00b7 Parcial 2023-24","examen":"Parciales Micro-Inm \u00b7 2023-2024","secciones":{"micro":{"label":"Microbiolog\u00eda","emoji":"\ud83e\udda0","color":"#0b7c5a","colorDim":"#dcf5ed","desc":"Bacterias \u00b7 Virus \u00b7 Hongos \u00b7 Par\u00e1sitos \u00b7 T\u00e9cnicas \u00b7 Esterilizaci\u00f3n"},"inm":{"label":"Inmunolog\u00eda","emoji":"\ud83d\udee1\ufe0f","color":"#1d4ed8","colorDim":"#dbeafe","desc":"Inmunidad innata \u00b7 Adaptativa \u00b7 Complemento \u00b7 Anticuerpos \u00b7 Inmunodeficiencias"}}};
+var D=/*__D_JSON__*/{"micro":[{"n":"P1A-1","noShuffle":false,"img":null,"q":"El lipopolisac\u00e1rido (LPS):","o":["Est\u00e1 compuesto por cadenas de az\u00facares unidas a trav\u00e9s de enlaces en los que participan p\u00e9ptidos.","Es degradado por la lisozima.","Es una endotoxina.","Forma parte de la c\u00e1psula de bacterias Gram negativas."],"c":3,"e":"El <b>LPS</b> es la <b>endotoxina</b> de la membrana externa de bacterias gram negativas, compuesta por l\u00edpido A (t\u00f3xico), core polisac\u00e1rido y cadena O. La lisozima degrada el peptidoglicano, no el LPS. No es componente capsular."},{"n":"P1A-2","noShuffle":true,"img":null,"q":"Un cultivo puro se refiere a:","o":["Una poblaci\u00f3n de microorganismos obtenida a partir de un individuo enfermo.","Una poblaci\u00f3n de microorganismos gen\u00e9ticamente id\u00e9nticos.","Una cepa.","C y B son correctas."],"c":4,"e":"Un <b>cultivo puro</b> contiene microorganismos <b>gen\u00e9ticamente id\u00e9nticos</b> derivados de un \u00fanico progenitor, lo que equivale a una <b>cepa</b>. No implica origen cl\u00ednico. Koch fue quien estableci\u00f3 el concepto de cultivo puro."},{"n":"P1A-3","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de los siguientes m\u00e9todos f\u00edsicos o qu\u00edmicos NO es esterilizante?","o":["Autoclavado.","Hipoclorito de sodio.","\u00d3xido de Etileno.","Radiaci\u00f3n ionizante."],"c":2,"e":"El <b>hipoclorito de sodio</b> (lej\u00eda) es un <b>desinfectante</b>, no un esterilizante: inactiva la mayor\u00eda de microorganismos pero no elimina de forma fiable las endosporas. El autoclavado, el \u00f3xido de etileno y la radiaci\u00f3n ionizante s\u00ed son m\u00e9todos esterilizantes."},{"n":"P1A-4","noShuffle":false,"img":null,"q":"Si sospechamos que un paciente puede sufrir meningitis bacteriana, \u00bfcu\u00e1l es la combinaci\u00f3n correcta de muestra y t\u00e9cnica anal\u00edtica m\u00e1s adecuada para el diagn\u00f3stico?","o":["Sangre y diagn\u00f3stico indirecto por serolog\u00eda.","LCR y diagn\u00f3stico indirecto por MALDI-TOF.","LCR y diagn\u00f3stico directo por PCR.","LCR y diagn\u00f3stico directo por cultivo."],"c":3,"e":"Ante meningitis bacteriana, la muestra de elecci\u00f3n es el <b>LCR</b>. La <b>PCR</b> es la t\u00e9cnica directa de mayor sensibilidad y rapidez, especialmente \u00fatil si hay tratamiento antibi\u00f3tico previo que reduce el rendimiento del cultivo. El cultivo tambi\u00e9n es v\u00e1lido pero m\u00e1s lento."},{"n":"P1A-5","noShuffle":false,"img":null,"q":"\u00bfEn qu\u00e9 fase del proceso que siguen los microorganismos para provocar enfermedad participan los enzimas degradativos secretados por el propio microorganismo?","o":["La entrada.","La adhesi\u00f3n.","La colonizaci\u00f3n.","La invasi\u00f3n."],"c":4,"e":"Durante la <b>invasi\u00f3n</b>, el microorganismo penetra en tejidos m\u00e1s profundos usando <b>enzimas degradativos</b> (hialuronidasas, colagenasas, leucocidinas) que destruyen la matriz extracelular y las barreras tisulares. La adhesi\u00f3n y colonizaci\u00f3n son pasos previos."},{"n":"P1B-1","noShuffle":false,"img":null,"q":"En el experimento de Pasteur, \u00bfqu\u00e9 se tuvo en cuenta?","o":["El calor se us\u00f3 para desinfectar y que no hubiera microorganismos.","El l\u00edquido se calienta en un recipiente cerrado.","El concepto de cultivo puro."],"c":1,"e":"Pasteur calent\u00f3 el caldo nutritivo para <b>eliminar microorganismos preexistentes</b> y dise\u00f1\u00f3 el matraz de cuello de cisne, que permit\u00eda el contacto con el aire pero imped\u00eda la entrada de part\u00edculas. As\u00ed refut\u00f3 la generaci\u00f3n espont\u00e1nea."},{"n":"P1B-3","noShuffle":false,"img":null,"q":"\u00bfC\u00f3mo se deben esterilizar unas pinzas de quir\u00f3fano?","o":["Autoclavado.","Gas.","\u00d3xido de etileno.","Radiaci\u00f3n ionizante."],"c":3,"e":"El <b>\u00f3xido de etileno</b> (gas) es el m\u00e9todo de elecci\u00f3n para instrumental quir\u00fargico termosensible o con cavidades, incluyendo pinzas con articulaciones. Penetra en todos los rincones y esteriliza en fr\u00edo, sin da\u00f1ar los materiales."},{"n":"P1B-4","noShuffle":false,"img":null,"q":"En un hemocultivo que ha salido positivo, \u00bfqu\u00e9 indica?","o":["Un microorganismo extracelular.","Un microorganismo intracelular.","Un microorganismo extracelular; adem\u00e1s podemos ver si es anaerobio o aerobio.","No se puede saber, falta informaci\u00f3n."],"c":3,"e":"El <b>hemocultivo</b> detecta microorganismos <b>extracelulares</b> en sangre (bacteriemia/fungemia). Los frascos aerobios y anaerobios permiten adem\u00e1s determinar los <b>requerimientos atmosf\u00e9ricos</b>. Los intracelulares obligados (Chlamydia, Rickettsia) no crecen en hemocultivo."},{"n":"P1B-5","noShuffle":false,"img":null,"q":"Los peptidoglicanos:","o":["Solo se encuentran en bacterias Gram +.","Se eliminan por lisozima.","Son cadenas de p\u00e9ptidos con residuos de glicanos unidos entre s\u00ed mediante az\u00facares.","Las gram \u2013 se unen mediante puentes intermedios y las gram + se unen directamente."],"c":2,"e":"La <b>lisozima</b> rompe el enlace \u03b2-1,4 entre NAM y NAG del peptidoglicano, destruyendo la pared bacteriana. El peptidoglicano est\u00e1 en gram+ y gram-; en gram+ hay m\u00e1s capas. En gram+, los puentes interpept\u00eddicos son directos o mediante puentes de pentaglicina."},{"n":"P2-1","noShuffle":false,"img":null,"q":"En el crecimiento microbiano, la fase estacionaria:","o":["Es la fase en la que se generan el mismo n\u00famero de microorganismos que mueren.","Aparece porque los microorganismos necesitan sintetizar prote\u00ednas y enzimas espec\u00edficas para crecer y dividirse.","Es la fase en la que los microorganismos crecen de forma exponencial.","Aparece porque los microorganismos cambian su metabolismo de fermentaci\u00f3n a respiraci\u00f3n aer\u00f3bica."],"c":1,"e":"En la <b>fase estacionaria</b>, la tasa de crecimiento es igual a la tasa de muerte: la poblaci\u00f3n se mantiene constante. Se debe al agotamiento de nutrientes y acumulaci\u00f3n de metabolitos t\u00f3xicos. La fase exponencial precede a esta."},{"n":"P2-2","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes afirmaciones referidas a los virus de la familia Herpesviridae es correcta?","o":["Son virus dsRNA desnudos.","Se caracterizan por tener tropismo por c\u00e9lulas en divisi\u00f3n.","Incluye al virus de la Varicela-z\u00f3ster, al Citomegalovirus y al virus del Epstein-Barr.","El Citomegalovirus presenta una relaci\u00f3n etiol\u00f3gica con el linfoma de Burkitt y el carcinoma nasofar\u00edngeo."],"c":3,"e":"<b>Herpesviridae</b>: virus dsDNA envueltos con capacidad de latencia. La familia incluye VHS-1/2, VZV, CMV, VEB, VHH-6/7/8. El <b>VEB</b> se asocia al linfoma de Burkitt y carcinoma nasofar\u00edngeo, no el CMV. El tropismo es por c\u00e9lulas no necesariamente en divisi\u00f3n."},{"n":"P2-3","noShuffle":false,"img":null,"q":"Un var\u00f3n de 52 a\u00f1os sufri\u00f3 una peritonitis. Tras cirug\u00eda con clindamicina y ceftazidima, a los 5 d\u00edas presenta diarrea abundante, retortijones, fiebre 38,5 \u00b0C y posteriormente heces sanguinolentas con placas blancas en mucosa del colon. \u00bfMicroorganismo m\u00e1s probable?","o":["Bacillus cereus.","Escherichia coli.","Pseudomonas aeruginosa.","Clostridium difficile."],"c":4,"e":"<b>C. difficile</b>: colitis pseudomembranosa tras antibioticoterapia de amplio espectro que altera la microbiota. Las <b>placas blancas</b> (pseudomembranas) en colon son el hallazgo caracter\u00edstico. Produce toxinas A (enterotoxina) y B (citotoxina)."},{"n":"P2-4","noShuffle":false,"img":null,"q":"\u00bfC\u00f3mo se transmite Legionella pneumophila?","o":["Por ingesta de agua contaminada.","Por ingesta de alimentos contaminados.","Por inhalaci\u00f3n de got\u00edculas con el microorganismo.","Por infecci\u00f3n de heridas con el microorganismo."],"c":3,"e":"<b>Legionella pneumophila</b> se transmite por <b>inhalaci\u00f3n de aerosoles</b> procedentes de instalaciones de agua (torres de refrigeraci\u00f3n, duchas, humidificadores). No se transmite persona a persona ni por ingesta. Causa neumon\u00eda at\u00edpica grave (enfermedad del Legionario)."},{"n":"P2-5","noShuffle":false,"img":null,"q":"Los virus clase VI de Baltimore:","o":["Tienen genoma de RNA doble cadena.","Su genoma se usa directamente como RNA mensajero.","Introducen su genoma en el de la c\u00e9lula hu\u00e9sped a trav\u00e9s de un intermediario DNA doble cadena.","Utilizan la transcriptasa reversa para generar nuevos genomas."],"c":3,"e":"Los <b>retrovirus (clase VI)</b> tienen ARN monocatenario (+) que la <b>transcriptasa inversa</b> retrotranscribe a ADNbc. Este se integra en el genoma celular como provirus. El ARN viral no se usa directamente como molde para nuevos genomas."},{"n":"P2-6","noShuffle":false,"img":null,"q":"\u00bfEn qu\u00e9 se diferencian Helicobacter pylori y Campylobacter jejuni?","o":["H. pylori degrada az\u00facares mientras que C. jejuni no.","La transmisi\u00f3n de persona a persona es conocida en la infecci\u00f3n por H. pylori pero no en C. jejuni.","H. pylori provoca complicaciones autoinmunitarias y C. jejuni \u00falceras p\u00e9pticas.","H. pylori es un microorganismo microaer\u00f3filo y C. jejuni aerobio estricto."],"c":3,"e":"<b>H. pylori</b> causa \u00falceras p\u00e9pticas y gastritis; <b>C. jejuni</b> se asocia a artritis reactiva y s\u00edndrome de Guillain-Barr\u00e9 (complicaciones <b>autoinmunitarias</b> posdiarrea). Ambos son microaer\u00f3filos. C. jejuni tampoco fermenta az\u00facares relevantes."},{"n":"P2-7","noShuffle":true,"img":null,"q":"Mujer de 28 a\u00f1os sexualmente activa con vaginitis y flujo anormal. Muestra sembrada en medios para bacterias causantes de ETS. Tras 24h, no hay crecimiento. \u00bfDiagn\u00f3stico posible?","o":["S\u00edfilis.","Clamidiasis.","Gonorrea.","A y B podr\u00edan ser correctas."],"c":4,"e":"<b>Treponema pallidum</b> (s\u00edfilis) no crece en medios artificiales. <b>Chlamydia trachomatis</b> es intracelular obligada, tampoco crece en agar convencional. La gonorrea (Neisseria gonorrhoeae) s\u00ed crece en medios espec\u00edficos. Por eso s\u00edfilis y clamidia son diagn\u00f3sticos compatibles."},{"n":"P2-8","noShuffle":false,"img":null,"q":"Entre las infecciones que produce S. aureus, NO se encuentra:","o":["Intoxicaci\u00f3n alimentaria.","Artritis s\u00e9ptica.","Imp\u00e9tigo.","Fiebre reum\u00e1tica."],"c":4,"e":"La <b>fiebre reum\u00e1tica</b> es una complicaci\u00f3n autoinmunitaria de la faringitis por <b>Streptococcus pyogenes</b>, no de S. aureus. S. aureus s\u00ed causa intoxicaci\u00f3n alimentaria (toxina termoestable), artritis s\u00e9ptica e imp\u00e9tigo bulloso (toxina exfoliativa)."},{"n":"23-1","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes afirmaciones NO corresponde a los postulados originales de Koch (aunque es verdadera)?","o":["En una enfermedad infecciosa, el microorganismo que causa la infecci\u00f3n se encuentra en el individuo enfermo y no en los individuos sanos.","Algunas enfermedades infecciosas est\u00e1n provocadas por diversos microorganismos.","El microorganismo causante de la infecci\u00f3n debe poder ser cultivado a partir de los productos o secreciones del individuo enfermo.","Cuando el microorganismo pat\u00f3geno es inoculado a un animal susceptible de infectarse, debe reproducir la sintomatolog\u00eda de la enfermedad."],"c":2,"e":"Koch postul\u00f3 que cada enfermedad infecciosa tiene un <b>\u00fanico microorganismo</b> causal espec\u00edfico. La afirmaci\u00f3n de que varias enfermedades pueden tener m\u00faltiples agentes causales contradice sus postulados originales, aunque hoy sabemos que es una limitaci\u00f3n superada."},{"n":"23-2","noShuffle":false,"img":null,"q":"Las endosporas:","o":["Facilitan la reproducci\u00f3n de las bacterias.","Se pueden eliminar mediante desinfecci\u00f3n.","Son generadas por los g\u00e9neros Bacillus y Clostridium.","Se forman dentro de los individuos o animales infectados."],"c":3,"e":"Las <b>endosporas</b> son estructuras de resistencia extrema formadas por <b>Bacillus</b> y <b>Clostridium</b> ante condiciones adversas. No son reproductivas. Son resistentes a la desinfecci\u00f3n ordinaria (requieren esterilizaci\u00f3n). Se forman en el ambiente, no en el hu\u00e9sped."},{"n":"23-3","noShuffle":false,"img":null,"q":"El peptidoglicano:","o":["Es degradado por la lisozima.","Est\u00e1 compuesto por cadenas de p\u00e9ptidos unidas a trav\u00e9s de enlaces en los que participan az\u00facares.","Forma parte de la c\u00e1psula bacteriana.","Solamente est\u00e1 presente en las bacterias Gram negativas."],"c":1,"e":"La <b>lisozima</b> hidroliza el enlace \u03b2-1,4 entre N-acetilmuramato (NAM) y N-acetilglucosamina (NAG) del peptidoglicano, destruyendo la pared bacteriana. El peptidoglicano est\u00e1 en todas las bacterias (gram+ en mayor cantidad). No es componente capsular."},{"n":"23-4","noShuffle":false,"img":null,"q":"De las siguientes combinaciones microorganismo/t\u00e9cnica de diagn\u00f3stico directo de primera elecci\u00f3n, \u00bfcu\u00e1l ser\u00eda la correcta?","o":["Detecci\u00f3n de par\u00e1sitos por inmunocromatograf\u00eda.","Detecci\u00f3n de hongos y bacterias por microscop\u00eda.","Detecci\u00f3n de hongos y bacterias por ELISA.","Detecci\u00f3n de virus por PCR."],"c":4,"e":"La <b>PCR</b> es la t\u00e9cnica de diagn\u00f3stico directo de primera elecci\u00f3n para <b>virus</b>: alta sensibilidad/especificidad, detecta material gen\u00e9tico incluso sin crecimiento viral. La microscop\u00eda es \u00fatil para hongos/par\u00e1sitos; la inmunocromatograf\u00eda para ant\u00edgenos r\u00e1pidos."},{"n":"23-5","noShuffle":false,"img":null,"q":"Entre las infecciones que provoca Staphylococcus aureus, NO se encuentra:","o":["Imp\u00e9tigo.","S\u00edndrome del shock t\u00f3xico.","Faringitis.","Intoxicaci\u00f3n alimentaria."],"c":3,"e":"La <b>faringitis</b> estreptoc\u00f3cica es causada por <i>Streptococcus pyogenes</i>, no por S. aureus. S. aureus causa imp\u00e9tigo bulloso (toxina exfoliativa), s\u00edndrome del shock t\u00f3xico (TSST-1) e intoxicaci\u00f3n alimentaria (enterotoxinas termoestables)."},{"n":"23-6","noShuffle":false,"img":null,"q":"Seg\u00fan la clasificaci\u00f3n de Spaulding, un material semicr\u00edtico:","o":["Entra en contacto con piel intacta.","Se somete a desinfecci\u00f3n de alto nivel.","Podr\u00eda ser un cat\u00e9ter vascular.","Tiene un riesgo de infecci\u00f3n bajo."],"c":2,"e":"Los materiales <b>semicr\u00edticos</b> contactan con mucosas o piel no intacta y requieren <b>desinfecci\u00f3n de alto nivel</b> (ej. endoscopios). Los cr\u00edticos (cat\u00e9teres vasculares) requieren esterilizaci\u00f3n. Los no cr\u00edticos solo desinfecci\u00f3n de bajo nivel."},{"n":"23-7","noShuffle":false,"img":null,"q":"El carbunco:","o":["Es una enfermedad infecciosa que afecta \u00fanicamente a humanos.","Est\u00e1 provocada por la especie Bacillus cereus.","La forma gastrointestinal puede ser hem\u00e9tica o diarreica.","La inhalaci\u00f3n de esporas est\u00e1 relacionada con el bioterrorismo."],"c":4,"e":"El <b>carbunco</b> (<i>Bacillus anthracis</i>) afecta principalmente a herb\u00edvoros; en humanos por contacto laboral. La forma <b>inhalatoria</b> (fiebre de lana) es la m\u00e1s grave y ha sido utilizada en <b>bioterrorismo</b>. B. cereus causa toxiinfecci\u00f3n alimentaria, no carbunco."},{"n":"23-8","noShuffle":false,"img":null,"q":"Paciente con cat\u00e9ter venoso central, fiebre postoperatoria, signos inflamatorios en la tunelizaci\u00f3n y hemocultivos positivos con cocos Gram + en la tinci\u00f3n. \u00bfCu\u00e1l es el pat\u00f3geno m\u00e1s probable?","o":["Streptococcus pyogenes.","Enterococcus faecalis.","Meningococo.","Staphylococcus epidermidis."],"c":4,"e":"<b>S. epidermidis</b> (SCN) es el principal causante de infecciones asociadas a <b>cat\u00e9ter venoso central</b>: forma biofilm sobre el dispositivo. Es coco gram+, coagulasa negativo. El meningococo es gram-, S. pyogenes no coloniza cat\u00e9teres habitualmente."},{"n":"23-9","noShuffle":false,"img":null,"q":"Un frasco de hemocultivo contiene:","o":["Compuestos que neutralizan o inactivan componentes del sistema inmunitario.","Antibi\u00f3ticos para mantener en buen estado la muestra.","Detergentes, como la saponina, para lisar las c\u00e9lulas y liberar los microorganismos.","Fijadores, como el formol, para determinar la presencia de par\u00e1sitos."],"c":3,"e":"Los frascos de hemocultivo contienen <b>saponina u otros detergentes</b> para lisar leucocitos y eritrocitos, liberando los microorganismos fagocitados y facilitando su crecimiento. Tambi\u00e9n contienen resinas que neutralizan antibi\u00f3ticos del suero del paciente."},{"n":"23-10","noShuffle":false,"img":null,"q":"Un pat\u00f3geno oportunista:","o":["Puede mantener una relaci\u00f3n de mutualismo o parasitismo con su hospedador.","No necesita producir factores de virulencia para provocar una enfermedad infecciosa.","Su patogenicidad depende en exclusiva de la susceptibilidad del hu\u00e9sped.","Es, por ejemplo, Streptococcus agalactiae."],"c":1,"e":"Un <b>pat\u00f3geno oportunista</b> puede coexistir como comensal (mutualismo) en un hu\u00e9sped inmunocompetente, pero provocar infecci\u00f3n grave en inmunodeprimidos. Su patogenicidad depende tanto de su virulencia como del estado inmune del hu\u00e9sped, no exclusivamente de este."}],"inm":[{"n":"P1A-6","noShuffle":false,"img":null,"q":"Los monocitos son c\u00e9lulas:","o":["Precursores de los macr\u00f3fagos.","Granulocitos polimorfonucleados.","Residentes de los tejidos.","Del linaje linfoide."],"c":1,"e":"Los <b>monocitos</b> circulan en sangre y son <b>precursores de los macr\u00f3fagos</b> tisulares. Pertenecen al linaje mieloide (no linfoide) y no son granulocitos. Al migrar a tejidos se diferencian en macr\u00f3fagos, que s\u00ed son residentes tisulares."},{"n":"P1A-7","noShuffle":false,"img":null,"q":"Indique la afirmaci\u00f3n correcta sobre las diferentes citocinas mencionadas:","o":["TGF-\u03b2 es una citocina proinflamatoria.","IL-2 favorece la activaci\u00f3n y proliferaci\u00f3n de los linfocitos T.","IL-1 es una citocina antiinflamatoria.","C3a act\u00faa como agente quimiot\u00e1ctico."],"c":2,"e":"La <b>IL-2</b> es una citocina autocr\u00edna producida por linfocitos T activados que promueve su <b>proliferaci\u00f3n y supervivencia</b>. TGF-\u03b2 es antiinflamatoria/reguladora; IL-1 es proinflamatoria; C3a es anafilatoxina (vasodilataci\u00f3n), no quimiot\u00e1ctico (eso es C5a)."},{"n":"P1A-8","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes mol\u00e9culas es un patr\u00f3n molecular asociado a da\u00f1o (DAMP)?","o":["ATP.","NLR.","LPS.","MBL."],"c":1,"e":"El <b>ATP</b> extracelular es un <b>DAMP</b> (patr\u00f3n molecular asociado a da\u00f1o): se\u00f1al de alarma liberada por c\u00e9lulas da\u00f1adas o necr\u00f3ticas. LPS es un PAMP bacteriano; NLR y MBL son receptores del sistema inmune innato, no ligandos."},{"n":"P1A-9","noShuffle":false,"img":null,"q":"En referencia a las c\u00e9lulas NK:","o":["Participan en la eliminaci\u00f3n de microorganismos extracelulares.","Pertenecen al linaje linfoide.","Expresan en su superficie CD16 que reconoce el ant\u00edgeno presentado por MHC.","Liberan gr\u00e1nulos favoreciendo la eliminaci\u00f3n de la c\u00e9lula diana por mecanismos de necrosis."],"c":2,"e":"Las c\u00e9lulas <b>NK</b> derivan del linaje <b>linfoide</b> (como T y B), aunque forman parte de la inmunidad innata. Act\u00faan sobre c\u00e9lulas con MHC-I reducido. CD16 reconoce IgG unida a la c\u00e9lula diana (ADCC), no el complejo p\u00e9ptido-MHC. Inducen <b>apoptosis</b>, no necrosis."},{"n":"P1A-10","noShuffle":false,"img":null,"q":"Se llama linfocito efector a:","o":["Las c\u00e9lulas que no han estado nunca en contacto con el ant\u00edgeno.","Las c\u00e9lulas que han participado en la respuesta inmune ya finalizada y ahora se encuentran en reposo.","Las c\u00e9lulas recientemente activadas y con capacidad para participar en la respuesta inmune.","Las c\u00e9lulas que tienen que sufrir un proceso de maduraci\u00f3n para ejercer su funci\u00f3n."],"c":3,"e":"Los <b>linfocitos efectores</b> son c\u00e9lulas <b>recientemente activadas</b> por el ant\u00edgeno y capaces de ejecutar la respuesta inmune (producir anticuerpos, citotoxicidad). Los v\u00edrgenes no han contactado ant\u00edgeno; los de memoria est\u00e1n en reposo tras una respuesta previa."},{"n":"P1B-2","noShuffle":false,"img":null,"q":"En una enfermedad infecciosa:","o":["Debe haber fase de convalecencia.","Debe haber per\u00edodo de incubaci\u00f3n.","No tiene por qu\u00e9 provocar cambios fisiol\u00f3gicos en el individuo."],"c":2,"e":"En toda enfermedad infecciosa existe un <b>per\u00edodo de incubaci\u00f3n</b> (desde la entrada del pat\u00f3geno hasta la aparici\u00f3n de s\u00edntomas). No siempre hay convalecencia (algunas son fulminantes o subcl\u00ednicas). Siempre hay alguna alteraci\u00f3n fisiol\u00f3gica, aunque sea subcl\u00ednica."},{"n":"P1B-6","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1les son las c\u00e9lulas m\u00e1s importantes de la inmunidad innata?","o":["NK.","Linfocitos y monocitos.","Complemento y fagocitos.","Otra."],"c":3,"e":"Los <b>fagocitos</b> (neutr\u00f3filos, macr\u00f3fagos) y el <b>complemento</b> son los pilares de la inmunidad innata: reconocen PAMPs de forma inespec\u00edfica, fagocitan y destruyen microorganismos. Las NK tambi\u00e9n son innatas pero se consideran complementarias."},{"n":"P1B-7","noShuffle":false,"img":null,"q":"Los linfocitos B se asocian con el marcador:","o":["CD3.","CD19.","CD34.","CD1."],"c":2,"e":"<b>CD19</b> es el marcador de superficie espec\u00edfico de <b>linfocitos B</b> en todas sus etapas madurativas. CD3 es el complejo se\u00f1alizador del TCR en linfocitos T; CD34 marca progenitores hematopoy\u00e9ticos; CD1 presenta ant\u00edgenos lip\u00eddicos."},{"n":"P1B-8","noShuffle":false,"img":null,"q":"Las integrinas:","o":["Tienen uni\u00f3n d\u00e9bil.","Tienen uni\u00f3n fuerte.","Son receptores de quimiocinas.","Son citocinas."],"c":2,"e":"Las <b>integrinas</b> median la <b>adhesi\u00f3n firme</b> del leucocito al endotelio (uni\u00f3n fuerte), paso imprescindible para la diap\u00e9desis. Las selectinas median la adhesi\u00f3n d\u00e9bil inicial (rodamiento). Las quimiocinas activan las integrinas pero son reconocidas por receptores GPCR distintos."},{"n":"P1B-9","noShuffle":false,"img":null,"q":"La v\u00eda de la lectina del complemento:","o":["Tiene C1, C2, C3 y C4.","Une el sistema innato y adaptativo.","La convertasa C3 es C2bC4b.","Todas son correctas."],"c":3,"e":"En la v\u00eda de la lectina, MBL o ficolinas activan MASP-1/2, que escinden C4 y C2 formando la <b>convertasa C3: C4b2b</b> (equivalente a C4b2a seg\u00fan nomenclatura). C1 es exclusivo de la v\u00eda cl\u00e1sica. Esta v\u00eda pertenece a la inmunidad innata, no conecta con la adaptativa."},{"n":"P1B-10","noShuffle":false,"img":null,"q":"Un _____ se une espec\u00edficamente a _____ que es parte de _____:","o":["Anticuerpo / ep\u00edtopo / ant\u00edgeno.","Anticuerpo / ant\u00edgeno / ep\u00edtopo.","Anticuerpo / inmun\u00f3geno / ant\u00edgeno.","Ep\u00edtopo / anticuerpo / ant\u00edgeno."],"c":1,"e":"Un <b>anticuerpo</b> se une espec\u00edficamente a un <b>ep\u00edtopo</b> (determinante antig\u00e9nico), que es la parte del <b>ant\u00edgeno</b> reconocida por el paratopo del anticuerpo. Un ant\u00edgeno puede tener m\u00faltiples ep\u00edtopos reconocidos por distintos anticuerpos."},{"n":"P2-9","noShuffle":false,"img":null,"q":"En la maduraci\u00f3n de los linfocitos B, el reordenamiento de los genes que codifican la cadena pesada por recombinaci\u00f3n som\u00e1tica:","o":["Se induce como respuesta a un ant\u00edgeno concreto.","Se produce en los ganglios linf\u00e1ticos.","Es independiente de ant\u00edgeno.","B y C son correctas."],"c":3,"e":"El reordenamiento V(D)J de la cadena pesada ocurre en m\u00e9dula \u00f3sea de forma <b>ant\u00edgeno-independiente</b>. La hipermutaci\u00f3n som\u00e1tica y el cambio de clase (ant\u00edgeno-dependientes) suceden despu\u00e9s en \u00f3rganos linfoides secundarios."},{"n":"P2-10","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de los siguientes componentes del sistema inmune es especialmente relevante para la respuesta inmunitaria frente a bacterias extracelulares?","o":["C\u00e9lulas NK.","IgE.","Complemento.","Linfocitos T citot\u00f3xicos."],"c":3,"e":"El <b>complemento</b> (v\u00edas alternativa y de lectinas) es clave frente a bacterias extracelulares: opsonizaci\u00f3n con C3b, lisis por MAC y quimiotaxis por C5a. Las NK y CD8+ act\u00faan frente a virus/intracelulares; la IgE frente a par\u00e1sitos."},{"n":"P2-11","noShuffle":false,"img":null,"q":"Las vacunas:","o":["Tienen como objetivo generar anticuerpos.","Tienen como objetivo generar linfocitos T y B de memoria.","No est\u00e1n recomendadas en inmunodeprimidos.","Incluyen citocinas para potenciar la respuesta inmunitaria."],"c":2,"e":"El objetivo fundamental de la vacunaci\u00f3n es inducir <b>memoria inmunol\u00f3gica</b> (linfocitos T y B de memoria) para una respuesta m\u00e1s r\u00e1pida y potente ante el pat\u00f3geno real. Las vacunas inactivadas son seguras en inmunodeprimidos; las vivas atenuadas, con precauci\u00f3n."},{"n":"P2-12","noShuffle":false,"img":null,"q":"La conmutaci\u00f3n de isotipo:","o":["Se induce por citocinas que liberan los linfocitos T y por interacci\u00f3n directa linfocito T-B.","Se produce a nivel del ADN del gen de la Ig humana y modifica el sitio de uni\u00f3n al Ag.","Afecta a la regi\u00f3n variable de la cadena pesada de Ig.","Es un cambio de cadena ligera de Ig."],"c":1,"e":"La <b>conmutaci\u00f3n de isotipo</b> requiere la se\u00f1al de citocinas (IL-4\u2192IgE, IFN-\u03b3\u2192IgG) y la <b>interacci\u00f3n CD40-CD40L</b> entre LB y LT. Cambia la regi\u00f3n constante de la cadena pesada (mantiene la regi\u00f3n variable e igual especificidad antig\u00e9nica). Ocurre a nivel del ADN (recombinaci\u00f3n de clase)."},{"n":"P2-13","noShuffle":false,"img":null,"q":"Con respecto al receptor de la c\u00e9lula T (TCR):","o":["Estructuralmente pertenece a la superfamilia de las inmunoglobulinas.","Es una inmunoglobulina de membrana.","Aparece en la membrana de los linfocitos T y de las c\u00e9lulas NK.","Est\u00e1 compuesto por tres cadenas denominadas respectivamente alfa, beta y gamma."],"c":1,"e":"El <b>TCR</b> pertenece estructuralmente a la <b>superfamilia de las inmunoglobulinas</b> (dominios Ig), aunque no es una inmunoglobulina. Est\u00e1 formado por 2 cadenas (\u03b1\u03b2 o \u03b3\u03b4). Solo se expresa en linfocitos T, no en NK. Reconoce p\u00e9ptido-MHC, no ant\u00edgeno libre."},{"n":"P2-14","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 es el S\u00edndrome de DiGeorge?","o":["Una inmunodeficiencia primaria causada por una ausencia de linfocitos B.","Una inmunodeficiencia primaria causada por ausencia de linfocitos T.","Una enfermedad autoinmunitaria mediada por anticuerpos.","Una enfermedad autoinmunitaria mediada por linfocitos T."],"c":2,"e":"El <b>s\u00edndrome de DiGeorge</b> es una inmunodeficiencia primaria por aplasia/hipoplasia del <b>timo</b> (deleci\u00f3n 22q11), con ausencia o d\u00e9ficit de <b>linfocitos T</b>. Cursa con infecciones oportunistas graves. La agammaglobulinemia de Bruton afecta a linfocitos B."},{"n":"P2-15","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes c\u00e9lulas NO puede presentar ant\u00edgenos mediante MHC-II?","o":["C\u00e9lula dendr\u00edtica.","Linfocito T.","Linfocito B.","Macr\u00f3fago."],"c":2,"e":"Los <b>linfocitos T</b> no expresan MHC-II constitutivamente y no son c\u00e9lulas presentadoras de ant\u00edgeno profesionales. Las <b>APCs profesionales</b> con MHC-II son: c\u00e9lula dendr\u00edtica, linfocito B y macr\u00f3fago. La c\u00e9lula dendr\u00edtica es la m\u00e1s potente activadora de T v\u00edrgenes."},{"n":"23-11","noShuffle":false,"img":null,"q":"\u00bfC\u00f3mo se denominan las mol\u00e9culas de bajo peso molecular que por s\u00ed solas no desencadenan respuesta inmune, pero que con una mol\u00e9cula portadora pueden comportarse como inmun\u00f3genas?","o":["Ant\u00edgenos.","Al\u00e9rgenos.","Ep\u00edtopos.","Haptenos."],"c":4,"e":"Los <b>haptenos</b> son mol\u00e9culas peque\u00f1as que por s\u00ed solas no son inmun\u00f3genas, pero al conjugarse con una prote\u00edna portadora adquieren capacidad para inducir respuesta inmune. Son antig\u00e9nicos (se unen al anticuerpo) pero no inmun\u00f3genos de forma independiente."},{"n":"23-12","noShuffle":false,"img":null,"q":"En relaci\u00f3n con el sistema del complemento, indica la afirmaci\u00f3n FALSA:","o":["Las prote\u00ednas del complemento interaccionan entre s\u00ed de modo regulado formando la cascada enzim\u00e1tica.","La ruta cl\u00e1sica y de las lectinas conectan con el sistema inmune adaptativo.","En la ruta alternativa, el complemento interacciona directamente con el microorganismo.","Las rutas cl\u00e1sica, alternativa y de las lectinas comparten los \u00faltimos pasos de la activaci\u00f3n y fijaci\u00f3n del complemento."],"c":2,"e":"La ruta <b>cl\u00e1sica</b> conecta con la inmunidad adaptativa (activada por complejos ant\u00edgeno-anticuerpo IgG/IgM). La ruta de las <b>lectinas</b> es innata (activada por MBL al reconocer manosa). Afirmar que ambas conectan con la adaptativa es <b>falso</b>."},{"n":"23-13","noShuffle":false,"img":null,"q":"La fracci\u00f3n cristalizable (Fc) de un anticuerpo:","o":["Es la zona que reconoce el ant\u00edgeno.","Est\u00e1 formada por una cadena ligera y una cadena pesada.","Contiene zonas variables y constantes.","Es reconocible por otras mol\u00e9culas y efectoras del sistema inmunitario."],"c":4,"e":"La regi\u00f3n <b>Fc</b> est\u00e1 formada por los dominios constantes de las dos cadenas pesadas. Es reconocida por <b>receptores Fc</b> de c\u00e9lulas efectoras (macr\u00f3fagos, NK, neutr\u00f3filos) y por el complemento (C1q). La regi\u00f3n Fab (variable) es la que reconoce el ant\u00edgeno."},{"n":"23-14","noShuffle":true,"img":null,"q":"\u00bfCu\u00e1l de las siguientes caracter\u00edsticas es exclusiva de un ant\u00edgeno T-independiente?","o":["Genera elevada memoria.","Necesita que el linfocito CD4+ interaccione con el linfocito B para activar la producci\u00f3n de anticuerpos.","El linfocito B puede reconocerlo directamente.","Se relaciona con la producci\u00f3n de IgM \u00fanicamente."],"c":3,"e":"Los ant\u00edgenos <b>T-independientes</b> (polisac\u00e1ridos, LPS) activan directamente los linfocitos B sin ayuda de LT CD4+. Generan principalmente <b>IgM</b>, escasa memoria y sin hipermutaci\u00f3n som\u00e1tica. Los T-dependientes (prote\u00ednas) requieren cooperaci\u00f3n T-B y generan memoria."},{"n":"23-15","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes mol\u00e9culas es un patr\u00f3n molecular asociado a da\u00f1o (DAMP)?","o":["TLR2.","\u00c1cido \u00farico.","C3.","Manosa."],"c":2,"e":"El <b>\u00e1cido \u00farico</b> (cristales de urato monos\u00f3dico) es un <b>DAMP</b> cl\u00e1sico liberado por c\u00e9lulas da\u00f1adas que activa el inflamasoma NLRP3. TLR2 es un receptor PRR; C3 es prote\u00edna del complemento; la manosa es un PAMP reconocido por MBL."},{"n":"23-16","noShuffle":false,"img":null,"q":"En relaci\u00f3n con la inmunidad humoral:","o":["Los anticuerpos generados en la respuesta secundaria presentan mayor afinidad por el ant\u00edgeno que los generados en la respuesta primaria.","En la respuesta primaria se produce primero IgG y luego IgM, siendo la IgM la m\u00e1s importante.","Las c\u00e9lulas plasm\u00e1ticas pueden quedar en reposo durante muchos a\u00f1os.","La respuesta secundaria tiene una fase de crecimiento menor que la respuesta primaria."],"c":1,"e":"En la respuesta <b>secundaria</b>, la hipermutaci\u00f3n som\u00e1tica y la selecci\u00f3n en centros germinales generan anticuerpos de <b>mayor afinidad</b> (maduraci\u00f3n de la afinidad). En la primaria se produce primero IgM; en la secundaria predomina IgG. La respuesta secundaria es m\u00e1s r\u00e1pida y potente."},{"n":"23-17","noShuffle":false,"img":null,"q":"Indica la frase correcta sobre los ganglios linf\u00e1ticos:","o":["Los ant\u00edgenos acceden a ellos a trav\u00e9s de las c\u00e9lulas M.","Son sitios inmunol\u00f3gicamente privilegiados.","Los linfocitos B se activan en los fol\u00edculos secundarios.","Los linfocitos se concentran en la pulpa blanca y los macr\u00f3fagos en la pulpa roja."],"c":3,"e":"Los linfocitos B se activan en los <b>fol\u00edculos secundarios</b> (centros germinales) del ganglio linf\u00e1tico, donde ocurren hipermutaci\u00f3n som\u00e1tica, maduraci\u00f3n de afinidad y cambio de clase. Las c\u00e9lulas M son en el MALT. La pulpa blanca/roja es estructura del bazo."},{"n":"23-18","noShuffle":false,"img":null,"q":"Indica la citocina que favorece la polarizaci\u00f3n de los linfocitos T hacia Th2:","o":["IL-1.","IL-2.","IL-4.","IL-6."],"c":3,"e":"La <b>IL-4</b> es la citocina clave para la diferenciaci\u00f3n hacia <b>Th2</b>, que a su vez produce m\u00e1s IL-4, IL-5 e IL-13. IL-12 e IFN-\u03b3 promueven Th1; TGF-\u03b2+IL-6 promueven Th17; IL-2 favorece proliferaci\u00f3n general de LT; IL-1 es proinflamatoria inespec\u00edfica."},{"n":"23-19","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes c\u00e9lulas NO puede presentar ant\u00edgenos mediante MHC-II?","o":["C\u00e9lula dendr\u00edtica.","Linfocito T.","Linfocito B.","Macr\u00f3fago."],"c":2,"e":"Los <b>linfocitos T</b> no son APCs profesionales y no expresan MHC-II constitutivamente. Las APCs profesionales que s\u00ed expresan MHC-II son: <b>c\u00e9lulas dendr\u00edticas</b> (las m\u00e1s potentes), <b>linfocitos B</b> y <b>macr\u00f3fagos</b>."},{"n":"23-20","noShuffle":true,"img":null,"q":"\u00bfCu\u00e1l de las siguientes c\u00e9lulas reconocen ant\u00edgenos espec\u00edficos?","o":["Fagocitos.","Linfocitos T.","Linfocitos B.","B y C son correctas."],"c":4,"e":"Solo los <b>linfocitos T</b> (mediante TCR) y los <b>linfocitos B</b> (mediante BCR/inmunoglobulina de membrana) reconocen ant\u00edgenos de forma <b>espec\u00edfica</b>. Los fagocitos reconocen patrones generales (PAMPs/DAMPs) de forma inespec\u00edfica."}]};
+var IMGS=/*__IMGS_JSON__*/{};
+
+/* ── Estado ── */
+var canSave=typeof localStorage!=='undefined';
+var saved={};try{saved=JSON.parse(localStorage.getItem(KEY)||'null')||{};}catch(e){}
+var state   =saved.state   ||{};
+var qOrd    =saved.qOrd    ||{};
+var oOrd    =saved.oOrd    ||{};
+var starred =saved.starred ||{};
+var failHist=saved.failHist||{};  // {qid: count} entre sesiones
+var darkMode=saved.dark    ||false;
+var timerSec=saved.timerSec||0;   // segundos configurados
+var SECS=Object.keys(META.secciones||{});
+var fFailed={};
+var qIdx={};           // {sec: {n: q}}
+var qNums={};          // {sec: {n: numero_correlativo}}
+var allOrder=null;     // orden mezclado inter-secciones para pestaña Todos
+var activeCid=null;
+var currentTab='all';
+var currentMode='test';
+var saveTimer=null;
+var starsFilter=false;
+var statsVisible=false;
+var timerRunning=false;
+var timerRemaining=timerSec;
+var timerInterval=null;
+
+/* ── INIT ── */
+(function init(){
+  SECS.forEach(function(s){fFailed[s]=false;});
+  injectSecCSS();
+  buildHeader();
+  buildTabs();
+  buildPanels();
+  buildIdx();
+  buildNums();
+  buildAllOrder();
+  SECS.forEach(render);
+  renderAll();
+  updateScores();
+  updateProg();
+  applyTheme();
+  initTimer();
+  setBadge(canSave?'Guardado':'Sin guardado',canSave?'ok':'warn');
+  document.addEventListener('keydown',handleKey);
+  var si=document.getElementById('search-input');
+  if(si)si.addEventListener('keydown',function(e){if(e.key==='Escape'){clearSearch();}});
+})();
+
+/* ── CSS dinámico ── */
+function injectSecCSS(){
+  var css='';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{};
+    var c=m.color||'#1a56db',cd=m.colorDim||'#e8f0fe';
+    css+='.tab.t-'+s+'.on{background:'+cd+';color:'+c+';border-color:'+c+'}\n';
+    css+='.ph.s-'+s+'{border-left:4px solid '+c+'}\n';
+    // Variables CSS por sección para el badge coloreado
+    css+='#panel-'+s+' .qnum.sec-colored{background:'+cd+';color:'+c+'}\n';
+  });
+  var st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+}
+
+/* ── Header ── */
+function buildHeader(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var t=document.getElementById('h-tit');if(t)t.textContent=META.titulo||'Banco MIR';
+  var pt=document.getElementById('page-title');if(pt)pt.textContent=META.titulo||'Banco MIR';
+  var m=document.getElementById('h-meta');
+  if(m){var p=[];if(total)p.push(total+' preguntas');if(META.examen)p.push(META.examen);m.textContent=p.join(' · ');}
+  var d=document.getElementById('ph-gdesc');if(d)d.textContent=META.subtitulo||'';
+  var r=document.getElementById('sc-rem-all');if(r)r.textContent='○ '+total;
+}
+
+/* ── Tabs ── */
+function buildTabs(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var h='<button class="tab t-all on" onclick="showTab(\'all\')">📋 Todos ('+total+')</button>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<button class="tab t-'+s+'" onclick="showTab(\''+s+'\')">'+(m.emoji?m.emoji+' ':'')+escH(m.label||s)+' ('+cnt+')</button>';
+  });
+  var w=document.getElementById('tabs-wrap');if(w)w.innerHTML=h;
+}
+
+/* ── Paneles ── */
+function buildPanels(){
+  var h='<div id="panel-all" class="sec-panel visible"><div id="qs-all"></div><div class="no-results" id="nr-all">No se encontraron preguntas</div></div>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<div id="panel-'+s+'" class="sec-panel">';
+    h+='<div class="ph s-'+s+'">';
+    h+='<div class="ph-left">';
+    h+='<span class="ph-label">'+(m.emoji?m.emoji+'&nbsp;':'')+escH(m.label||s)+'</span>';
+    if(m.desc)h+='<span class="ph-desc">'+escH(m.desc)+'</span>';
+    h+='<div class="score-row">';
+    h+='<span class="sc ok" id="sc-ok-'+s+'">✓ 0</span>';
+    h+='<span class="sc ko" id="sc-ko-'+s+'">✗ 0</span>';
+    h+='<span class="sc rem" id="sc-rem-'+s+'">○ '+cnt+'</span>';
+    h+='</div></div>';
+    h+='<button class="fbtn" id="fb-'+s+'" onclick="toggleFail(\''+s+'\')">Solo falladas</button>';
+    h+='</div>';
+    h+='<div id="qs-'+s+'"></div>';
+    h+='<div class="no-failed" id="nf-'+s+'">Aún no has fallado ninguna 🎉</div>';
+    h+='<div class="no-results" id="nr-'+s+'">No se encontraron preguntas</div>';
+    h+='<div class="sec-actions">';
+    h+='<button class="reset-btn" onclick="resetSec(\''+s+'\')">↺ Reiniciar</button>';
+    h+='<button class="nota-btn" onclick="calcNota(\''+s+'\')">✎ Calcular nota</button>';
+    h+='</div>';
+    h+='<div class="nota-box" id="nota-'+s+'"></div>';
+    h+='</div>';
+  });
+  var pw=document.getElementById('panels-wrap');if(pw)pw.innerHTML=h;
+}
+
+/* ── Índice O(1) + numeración fija ── */
+function buildIdx(){
+  SECS.forEach(function(s){
+    qIdx[s]={};
+    if(D[s])D[s].forEach(function(q){qIdx[s][q.n]=q;});
+  });
+}
+function buildNums(){
+  // Numeración correlativa fija: 1, 2, 3... por sección
+  SECS.forEach(function(s){
+    qNums[s]={};
+    if(D[s])D[s].forEach(function(q,i){qNums[s][q.n]=i+1;});
+  });
+}
+function getNum(sec,n){return qNums[sec]?qNums[sec][n]||n:n;}
+function findQ(qid){
+  var d=qid.indexOf('-'),s=qid.substring(0,d),n=qid.substring(d+1);
+  return(qIdx[s]&&qIdx[s][n])||null;
+}
+function getSecFromQid(qid){return qid.substring(0,qid.indexOf('-'));}
+function getNFromQid(qid){return qid.substring(qid.indexOf('-')+1);}
+
+/* ── Orden inter-secciones para Todos ── */
+function buildAllOrder(){
+  var all=[];
+  SECS.forEach(function(s){if(D[s])D[s].forEach(function(q){all.push({sec:s,n:q.n});});});
+  if(!qOrd['__all__'])qOrd['__all__']=shuffle(all.map(function(x){return x.sec+'|'+x.n;}));
+  allOrder=qOrd['__all__'].map(function(key){
+    var p=key.indexOf('|'),sec=key.substring(0,p),n=key.substring(p+1);
+    return{sec:sec,n:n,q:qIdx[sec]&&qIdx[sec][n]};
+  }).filter(function(x){return x.q;});
+}
+
+/* ── Utilidades ── */
+function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function shuffle(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=b[i];b[i]=b[j];b[j]=t;}return b;}
+function getQOrd(s,qs){if(!qOrd[s])qOrd[s]=shuffle(qs.map(function(q){return q.n;}));return qOrd[s];}
+function getOOrd(qid){
+  var q=findQ(qid);var n=q&&q.o?q.o.length:4;
+  if(q&&q.noShuffle){var a=[];for(var i=0;i<n;i++)a.push(i);return a;}
+  if(!oOrd[qid]){var a=[];for(var i=0;i<n;i++)a.push(i);oOrd[qid]=shuffle(a);}
+  return oOrd[qid];
+}
+function imgHtml(key){
+  if(!IMGS[key]){console.warn('IMGS: clave no encontrada →',key);return'';}
+  return'<div class="clinimg-wrap"><img src="'+IMGS[key]+'" class="clinimg" alt="Imagen clínica" loading="lazy"><div class="clinimg-cap">Imagen clínica</div></div>';
+}
+
+/* ── localStorage debounce ── */
+function saveLocal(){
+  if(!canSave)return;
+  if(saveTimer)clearTimeout(saveTimer);
+  saveTimer=setTimeout(function(){
+    try{
+      localStorage.setItem(KEY,JSON.stringify({state:state,qOrd:qOrd,oOrd:oOrd,starred:starred,failHist:failHist,dark:darkMode,timerSec:timerSec}));
+      setBadge('Guardado','ok');
+    }catch(e){setBadge('Sin guardado','warn');}
+  },300);
+}
+function setBadge(t,c){var b=document.getElementById('save-badge');if(b){b.textContent=t;b.className='sbadge '+c;}}
+
+/* ── Construcción de tarjeta ── */
+function buildCard(q,sec,inAll,allPos){
+  var qid=sec+'-'+q.n;
+  var cid=(inAll?'A-':'S-')+qid;
+  var num=inAll?(allPos+1):getNum(sec,q.n);
+  var oo=getOOrd(qid);
+  var sOpts=oo.map(function(i){return q.o[i];});
+  var nc=oo.indexOf(q.c-1)+1;
+  var ans=state[qid];
+  var cc=ans?(ans.r?' answered-ok':' answered-wrong'):'';
+  var badgeCls='qnum'+(inAll?'':' sec-colored');
+  var h='<div class="qcard s-'+sec+cc+'" id="card-'+cid+'">';
+  h+='<div class="qhead" id="h-'+cid+'" data-cid="'+cid+'" data-qid="'+qid+'" data-sec="'+sec+'" onclick="tog(this.dataset.cid)">';
+  h+='<span class="'+badgeCls+'">'+num+'</span>';
+  h+='<span class="qtxt">'+q.q+(ans?'<span class="atag '+(ans.r?'ok':'ko')+'">'+(ans.r?'✓ acertada':'✗ fallada')+'</span>':'')+'</span>';
+  h+='<button class="star-btn'+(starred[qid]?' on':'')+'\" id="star-'+cid+'" onclick="event.stopPropagation();toggleStar(\''+qid+'\')" title="Marcar (S)"><span class="si">\u2606</span><span class="sf">\u2605</span></button>';
+  h+='<span class="chev">▾</span>';
+  h+='</div>';
+  h+='<div class="qbody" id="b-'+cid+'">';
+  if(q.img)h+=imgHtml(q.img);
+  if(currentMode==='quick'){
+    h+='<div class="quick-card"><div class="quick-rc">✓ Respuesta correcta: opción '+nc+' — '+escH(q.o[q.c-1])+'</div><div class="expbox">'+q.e+'</div></div>';
+  } else {
+    h+='<ul class="opts" id="opts-'+cid+'">';
+    h+=sOpts.map(function(o,i){
+      var p=i+1,oc='opt';
+      if(ans){oc+=' done';if(p===nc)oc+=' correct';else if(p===ans.c&&!ans.r)oc+=' wrong';}
+      return'<li class="'+oc+'" data-qid="'+qid+'" data-pos="'+p+'" data-sec="'+sec+'" onclick="answer(this.dataset.qid,+this.dataset.pos,this.dataset.sec)"><span class="onum">'+p+'.</span><span>'+o+'</span></li>';
+    }).join('');
+    h+='</ul>';
+    if(ans){h+='<div class="expbox"><span class="et">'+(ans.r?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e+'</div>';}
+  }
+  h+='</div></div>';
+  return h;
+}
+
+/* ── Render sección ── */
+function render(sec){
+  var qs=D[sec];if(!qs)return;
+  var ord=getQOrd(sec,qs);
+  var sorted=ord.map(function(n){return qIdx[sec]&&qIdx[sec][n];}).filter(Boolean);
+  var el=document.getElementById('qs-'+sec);
+  if(el)el.innerHTML=sorted.map(function(q){return buildCard(q,sec,false,0);}).join('');
+}
+
+/* ── Render Todos (mezcla inter-secciones) ── */
+function renderAll(){
+  if(!allOrder)buildAllOrder();
+  var el=document.getElementById('qs-all');
+  if(el)el.innerHTML=allOrder.map(function(x,i){return buildCard(x.q,x.sec,true,i);}).join('');
+}
+
+/* ── Toggle open/close ── */
+function tog(cid){
+  var b=document.getElementById('b-'+cid),h=document.getElementById('h-'+cid);
+  if(!b||!h)return;
+  var opening=!b.classList.contains('open');
+  b.classList.toggle('open');h.classList.toggle('open');
+  if(opening){
+    if(activeCid&&activeCid!==cid){var pc=document.getElementById('card-'+activeCid);if(pc)pc.classList.remove('kb-focus');}
+    activeCid=cid;
+    var card=document.getElementById('card-'+cid);if(card)card.classList.add('kb-focus');
+  }else{
+    if(activeCid===cid){activeCid=null;var card=document.getElementById('card-'+cid);if(card)card.classList.remove('kb-focus');}
+  }
+}
+
+/* ── Responder ── */
+function answer(qid,pos,sec){
+  if(state[qid])return;
+  var q=findQ(qid);if(!q)return;
+  var oo=getOOrd(qid);
+  var nc=oo.indexOf(q.c-1)+1;
+  var isRight=pos===nc;
+  state[qid]={c:pos,r:isRight};
+  // Registro de errores
+  if(!isRight){failHist[qid]=(failHist[qid]||0)+1;}
+  saveLocal();
+  // Actualizar todas las instancias del card (panel sección + panel all)
+  // Actualizar opciones en todas las instancias del card
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var optsEl=document.querySelectorAll('#opts-'+cid+' .opt');
+    optsEl.forEach(function(el,i){
+      el.classList.add('done');
+      if(i+1===nc)el.classList.add('correct');
+      else if(i+1===pos&&!isRight)el.classList.add('wrong');
+    });
+    var bdy=document.getElementById('b-'+cid);
+    if(bdy){
+      var eb=bdy.querySelector('.expbox');
+      if(!eb){eb=document.createElement('div');eb.className='expbox';bdy.appendChild(eb);}
+      eb.innerHTML='<span class="et">'+(isRight?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e;
+    }
+    var hd=document.getElementById('h-'+cid);
+    if(hd){var qt=hd.querySelector('.qtxt');if(qt&&!qt.querySelector('.atag')){var at=document.createElement('span');at.className='atag '+(isRight?'ok':'ko');at.innerHTML=isRight?'✓ acertada':'✗ fallada';qt.appendChild(at);}}
+    var card=document.getElementById('card-'+cid);
+    if(card)card.classList.add(isRight?'answered-ok':'answered-wrong');
+  });
+  updateScores();updateProg();
+  if(fFailed[sec]&&isRight){
+    var fcard=document.getElementById('card-S-'+qid);
+    if(fcard)fcard.style.display='none';
+    refreshNF(sec);
+  }
+}
+
+/* ── Estrella ── */
+function toggleStar(qid){
+  starred[qid]=!starred[qid];
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var btn=document.getElementById('star-'+cid);
+    if(btn)btn.classList.toggle('on',starred[qid]);
+  });
+  saveLocal();
+}
+function filterStarred(){
+  starsFilter=!starsFilter;
+  var btn=document.getElementById('btn-stars');
+  if(btn){btn.style.background=starsFilter?'#fef3c7':'';btn.style.fontWeight=starsFilter?'700':'';}
+  document.querySelectorAll('.qcard').forEach(function(card){
+    if(starsFilter){
+      var hd=card.querySelector('.qhead');
+      var qid=hd?hd.dataset.qid:'';
+      card.style.display=starred[qid]?'':'none';
+    }else{card.style.display='';}
+  });
+}
+
+/* ── Filtro falladas ── */
+function refreshNF(sec){
+  var c=document.getElementById('qs-'+sec);if(!c||!fFailed[sec])return;
+  var n=c.querySelectorAll('.qcard.answered-wrong').length;
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',n===0);
+}
+function toggleFail(sec){
+  fFailed[sec]=!fFailed[sec];
+  var btn=document.getElementById('fb-'+sec);
+  if(btn){btn.classList.toggle('on',fFailed[sec]);btn.textContent=fFailed[sec]?'← Ver todas':'Solo falladas';}
+  var c=document.getElementById('qs-'+sec);if(!c)return;
+  var nf=0;
+  c.querySelectorAll('.qcard').forEach(function(card){
+    if(fFailed[sec]){var show=card.classList.contains('answered-wrong');card.style.display=show?'':'none';if(show)nf++;}
+    else{card.style.display='';}
+  });
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',fFailed[sec]&&nf===0);
+}
+
+/* ── Scores y progreso ── */
+function updateScores(){
+  var tok=0,tok2=0,tok3=0;
+  SECS.forEach(function(sec){
+    var ok=0,ko=0;
+    if(D[sec])D[sec].forEach(function(q){var a=state[sec+'-'+q.n];if(a){if(a.r)ok++;else ko++;}});
+    var tot=D[sec]?D[sec].length:0,rem=tot-ok-ko;
+    tok+=ok;tok2+=ko;tok3+=rem;
+    var eok=document.getElementById('sc-ok-'+sec),eko=document.getElementById('sc-ko-'+sec),erm=document.getElementById('sc-rem-'+sec);
+    if(eok)eok.textContent='✓ '+ok;if(eko)eko.textContent='✗ '+ko;if(erm)erm.textContent='○ '+rem;
+  });
+  var eok=document.getElementById('sc-ok-all'),eko=document.getElementById('sc-ko-all'),erm=document.getElementById('sc-rem-all');
+  if(eok)eok.textContent='✓ '+tok;if(eko)eko.textContent='✗ '+tok2;if(erm)erm.textContent='○ '+tok3;
+}
+function updateProg(){
+  var total=0,done=Object.keys(state).length;
+  SECS.forEach(function(s){if(D[s])total+=D[s].length;});
+  var pct=total>0?Math.round(done/total*100):0;
+  var bar=document.getElementById('prog-bar');if(bar)bar.style.width=pct+'%';
+}
+
+/* ── Tabs ── */
+function showTab(t){
+  currentTab=t;
+  document.querySelectorAll('.tab').forEach(function(b){b.classList.remove('on');});
+  var tb=document.querySelector('.tab.t-'+t);if(tb)tb.classList.add('on');
+  var mc=document.getElementById('main-cont');if(mc)mc.setAttribute('data-tab',t);
+  var panelAll=document.getElementById('panel-all');
+  if(panelAll)panelAll.classList.toggle('visible',t==='all');
+  SECS.forEach(function(s){
+    var p=document.getElementById('panel-'+s);
+    if(p)p.classList.toggle('visible',t===s);
+  });
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  clearSearch();
+}
+
+/* ── Reset ── */
+function resetSec(sec){
+  if(D[sec])D[sec].forEach(function(q){var qid=sec+'-'+q.n;delete state[qid];delete oOrd[qid];});
+  delete qOrd[sec];fFailed[sec]=false;activeCid=null;
+  var btn=document.getElementById('fb-'+sec);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+  var nb=document.getElementById('nota-'+sec);if(nb){nb.style.display='none';nb.className='nota-box';}
+  saveLocal();render(sec);
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.remove('show');
+  updateScores();updateProg();
+  // Reconstruir panel all para reflejar cambios
+  buildAllOrder();renderAll();
+}
+function resetAll(){
+  Object.keys(state).forEach(function(k){delete state[k];});
+  Object.keys(oOrd).forEach(function(k){delete oOrd[k];});
+  Object.keys(qOrd).forEach(function(k){delete qOrd[k];});
+  activeCid=null;starsFilter=false;allOrder=null;
+  var bs=document.getElementById('btn-stars');if(bs){bs.style.background='';bs.style.fontWeight='';}
+  SECS.forEach(function(s){
+    fFailed[s]=false;
+    var btn=document.getElementById('fb-'+s);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+    var nb=document.getElementById('nota-'+s);if(nb){nb.style.display='none';nb.className='nota-box';}
+  });
+  saveLocal();
+  SECS.forEach(render);
+  buildAllOrder();renderAll();
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  updateScores();updateProg();
+}
+
+/* ── Nota y revisión ── */
+function buildRevList(sec){
+  var qs=D[sec];if(!qs)return'';
+  var failed=qs.filter(function(q){var a=state[sec+'-'+q.n];return a&&!a.r;});
+  if(!failed.length)return'';
+  var html='<div class="review-list"><div class="review-title">📋 '+failed.length+' pregunta'+(failed.length>1?'s':'')+' fallada'+(failed.length>1?'s':'')+' — repasa aquí:</div>';
+  failed.forEach(function(q){
+    var qid=sec+'-'+q.n;var oo=getOOrd(qid);var nc=oo.indexOf(q.c-1)+1;
+    html+='<details class="review-item"><summary><span><b>'+getNum(sec,q.n)+'.</b> '+q.q+'</span></summary>';
+    html+='<div class="review-body"><div class="review-ans">✓ Opción '+nc+': '+escH(q.o[q.c-1]||'')+'</div>';
+    html+='<div class="expbox">'+q.e+'</div></div></details>';
+  });
+  return html+'</div>';
+}
+function calcNota(sec){
+  var qs=D[sec];if(!qs)return;
+  var total=qs.length,ok=0,ko=0,skip=0;
+  qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-'+sec);if(!box)return;
+  box.className='nota-box '+(pass?'pass':'fail');
+  box.innerHTML='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>'
+    +buildRevList(sec);
+  box.style.display='block';
+}
+function calcNotaAll(){
+  var total=0,ok=0,ko=0,skip=0;
+  SECS.forEach(function(sec){
+    var qs=D[sec];if(!qs)return;
+    total+=qs.length;
+    qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  });
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-all');if(!box)return;
+  box.className='global-nota-box '+(pass?'pass':'fail');
+  var html='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10 (global)</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>';
+  SECS.forEach(function(sec){
+    var rv=buildRevList(sec);
+    if(rv){var m=META.secciones[sec]||{};html+='<div class="review-sec-label">'+(m.emoji?m.emoji+' ':'')+escH(m.label||sec)+'</div>'+rv;}
+  });
+  box.innerHTML=html;box.style.display='block';
+}
+
+/* ── Estadísticas de errores ── */
+function toggleStats(){
+  statsVisible=!statsVisible;
+  var btn=document.getElementById('btn-stats');
+  if(btn){btn.style.background=statsVisible?'var(--ko-bg)':'';btn.style.color=statsVisible?'var(--ko-t)':'';}
+  var box=document.getElementById('stats-global');
+  if(!box)return;
+  if(!statsVisible){box.classList.remove('show');return;}
+  var entries=Object.entries(failHist).filter(function(e){return e[1]>0;});
+  if(!entries.length){box.innerHTML='<div class="stats-title">📊 Sin errores registrados todavía</div>';box.classList.add('show');return;}
+  entries.sort(function(a,b){return b[1]-a[1];});
+  var top=entries.slice(0,10);
+  var maxV=top[0][1];
+  var html='<div class="stats-title">📊 Preguntas más falladas (acumulado entre sesiones)</div>';
+  top.forEach(function(e,i){
+    var qid=e[0],count=e[1];
+    var q=findQ(qid);if(!q)return;
+    var sec=getSecFromQid(qid),n=getNFromQid(qid);
+    var m=META.secciones[sec]||{};
+    var pct=Math.round(count/maxV*100);
+    html+='<div class="stats-item">';
+    html+='<span class="stats-n" style="min-width:18px;color:var(--ko-t);font-weight:700">'+(i+1)+'.</span>';
+    html+='<span class="stats-q">'+(m.emoji?m.emoji+' ':'')+getNum(sec,n)+'. '+q.q.substring(0,60)+(q.q.length>60?'…':'')+'</span>';
+    html+='<div class="stats-bar-wrap"><div class="stats-bar" style="width:'+pct+'%"></div></div>';
+    html+='<span class="stats-n">'+count+'✗</span>';
+    html+='</div>';
+  });
+  box.innerHTML=html;box.classList.add('show');
+}
+
+/* ── Buscador ── */
+function onSearch(val){
+  var v=val.trim().toLowerCase();
+  var clr=document.getElementById('search-clear');
+  var cnt=document.getElementById('search-count');
+  if(clr)clr.style.display=v?'block':'none';
+  var found=0,total=0;
+  document.querySelectorAll('.qcard').forEach(function(card){
+    total++;
+    if(!v){card.classList.remove('search-hidden');found++;}
+    else{
+      var qtxt=card.querySelector('.qtxt');
+      var match=qtxt&&qtxt.textContent.toLowerCase().indexOf(v)!==-1;
+      card.classList.toggle('search-hidden',!match);
+      if(match)found++;
+    }
+  });
+  if(cnt){
+    if(v){cnt.textContent=found+' de '+total+' preguntas';cnt.style.display='block';}
+    else{cnt.style.display='none';}
+  }
+  // Mostrar "sin resultados" por panel
+  ['all'].concat(SECS).forEach(function(s){
+    var panel=document.getElementById('panel-'+s);if(!panel||!panel.classList.contains('visible'))return;
+    var cards=panel.querySelectorAll('.qcard:not(.search-hidden)');
+    var nr=document.getElementById('nr-'+s);if(nr)nr.style.display=cards.length===0&&v?'block':'none';
+  });
+}
+function clearSearch(){
+  var si=document.getElementById('search-input');if(si)si.value='';
+  onSearch('');
+}
+
+/* ── Modo ── */
+function setMode(mode){
+  currentMode=mode;
+  document.getElementById('mode-test').classList.toggle('on',mode==='test');
+  document.getElementById('mode-quick').classList.toggle('on',mode==='quick');
+  // Rerenderizar todo
+  SECS.forEach(render);renderAll();
+}
+
+/* ── Modo oscuro ── */
+function applyTheme(){
+  document.documentElement.setAttribute('data-theme',darkMode?'dark':'light');
+  var btn=document.getElementById('btn-dark');if(btn)btn.textContent=darkMode?'☀️':'🌙';
+}
+function toggleDark(){darkMode=!darkMode;applyTheme();saveLocal();}
+
+/* ── Temporizador ── */
+function initTimer(){
+  timerRemaining=timerSec;
+  renderTimer();
+  var disp=document.getElementById('timer-display');
+  if(disp){
+    disp.addEventListener('click',function(){startEditTimer();});
+  }
+}
+function fmtTime(s){
+  var h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60;
+  return h+':'+(m<10?'0':'')+m+':'+(ss<10?'0':'')+ss;
+}
+function renderTimer(){
+  var disp=document.getElementById('timer-display');
+  if(!disp)return;
+  disp.textContent=fmtTime(timerRemaining);
+  disp.classList.toggle('danger',timerSec>0&&timerRemaining===0);
+}
+function timerToggle(){
+  if(timerRunning){
+    clearInterval(timerInterval);timerRunning=false;
+    document.getElementById('btn-tplay').textContent='▶';
+  }else{
+    if(timerRemaining<=0&&timerSec>0)timerRemaining=timerSec;
+    timerRunning=true;
+    document.getElementById('btn-tplay').textContent='⏸';
+    timerInterval=setInterval(function(){
+      if(timerRemaining>0){timerRemaining--;renderTimer();}
+      else{clearInterval(timerInterval);timerRunning=false;document.getElementById('btn-tplay').textContent='▶';renderTimer();}
+    },1000);
+  }
+}
+function timerReset(){
+  clearInterval(timerInterval);timerRunning=false;
+  timerRemaining=timerSec;
+  document.getElementById('btn-tplay').textContent='▶';
+  renderTimer();
+}
+function startEditTimer(){
+  var disp=document.getElementById('timer-display');if(!disp)return;
+  if(timerRunning){timerToggle();}
+  var old=fmtTime(timerRemaining);
+  disp.contentEditable='true';disp.classList.add('editing');
+  disp.textContent=old;
+  disp.focus();
+  var range=document.createRange();range.selectNodeContents(disp);
+  var sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
+  function commit(){
+    disp.contentEditable='false';disp.classList.remove('editing');
+    var txt=disp.textContent.trim();
+    var parts=txt.split(':').map(Number);
+    var secs=0;
+    if(parts.length===3)secs=parts[0]*3600+parts[1]*60+parts[2];
+    else if(parts.length===2)secs=parts[0]*60+parts[1];
+    else if(parts.length===1)secs=parts[0]*60;
+    if(!isNaN(secs)&&secs>=0){timerSec=secs;timerRemaining=secs;saveLocal();}
+    renderTimer();
+  }
+  disp.addEventListener('blur',commit,{once:true});
+  disp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();disp.blur();}});
+}
+
+/* ── Helpers cid ── */
+function cidToQid(cid){return cid.replace(/^[AS]-/,'');}
+
+/* ── Teclado ── */
+function handleKey(e){
+  var tg=e.target.tagName;
+  if(tg==='INPUT'||tg==='TEXTAREA'||e.target.contentEditable==='true')return;
+  var k=e.key;
+  if(k>='1'&&k<='5'){
+    if(activeCid&&!state[cidToQid(activeCid)]){
+      var aqid=cidToQid(activeCid);
+      var pos=parseInt(k),q=findQ(aqid);
+      if(q&&pos<=q.o.length){e.preventDefault();answer(aqid,pos,getSecFromQid(aqid));}
+    }
+  }else if(k==='ArrowDown'||k==='ArrowUp'){
+    e.preventDefault();navigateQ(k==='ArrowDown'?1:-1);
+  }else if(k==='s'||k==='S'){
+    if(activeCid)toggleStar(cidToQid(activeCid));
+  }
+}
+function navigateQ(dir){
+  var cards=Array.from(document.querySelectorAll('.sec-panel.visible .qcard')).filter(function(c){return c.style.display!=='none'&&!c.classList.contains('search-hidden');});
+  var cids=cards.map(function(c){return c.id.replace('card-','');});
+  if(!cids.length)return;
+  var idx=activeCid?cids.indexOf(activeCid):-1;
+  var nidx=Math.max(0,Math.min(cids.length-1,idx+dir));
+  var ncid=cids[nidx];if(!ncid||ncid===activeCid)return;
+  if(activeCid){var ob=document.getElementById('b-'+activeCid);var oh=document.getElementById('h-'+activeCid);if(ob)ob.classList.remove('open');if(oh)oh.classList.remove('open');var oc=document.getElementById('card-'+activeCid);if(oc)oc.classList.remove('kb-focus');}
+  activeCid=ncid;
+  var nb=document.getElementById('b-'+ncid);var nh=document.getElementById('h-'+ncid);
+  if(nb)nb.classList.add('open');if(nh)nh.classList.add('open');
+  var nc2=document.getElementById('card-'+ncid);if(nc2){nc2.classList.add('kb-focus');nc2.scrollIntoView({behavior:'smooth',block:'nearest'});}
+}
+</script>
+</body>
+</html>
