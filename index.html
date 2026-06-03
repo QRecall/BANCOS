@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>QRecall — Bancos de preguntas — QRecall</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0a0f;--surface:#12121a;--border:#1e1e2e;--accent:#4f8cff;--accent2:#a78bfa;--text:#e8e8f0;--muted:#6b6b80;--card:#14141f;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(79,140,255,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(79,140,255,0.03) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0;}
+body::after{content:'';position:fixed;top:-20vh;left:50%;transform:translateX(-50%);width:600px;height:600px;background:radial-gradient(circle,rgba(79,140,255,0.12) 0%,transparent 70%);pointer-events:none;z-index:0;}
+.wrapper{position:relative;z-index:1;max-width:720px;margin:0 auto;padding:0 20px;}
+header{padding:40px 0 32px;display:flex;align-items:center;gap:16px;}
+.back{color:var(--muted);text-decoration:none;font-size:14px;display:flex;align-items:center;gap:6px;}
+.back:hover{color:var(--text);}
+.logo{display:inline-flex;align-items:center;gap:10px;text-decoration:none;}
+.logo-icon{width:36px;height:36px;background:#1a2744;border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:Georgia,serif;font-weight:900;font-size:22px;color:white;}
+.logo-text{font-size:20px;font-weight:800;letter-spacing:-0.5px;background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+h1{font-size:clamp(28px,7vw,44px);font-weight:800;letter-spacing:-1px;margin-bottom:8px;line-height:1.1;}
+h1 span{background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.subtitle{color:var(--muted);font-size:15px;margin-bottom:40px;}
+.section-title{font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:2px;margin-bottom:16px;padding-left:4px;}
+.cards{display:flex;flex-direction:column;gap:12px;margin-bottom:40px;}
+.card{display:flex;align-items:center;gap:16px;padding:18px 20px;background:var(--card);border:1px solid var(--border);border-radius:14px;text-decoration:none;color:inherit;transition:all .2s ease;position:relative;overflow:hidden;}
+.card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(79,140,255,0.04),transparent);opacity:0;transition:opacity .2s;}
+.card:hover{border-color:rgba(79,140,255,0.3);transform:translateY(-1px);box-shadow:0 8px 32px rgba(79,140,255,0.1);}
+.card:hover::before{opacity:1;}
+.card-emoji{font-size:28px;width:52px;height:52px;display:flex;align-items:center;justify-content:center;background:var(--surface);border-radius:12px;flex-shrink:0;}
+.card-info{flex:1;min-width:0;}
+.card-title{font-size:15px;font-weight:500;margin-bottom:4px;}
+.card-meta{font-size:12px;color:var(--muted);}
+.badge{font-size:11px;font-weight:500;padding:4px 10px;border-radius:20px;flex-shrink:0;}
+.arrow{color:var(--muted);font-size:16px;flex-shrink:0;transition:transform .2s,color .2s;}
+.card:hover .arrow{color:var(--accent);transform:translateX(3px);}
+.stats{display:flex;gap:32px;margin-bottom:40px;padding:20px 28px;background:var(--surface);border:1px solid var(--border);border-radius:16px;}
+.stat{text-align:center;}
+.stat-num{font-size:28px;font-weight:800;background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;line-height:1;}
+.stat-label{font-size:12px;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:0.5px;}
+footer{text-align:center;padding:24px 0 40px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);}
+.asig-emoji{font-size:36px;width:64px;height:64px;display:flex;align-items:center;justify-content:center;background:var(--surface);border-radius:16px;flex-shrink:0;}
+.asig-count{font-size:12px;color:var(--muted);margin-top:2px;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<header><a class="logo" href="index.html"><div class="logo-icon">Q</div><span class="logo-text">Recall</span></a></header>
+<h1>Estudia con<br><span>preguntas reales</span></h1>
+<p class="subtitle">Bancos de preguntas interactivos para medicina. Elige tu asignatura.</p>
+<div class="stats">
+  <div class="stat"><div class="stat-num">16</div><div class="stat-label">Bancos</div></div>
+  <div class="stat"><div class="stat-num">+1.2K</div><div class="stat-label">Preguntas</div></div>
+  <div class="stat"><div class="stat-num">8</div><div class="stat-label">Asignaturas</div></div>
+</div>
+<div class="cards">
+    <a class="card" href="PDT.html">
+      <div class="asig-emoji">🏥</div>
+      <div class="card-info">
+        <div class="card-title">PDT — Práctica Docente Tutelada</div>
+        <div class="card-meta">6 bancos · Radiología · Digestivo · Cirugía · Endocrino</div>
+      </div>
+      <span class="arrow">→</span>
+    </a>
+    <a class="card" href="Infecciosas.html">
+      <div class="asig-emoji">🦠</div>
+      <div class="card-info">
+        <div class="card-title">Infecciosas</div>
+        <div class="card-meta">2 bancos · Examen y apuntes</div>
+      </div>
+      <span class="arrow">→</span>
+    </a>
+    <a class="card" href="SaludPublica.html">
+      <div class="asig-emoji">🏛️</div>
+      <div class="card-info">
+        <div class="card-title">Salud Pública</div>
+        <div class="card-meta">3 bancos · Epidemiología · Temas 11-19</div>
+      </div>
+      <span class="arrow">→</span>
+    </a>
+    <a class="card" href="AP.html">
+      <div class="asig-emoji">🔬</div>
+      <div class="card-info">
+        <div class="card-title">Anatomía Patológica</div>
+        <div class="card-meta">2 bancos · Exámenes 2020 y 2023</div>
+      </div>
+      <span class="arrow">→</span>
+    </a>
+    <a class="card" href="Farma.html">
+      <div class="asig-emoji">💊</div>
+      <div class="card-info">
+        <div class="card-title">Farmacología</div>
+        <div class="card-meta">1 banco · Final 2024</div>
+      </div>
+      <span class="arrow">→</span>
+    </a>
+    <a class="card" href="MicroInmuno.html">
+      <div class="asig-emoji">🧫</div>
+      <div class="card-info">
+        <div class="card-title">Microbiología e Inmunología</div>
+        <div class="card-meta">2 bancos · Examen y parciales 2024</div>
+      </div>
+      <span class="arrow">→</span>
+    </a>
+    <a class="card" href="MIR.html">
+      <div class="asig-emoji">⭐</div>
+      <div class="card-info">
+        <div class="card-title">MIR</div>
+        <div class="card-meta">1 banco · Examen oficial 2026 · 203 preguntas</div>
+      </div>
+      <span class="arrow">→</span>
+    </a>
+</div>
+<footer>QRecall · Castellón · 2025</footer>
+</div>
+</body>
+</html>
