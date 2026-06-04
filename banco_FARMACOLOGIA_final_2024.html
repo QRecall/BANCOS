@@ -1,0 +1,898 @@
+<!--
+=============================================================
+  MOTOR BANCO MIR — v10
+  Novedades respecto a v9:
+  - Numeración correlativa fija por sección (no se mezcla)
+  - Badge neutro en pestaña "Todos" + mezcla real inter-secciones
+  - Temporizador sticky editable en header (play/pausa/reset)
+  - Buscador de texto en tiempo real
+  - Modo repaso rápido (muestra RC + explicación directamente)
+  - Estadísticas de errores recurrentes entre sesiones
+=============================================================
+-->
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title id="page-title">Banco MIR</title>
+<style>
+:root{
+  --bg:#f4f3ef;--surf:#fff;--bd:#e5e5e5;--bd2:#ddd;
+  --txt:#1a1a1a;--txt2:#555;--txt3:#999;--txt4:#666;
+  --hdr:#1a1a1a;--hdr-t:#fff;
+  --ok-bg:#e6f9ef;--ok-t:#0b6e52;--ok-bd:#2da060;
+  --ko-bg:#fdecea;--ko-t:#b91c1c;--ko-bd:#d94f45;
+  --sc-ok:#dcf5ed;--sc-ko:#fdecea;--sc-rem:#f0f0f0;--sc-rem-t:#666;
+  --exp:#fffbe6;--exp-bd:#f0c04a;--exp-t:#5a4500;
+  --prog:#e5e5e5;--prog-fill:#1a56db;
+  --star:#ccc;--star-on:#f59e0b;
+  --hint:#fafafa;--hint-bd:#eee;
+  --tab-bd:#ddd;--tab-t:#555;
+  --all-bg:#e8f0fe;--all-t:#1a56db;--all-bd:#1a56db;
+  --fab:#1a1a1a;--fab-t:#fff;
+  --nota-btn-t:#1a56db;--nota-btn-bd:#1a56db;--nota-btn-bg:var(--surf);
+  --timer-bg:#222;--timer-t:#fff;--timer-danger:#ef4444;
+}
+[data-theme="dark"]{
+  --bg:#0f0f1a;--surf:#1e1e30;--bd:#2a2a45;--bd2:#333355;
+  --txt:#e8e8f0;--txt2:#aaa;--txt3:#555;--txt4:#888;
+  --hdr:#0a0a14;--hdr-t:#e8e8f0;
+  --ok-bg:#0b3020;--ok-t:#4ade80;--ok-bd:#166534;
+  --ko-bg:#2d0a0a;--ko-t:#f87171;--ko-bd:#7f1d1d;
+  --sc-ok:#0b3020;--sc-ko:#2d0a0a;--sc-rem:#252540;--sc-rem-t:#aaa;
+  --exp:#1a1500;--exp-bd:#a37f10;--exp-t:#d4b84a;
+  --prog:#2a2a45;--prog-fill:#60a5fa;
+  --star:#444;--star-on:#f59e0b;
+  --hint:#1a1a2e;--hint-bd:#2a2a45;
+  --tab-bd:#2a2a45;--tab-t:#aaa;
+  --all-bg:#1a2a4a;--all-t:#60a5fa;--all-bd:#3b82f6;
+  --fab:#2a2a50;--fab-t:#e8e8f0;
+  --nota-btn-t:#60a5fa;--nota-btn-bd:#3b82f6;--nota-btn-bg:var(--surf);
+  --timer-bg:#1a1a2e;--timer-t:#e8e8f0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;transition:background .25s,color .25s}
+
+/* ── Header ── */
+header{background:var(--hdr);color:var(--hdr-t);padding:9px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;position:sticky;top:0;z-index:100}
+header h1{font-size:13.5px;font-weight:600;white-space:nowrap}
+.hright{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.hmeta{font-size:11px;color:#888}
+.hbtn{background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:3px 5px;border-radius:5px;transition:background .15s;color:var(--hdr-t)}
+.hbtn:hover{background:rgba(255,255,255,.12)}
+.sbadge{font-size:11px;padding:3px 9px;border-radius:5px;font-weight:500}
+.sbadge.ok{background:#15803d;color:#dcfce7}.sbadge.warn{background:#92400e;color:#fef3c7}
+
+/* ── Temporizador ── */
+#timer-wrap{display:flex;align-items:center;gap:4px;background:var(--timer-bg);border-radius:7px;padding:3px 8px;border:1px solid rgba(255,255,255,.1)}
+#timer-display{font-size:13px;font-weight:700;font-family:monospace;color:var(--timer-t);min-width:58px;text-align:center;cursor:pointer;border-radius:3px;padding:1px 3px}
+#timer-display:hover{background:rgba(255,255,255,.08)}
+#timer-display.editing{background:rgba(255,255,255,.15);outline:none;color:var(--timer-t)}
+#timer-display.danger{color:var(--timer-danger)}
+#timer-wrap button{background:none;border:none;cursor:pointer;color:rgba(255,255,255,.7);font-size:12px;padding:1px 3px;border-radius:3px;line-height:1}
+#timer-wrap button:hover{background:rgba(255,255,255,.12);color:#fff}
+
+/* ── Barra de progreso ── */
+#prog-wrap{height:3px;background:var(--prog);position:sticky;top:40px;z-index:99}
+#prog-bar{height:100%;background:var(--prog-fill);width:0%;transition:width .4s}
+
+/* ── Contenedor ── */
+.container{max-width:820px;margin:0 auto;padding:16px 12px}
+
+/* ── Buscador ── */
+.search-wrap{position:relative;margin-bottom:13px}
+.search-wrap input{width:100%;padding:8px 34px 8px 12px;border:1.5px solid var(--bd2);border-radius:8px;font-size:13px;background:var(--surf);color:var(--txt);outline:none;transition:border-color .15s}
+.search-wrap input:focus{border-color:var(--prog-fill)}
+.search-clear{position:absolute;right:9px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--txt3);font-size:16px;display:none;line-height:1}
+#search-count{font-size:11px;color:var(--txt3);margin-top:4px;display:none}
+
+/* ── Modo repaso ── */
+.mode-bar{display:flex;gap:6px;margin-bottom:12px;align-items:center}
+.mode-btn{padding:5px 12px;border:1.5px solid var(--bd2);border-radius:7px;cursor:pointer;font-size:12px;font-weight:500;background:var(--surf);color:var(--txt2);transition:all .15s}
+.mode-btn:hover{border-color:#999}
+.mode-btn.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Tabs ── */
+.tabs{display:flex;gap:7px;margin-bottom:13px;flex-wrap:wrap}
+.tab{padding:7px 14px;border:1.5px solid var(--tab-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;background:var(--surf);color:var(--tab-t);transition:all .15s}
+.tab:hover{border-color:#999;color:var(--txt)}
+.tab.t-all.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Score global ── */
+.ph-global{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 15px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-left:4px solid var(--prog-fill)}
+.score-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.sc{font-size:12px;font-weight:600;padding:3px 9px;border-radius:6px}
+.sc.ok{background:var(--sc-ok);color:var(--ok-t)}.sc.ko{background:var(--sc-ko);color:var(--ko-t)}.sc.rem{background:var(--sc-rem);color:var(--sc-rem-t)}
+
+/* ── Acciones ── */
+.global-actions{display:none;margin-bottom:10px;gap:7px;flex-wrap:wrap;align-items:center}
+.container[data-tab="all"] .global-actions{display:flex}
+.sec-actions{margin:6px 0 15px;display:flex;gap:7px;flex-wrap:wrap}
+.reset-btn{padding:7px 14px;background:var(--fab);color:var(--fab-t);border:none;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:opacity .15s}
+.reset-btn:hover{opacity:.82}
+.nota-btn{padding:7px 14px;background:var(--nota-btn-bg);color:var(--nota-btn-t);border:1.5px solid var(--nota-btn-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:background .15s}
+.nota-btn:hover{background:var(--all-bg)}
+
+/* ── Nota box ── */
+.nota-box,.global-nota-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:2px solid var(--bd2);font-size:13px;line-height:1.7;display:none}
+.nota-box.pass,.global-nota-box.pass{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t)}
+.nota-box.fail,.global-nota-box.fail{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t)}
+.nota-score{font-size:26px;font-weight:700;display:block;margin-bottom:4px}
+.nota-detail{font-size:12px;opacity:.85;font-family:monospace}
+
+/* ── Vista revisión ── */
+.review-list{margin-top:12px;border-top:1px solid var(--bd2);padding-top:10px}
+.review-title{font-size:12px;font-weight:700;margin-bottom:9px;color:var(--txt)}
+.review-sec-label{font-size:11.5px;font-weight:700;color:var(--txt3);margin:8px 0 5px;padding-top:6px;border-top:1px solid var(--bd)}
+.review-item{background:var(--surf);border-radius:8px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden}
+.review-item summary{padding:9px 12px;cursor:pointer;font-size:12.5px;color:var(--txt);list-style:none;display:flex;gap:8px;align-items:flex-start}
+.review-item summary::-webkit-details-marker{display:none}
+.review-item summary::before{content:'▶';font-size:9px;color:var(--txt3);flex-shrink:0;margin-top:4px;transition:transform .18s}
+details[open] summary::before{transform:rotate(90deg)}
+.review-body{padding:0 12px 11px}
+.review-ans{font-size:12px;color:var(--ok-t);margin-bottom:7px;font-weight:500}
+
+/* ── Estadísticas ── */
+.stats-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:1.5px solid var(--bd2);background:var(--surf);display:none}
+.stats-box.show{display:block}
+.stats-title{font-size:12px;font-weight:700;margin-bottom:10px;color:var(--txt)}
+.stats-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:12.5px}
+.stats-item:last-child{border-bottom:none}
+.stats-bar-wrap{flex:1;background:var(--sc-rem);border-radius:4px;height:6px;overflow:hidden}
+.stats-bar{height:100%;background:var(--ko-bd);border-radius:4px;transition:width .4s}
+.stats-n{font-size:11px;color:var(--txt3);white-space:nowrap}
+.stats-q{flex:2;color:var(--txt);font-size:12px;line-height:1.3}
+
+/* ── Panel secciones ── */
+.sec-panel{display:none}.sec-panel.visible{display:block}
+.ph{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ph-left{flex:1;display:flex;flex-direction:column;gap:5px}
+.ph-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt3);margin-bottom:1px}
+.ph-desc{font-size:12px;color:var(--txt4)}
+.fbtn{padding:6px 12px;font-size:12px;font-weight:500;border:1.5px solid var(--bd2);border-radius:8px;cursor:pointer;background:var(--surf);color:var(--txt2);transition:all .15s;white-space:nowrap}
+.fbtn:hover{border-color:#999;color:var(--txt)}.fbtn.on{background:var(--ko-bg);color:#b91c1c;border-color:#f87171}
+.no-failed{display:none;text-align:center;padding:16px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin-top:4px}
+.no-failed.show{display:block}
+.no-results{display:none;text-align:center;padding:20px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin:8px 0}
+
+/* ── Hint ── */
+.hint{font-size:11px;color:var(--txt3);margin-bottom:15px;padding:7px 11px;background:var(--hint);border-radius:6px;border:1px solid var(--hint-bd)}
+
+/* ── Tarjeta ── */
+.qcard{background:var(--surf);border-radius:10px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden;transition:box-shadow .15s}
+.qcard:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.qcard.kb-focus{outline:2px solid var(--prog-fill);outline-offset:-2px}
+.qcard.search-hidden{display:none}
+.qhead{padding:11px 13px;cursor:pointer;display:flex;align-items:flex-start;gap:9px}
+
+/* ── Badge numérico ── */
+.qnum{font-size:11px;font-weight:700;padding:3px 7px;border-radius:5px;white-space:nowrap;flex-shrink:0;margin-top:2px;background:var(--sc-rem);color:var(--sc-rem-t)}
+/* En pestaña "Todos" siempre neutro; en sección aplica color de sección */
+.qnum.sec-colored{background:var(--sec-dim);color:var(--sec-col)}
+
+.qtxt{font-size:13px;line-height:1.5;flex:1}
+.star-btn{background:none;border:none;cursor:pointer;font-size:15px;color:var(--star);padding:0 2px;flex-shrink:0;margin-top:2px;line-height:1;transition:color .15s,transform .15s}
+.star-btn:hover{transform:scale(1.2)}
+.star-btn .si{display:inline}.star-btn .sf{display:none}
+.star-btn.on .si{display:none}.star-btn.on .sf{display:inline;color:var(--star-on)}
+.chev{font-size:15px;color:var(--bd2);flex-shrink:0;margin-top:2px;transition:transform .2s}
+.qhead.open .chev{transform:rotate(180deg)}
+.qbody{display:none;padding:0 13px 13px}.qbody.open{display:block}
+
+/* ── Imagen ── */
+.clinimg-wrap{margin:9px 0 7px;background:#111;border-radius:8px;overflow:hidden;border:1px solid var(--bd2);text-align:center}
+.clinimg{max-width:100%;max-height:340px;object-fit:contain;display:block;margin:0 auto}
+.clinimg-cap{font-size:11px;color:var(--txt3);padding:4px 0 5px;background:var(--hint);border-top:1px solid var(--bd)}
+
+/* ── Opciones ── */
+.opts{list-style:none;margin-top:9px;display:flex;flex-direction:column;gap:5px}
+.opt{padding:9px 12px;border-radius:8px;border:1.5px solid var(--bd2);cursor:pointer;display:flex;align-items:flex-start;gap:9px;color:var(--txt);font-size:13px;line-height:1.45;transition:border-color .12s,background .12s;user-select:none}
+.opt:hover:not(.done){border-color:#999;background:var(--hint)}
+.opt.correct{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t);font-weight:500;cursor:default}
+.opt.wrong{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t);cursor:default}
+.opt.done:not(.correct):not(.wrong){cursor:default;opacity:.7}
+.onum{font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px;min-width:15px}
+
+/* ── Modo repaso rápido ── */
+.quick-card{padding:9px 12px;border-radius:8px;border:1.5px solid var(--ok-bd);background:var(--ok-bg);margin-top:8px}
+.quick-rc{font-size:12.5px;font-weight:600;color:var(--ok-t);margin-bottom:6px}
+
+/* ── Explicación ── */
+.expbox{margin-top:10px;padding:10px 12px;background:var(--exp);border-left:4px solid var(--exp-bd);border-radius:0 8px 8px 0;font-size:12.5px;color:var(--exp-t);line-height:1.65}
+.expbox b,.expbox strong{font-weight:600}
+.et{display:block;margin-bottom:4px;font-weight:600;font-size:13px}
+.atag{font-size:10px;padding:2px 6px;border-radius:4px;margin-left:5px;vertical-align:middle}
+.atag.ok{background:var(--sc-ok);color:var(--ok-t)}.atag.ko{background:var(--sc-ko);color:#c0392b}
+
+/* ── All-tab CSS ── */
+.container[data-tab="all"] .ph{display:none!important}
+.container[data-tab="all"] .sec-actions{display:none!important}
+.container[data-tab="all"] .no-failed{display:none!important}
+.container[data-tab="all"] .nota-box{display:none!important}
+.container:not([data-tab="all"]) .global-nota-box{display:none!important}
+.container:not([data-tab="all"]) #stats-global{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="h-tit">Banco MIR</h1>
+  <div class="hright">
+    <span class="hmeta" id="h-meta"></span>
+    <!-- Temporizador -->
+    <div id="timer-wrap" title="Haz clic en el tiempo para editar">
+      <span id="timer-display">0:00:00</span>
+      <button id="btn-tplay" onclick="timerToggle()" title="Play/Pausa">▶</button>
+      <button onclick="timerReset()" title="Reset">↺</button>
+    </div>
+    <button class="hbtn" id="btn-dark" onclick="toggleDark()" title="Modo oscuro">🌙</button>
+    <span id="save-badge" class="sbadge"></span>
+  </div>
+</header>
+<div id="prog-wrap"><div id="prog-bar"></div></div>
+
+<div class="container" id="main-cont" data-tab="all">
+  <!-- Buscador -->
+  <div class="search-wrap">
+    <input type="text" id="search-input" placeholder="🔍 Buscar en enunciados..." oninput="onSearch(this.value)">
+    <button class="search-clear" id="search-clear" onclick="clearSearch()">✕</button>
+  </div>
+  <div id="search-count"></div>
+
+  <!-- Modo -->
+  <div class="mode-bar">
+    <span style="font-size:11.5px;color:var(--txt3);font-weight:600">MODO:</span>
+    <button class="mode-btn on" id="mode-test" onclick="setMode('test')">📝 Test</button>
+    <button class="mode-btn" id="mode-quick" onclick="setMode('quick')">⚡ Repaso rápido</button>
+    <button class="mode-btn" id="btn-stars" onclick="filterStarred()" style="margin-left:auto;border-color:#f59e0b;color:#b45309">⭐ Marcadas</button>
+    <button class="mode-btn" id="btn-stats" onclick="toggleStats()">📊 Errores</button>
+  </div>
+
+  <!-- Stats globales -->
+  <div class="stats-box" id="stats-global"></div>
+
+  <!-- Tabs -->
+  <div class="tabs" id="tabs-wrap"></div>
+
+  <!-- Score global -->
+  <div class="ph-global">
+    <div class="ph-left">
+      <span class="ph-desc" id="ph-gdesc"></span>
+      <div class="score-row">
+        <span class="sc ok" id="sc-ok-all">✓ 0</span>
+        <span class="sc ko" id="sc-ko-all">✗ 0</span>
+        <span class="sc rem" id="sc-rem-all">○ 0</span>
+      </div>
+    </div>
+  </div>
+  <div class="global-actions">
+    <button class="reset-btn" onclick="resetAll()">↺ Reiniciar y mezclar</button>
+    <button class="nota-btn" onclick="calcNotaAll()">✎ Calcular nota global</button>
+  </div>
+  <div class="global-nota-box" id="nota-all"></div>
+  <p class="hint">💡 <b>1–5</b> responde · <b>↑↓</b> navega · <b>S</b> marca ⭐ · Progreso guardado automáticamente</p>
+
+  <div id="panels-wrap"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════ MOTOR v10 ═══════════════════════════════════════ */
+
+var KEY="mir_farmacologia_jul2024_v1";
+var META={"titulo":"Farmacolog\u00eda \u2014 Julio 2024","subtitulo":"Farmacolog\u00eda general y cl\u00ednica \u00b7 79 preguntas (75 + 4 reserva)","examen":"Examen Farmacolog\u00eda \u00b7 Julio 2024","secciones":{"gen":{"label":"Generalidades, FC/FD y RAM","emoji":"\ud83d\udcd0","color":"#1a56db","colorDim":"#e8f0fe","desc":"LADME \u00b7 Receptores \u00b7 Curvas dosis-respuesta \u00b7 Interacciones \u00b7 Farmacovigilancia \u00b7 Formas farmac\u00e9uticas"},"sna":{"label":"Sistema Nervioso Aut\u00f3nomo","emoji":"\ud83e\udde0","color":"#0b7c5a","colorDim":"#dcf5ed","desc":"Colin\u00e9rgicos \u00b7 Adren\u00e9rgicos \u00b7 Bloqueantes neuromusculares"},"cv":{"label":"Cardiovascular","emoji":"\u2764\ufe0f","color":"#b91c1c","colorDim":"#fdecea","desc":"Antihipertensivos \u00b7 Antiarr\u00edtmicos \u00b7 Diur\u00e9ticos \u00b7 Antianginosos \u00b7 L\u00edpidos"},"snc":{"label":"Sistema Nervioso Central y dolor","emoji":"\ud83d\udc8a","color":"#7c3aed","colorDim":"#ede9fe","desc":"Antiepil\u00e9pticos \u00b7 Antidepresivos \u00b7 Antipsic\u00f3ticos \u00b7 Parkinson \u00b7 Alzheimer \u00b7 Opioides \u00b7 AINEs \u00b7 Anest\u00e9sicos"},"inf":{"label":"Antiinfecciosos","emoji":"\ud83e\udda0","color":"#c2410c","colorDim":"#fff0e6","desc":"Antibi\u00f3ticos \u00b7 Antif\u00fangicos \u00b7 Antivirales \u00b7 Antiparasitarios"},"endo":{"label":"Endocrino, metabolismo y hueso","emoji":"\ud83e\udd8b","color":"#0e7490","colorDim":"#dff4f8","desc":"Tiroides \u00b7 Corticoides \u00b7 Bisfosfonatos \u00b7 Pr\u00f3stata \u00b7 Oncolog\u00eda \u00b7 Uricemia"},"rdg":{"label":"Respiratorio, digestivo y ginecol\u00f3gico","emoji":"\ud83e\udec1","color":"#a16207","colorDim":"#fdf3d7","desc":"Asma/EPOC \u00b7 Antihistam\u00ednicos \u00b7 Digestivo \u00b7 Obstetricia \u00b7 Fibrosis qu\u00edstica"}}};
+var D={"gen":[{"n":"1","noShuffle":false,"img":null,"q":"El uso de antibi\u00f3ticos en una infecci\u00f3n es un tratamiento de tipo:","o":["Curativo","Profil\u00e1ctico","Patog\u00e9nico","Sintom\u00e1tico"],"c":1,"e":"El tratamiento <b>curativo</b> (etiol\u00f3gico) elimina la causa de la enfermedad; el antibi\u00f3tico erradica el microorganismo. El profil\u00e1ctico previene, el sintom\u00e1tico alivia s\u00edntomas y el patog\u00e9nico act\u00faa sobre el mecanismo fisiopatol\u00f3gico."},{"n":"2","noShuffle":false,"img":null,"q":"A un ni\u00f1o de 10 kg se le prescriben 15 mg/kg de paracetamol v\u00eda oral cada 8 horas. \u00bfCu\u00e1ntos mg de paracetamol se le administran al d\u00eda?","o":["1500 mg","50 mg","150 mg","450 mg"],"c":4,"e":"Dosis por toma: <b>15 mg/kg \u00d7 10 kg = 150 mg</b>. Cada 8 horas equivale a <b>3 tomas/d\u00eda</b>: 150 \u00d7 3 = <b>450 mg/d\u00eda</b>."},{"n":"3","noShuffle":false,"img":null,"q":"En la farmacia del hospital proporcionan un vial de morfina al 2%. \u00bfCu\u00e1ntos mg hay en 6 ml y cu\u00e1ntos ml deben extraerse para obtener 100 mg de morfina?","o":["75 mg / 0,5 ml","120 mg / 5 ml","2,5 mg / 50 ml","120 mg / 1 ml"],"c":2,"e":"Una soluci\u00f3n al <b>2%</b> contiene 20 mg/ml. En 6 ml hay <b>120 mg</b>. Para obtener 100 mg: 100 \u00f7 20 mg/ml = <b>5 ml</b>."},{"n":"12","noShuffle":false,"img":null,"q":"En una curva plasm\u00e1tica concentraci\u00f3n-tiempo, el par\u00e1metro que mide la flecha (distancia entre la concentraci\u00f3n alcanzada y la concentraci\u00f3n m\u00ednima eficaz) indica:","o":["Duraci\u00f3n del efecto","Margen terap\u00e9utico","Intensidad del efecto","Periodo de latencia"],"c":3,"e":"La <b>intensidad del efecto</b> se relaciona con cu\u00e1nto supera la concentraci\u00f3n plasm\u00e1tica la <b>concentraci\u00f3n m\u00ednima eficaz</b>. La duraci\u00f3n es el tiempo sobre la CME y el periodo de latencia, el tiempo hasta alcanzarla."},{"n":"16","noShuffle":false,"img":null,"q":"Se\u00f1ale la afirmaci\u00f3n correcta:","o":["La biodisponibilidad es la fracci\u00f3n de la dosis administrada que accede a la circulaci\u00f3n sist\u00e9mica en su forma activa","La biodisponibilidad no se ve afectada por la edad, el sexo o las patolog\u00edas","La forma no ionizada de los \u00e1cidos y bases d\u00e9biles es la liposoluble y, por tanto, la que atraviesa membranas por difusi\u00f3n pasiva","Una cin\u00e9tica de absorci\u00f3n de orden uno significa que la velocidad de absorci\u00f3n es constante e independiente de la concentraci\u00f3n"],"c":3,"e":"La <b>forma no ionizada</b> es liposoluble y difunde pasivamente. La cin\u00e9tica de <b>orden uno</b> es dependiente de la concentraci\u00f3n (la de orden cero es constante). La biodisponibilidad s\u00ed var\u00eda con edad, sexo y patolog\u00eda."},{"n":"21","noShuffle":false,"img":null,"q":"Paciente de 60 a\u00f1os con neumon\u00eda en programa de di\u00e1lisis. El antibi\u00f3tico de elecci\u00f3n se excreta principalmente por v\u00eda renal. \u00bfQu\u00e9 consideraciones sobre la semivida de eliminaci\u00f3n y la dosis?","o":["Disminuir\u00e1 la semivida y se debe aumentar la dosis","Disminuir\u00e1 la semivida y se debe disminuir la dosis","Aumentar\u00e1 la semivida y no ser\u00e1 necesario modificar la dosis","Aumentar\u00e1 la semivida y debe considerarse disminuir la dosis"],"c":4,"e":"En insuficiencia renal con eliminaci\u00f3n renal del f\u00e1rmaco, el aclaramiento cae y la <b>semivida aumenta</b>, con riesgo de acumulaci\u00f3n. Procede <b>ajustar (reducir) la dosis</b> o espaciar intervalos."},{"n":"26","noShuffle":false,"img":null,"q":"Indique la afirmaci\u00f3n FALSA sobre los receptores acoplados a prote\u00ednas G:","o":["Poseen 7 h\u00e9lices transmembrana, con 3 bucles extracelulares y 3 intracelulares","La uni\u00f3n del agonista puede producir inhibici\u00f3n de la adenilato ciclasa","La uni\u00f3n de un antagonista produce una disminuci\u00f3n de los niveles de AMP c\u00edclico","La uni\u00f3n del agonista puede producir aumento de inositol trifosfato (IP3)"],"c":3,"e":"El <b>antagonista carece de actividad intr\u00ednseca</b>: ocupa el receptor sin modificar por s\u00ed mismo el AMPc, solo bloquea al agonista. Quien modifica el AMPc o el IP3 es el agonista seg\u00fan la prote\u00edna G acoplada."},{"n":"31","noShuffle":false,"img":null,"q":"Curva dosis-respuesta de los f\u00e1rmacos A y B, con DE50 de A igual a la DE50 de B. Es correcto decir:","o":["A y B presentan la misma eficacia y potencia","A presenta mayor eficacia y potencia que B","B presenta la misma potencia que A pero menor eficacia","A presenta mayor potencia que B e igual eficacia"],"c":3,"e":"Igual <b>DE50</b> implica misma <b>potencia</b>. Si el efecto m\u00e1ximo (techo) de B es inferior, su <b>eficacia es menor</b>. Potencia y eficacia son propiedades independientes."},{"n":"35","noShuffle":false,"img":null,"q":"Se\u00f1ale la afirmaci\u00f3n FALSA respecto a las reacciones al\u00e9rgicas:","o":["Es una reacci\u00f3n adversa de tipo B","No se recomienda retirar el f\u00e1rmaco; basta con disminuir la dosis","Las de tipo II (citot\u00f3xicas) se deben al complejo membrana-f\u00e1rmaco-anticuerpo con activaci\u00f3n del complemento y lisis celular","Es una reacci\u00f3n adversa no relacionada con la dosis"],"c":2,"e":"Las reacciones al\u00e9rgicas (tipo B, idiosincr\u00e1sicas, <b>independientes de la dosis</b>) obligan a <b>retirar el f\u00e1rmaco</b>; reducir la dosis no las controla y pueden recurrir con cualquier reexposici\u00f3n."},{"n":"45","noShuffle":false,"img":null,"q":"Las tetraciclinas forman complejos insolubles con cationes como el calcio. \u00bfQu\u00e9 interacci\u00f3n se produce si se toma tetraciclina oral con un vaso de leche?","o":["No se produce ninguna interacci\u00f3n","Interacci\u00f3n de tipo farmacodin\u00e1mico","Interacci\u00f3n de tipo farmacocin\u00e9tico en la absorci\u00f3n","Interacci\u00f3n de tipo farmacocin\u00e9tico en el metabolismo"],"c":3,"e":"El calcio <b>quela la tetraciclina</b> formando complejos insolubles no absorbibles: interacci\u00f3n <b>farmacocin\u00e9tica en la absorci\u00f3n</b> que reduce su biodisponibilidad. Por eso se separan de l\u00e1cteos y anti\u00e1cidos."},{"n":"70","noShuffle":false,"img":null,"q":"Se\u00f1ale la afirmaci\u00f3n FALSA sobre interacciones farmacol\u00f3gicas:","o":["Las interacciones solo se producen entre f\u00e1rmacos; los alimentos no interaccionan con los f\u00e1rmacos","En las interacciones farmacodin\u00e1micas el f\u00e1rmaco B modifica la actividad de A sin modificar su concentraci\u00f3n en la biofase","Las interacciones farmacocin\u00e9ticas pueden producirse en cualquier proceso LADME","Las interacciones farmacol\u00f3gicas pueden ser beneficiosas"],"c":1,"e":"Es falsa: los <b>alimentos s\u00ed interaccionan</b> con f\u00e1rmacos (p. ej., l\u00e1cteos-tetraciclinas, zumo de pomelo-CYP3A4). Existen interacciones f\u00e1rmaco-alimento relevantes."},{"n":"71","noShuffle":true,"img":null,"q":"En farmacovigilancia se consideran se\u00f1ales de alarma:","o":["La existencia de posibles riesgos no conocidos anteriormente","Cambios en la gravedad o frecuencia de riesgos ya conocidos","Las respuestas a) y b) son correctas","Ninguna es correcta"],"c":3,"e":"Una <b>se\u00f1al</b> en farmacovigilancia es informaci\u00f3n sobre una posible asociaci\u00f3n causal nueva o un <b>cambio en la gravedad/frecuencia</b> de un riesgo ya conocido. Ambas situaciones lo son."},{"n":"72","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 es cierto sobre el inhalador \"Anasma Accuhaler\"?","o":["El tipo de dispositivo viene indicado por el nombre \"Anasma\"","El tipo de dispositivo viene indicado por el nombre \"Accuhaler\"","El tipo de dispositivo no viene indicado en el nombre","Podr\u00eda ser sustituido por otro de igual composici\u00f3n y dispositivo"],"c":2,"e":"\"Anasma\" es el nombre comercial; <b>\"Accuhaler\"</b> identifica el <b>tipo de dispositivo</b> (inhalador de polvo seco). No es intercambiable por otro dispositivo distinto sin prescripci\u00f3n."},{"n":"73","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 afirmaci\u00f3n es FALSA sobre los parches transd\u00e9rmicos?","o":["Se formulan para que el f\u00e1rmaco llegue a sangre y act\u00fae de forma sist\u00e9mica","Son formas farmac\u00e9uticas que se adhieren a la piel","En los parches transd\u00e9rmicos no se controla la velocidad de liberaci\u00f3n del f\u00e1rmaco, es decir, no es siempre la misma","La periodicidad de cambio puede ser de 12 h, 24 h, 72 h..."],"c":3,"e":"Es falsa: el parche transd\u00e9rmico es un sistema de <b>liberaci\u00f3n controlada</b> que mantiene una velocidad de cesi\u00f3n <b>constante y predecible</b> durante el periodo de aplicaci\u00f3n."},{"n":"74","noShuffle":false,"img":null,"q":"Se\u00f1ale la afirmaci\u00f3n correcta:","o":["El paciente con ileostom\u00eda debe tomar mucha agua para evitar deshidratarse","La consistencia del efluyente es igual en todos los tipos de ostom\u00edas digestivas","La consistencia del efluyente de las urostom\u00edas es igual al de las ostom\u00edas digestivas","El paciente con ileostom\u00eda debe tomar mucha agua para evitar infecciones de orina"],"c":1,"e":"El efluyente de la <b>ileostom\u00eda es l\u00edquido</b> y rico en electrolitos, con riesgo de <b>deshidrataci\u00f3n</b>; precisa buena ingesta h\u00eddrica. La consistencia var\u00eda seg\u00fan el tramo (colostom\u00eda m\u00e1s s\u00f3lida)."},{"n":"75","noShuffle":false,"img":null,"q":"El nombre de la forma farmac\u00e9utica mostrada (cubierta gelatinosa \u00fanica que contiene un l\u00edquido o pasta oleosa) es:","o":["\u00d3vulos","Comprimidos","C\u00e1psulas duras","C\u00e1psulas blandas"],"c":4,"e":"Las <b>c\u00e1psulas blandas</b> tienen una cubierta de gelatina el\u00e1stica de una sola pieza que alberga contenido l\u00edquido o semis\u00f3lido (oleoso). Las duras constan de dos mitades encajables."},{"n":"77","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 es cierto sobre el dispositivo mostrado (sistema de ostom\u00eda de una sola pieza, sin orificio de vaciado)?","o":["Es una bolsa de 2 piezas","Es una bolsa cerrada de una pieza","Es una bolsa abierta de una pieza","Es una bolsa de urostom\u00eda de 1 pieza"],"c":2,"e":"Una <b>bolsa cerrada de una pieza</b> integra adhesivo y bolsa sin posibilidad de vaciado; se desecha completa. Es t\u00edpica de colostom\u00edas con efluyente formado. Las abiertas llevan pinza/cierre vaciable."},{"n":"79","noShuffle":false,"img":null,"q":"Se\u00f1ale la afirmaci\u00f3n correcta:","o":["Tanto la alimentaci\u00f3n como la nutrici\u00f3n son actos voluntarios","La dietoterapia es el establecimiento de pautas alimentarias para mejorar o prevenir ciertas enfermedades","Tanto la alimentaci\u00f3n como la nutrici\u00f3n son actos involuntarios","La dietoterapia establece pautas solo para enfermedades del aparato digestivo"],"c":2,"e":"La <b>dietoterapia</b> adapta la alimentaci\u00f3n con fines preventivos o terap\u00e9uticos en <b>diversas enfermedades</b>. La alimentaci\u00f3n es voluntaria, pero la nutrici\u00f3n (procesos metab\u00f3licos) es involuntaria."}],"sna":[{"n":"5","noShuffle":false,"img":null,"q":"Las caracter\u00edsticas \u00abvoluntario \u00b7 inerva m\u00fasculo esquel\u00e9tico \u00b7 neurotransmisor acetilcolina \u00b7 receptor colin\u00e9rgico nicot\u00ednico\u00bb se corresponden con:","o":["Sistema nervioso simp\u00e1tico","Sistema nervioso som\u00e1tico","Sistema nervioso parasimp\u00e1tico","Sistema nervioso simp\u00e1tico y parasimp\u00e1tico"],"c":2,"e":"El <b>sistema nervioso som\u00e1tico</b> es voluntario, inerva m\u00fasculo esquel\u00e9tico y emplea <b>acetilcolina sobre receptores nicot\u00ednicos</b> en la placa motora."},{"n":"6","noShuffle":false,"img":null,"q":"Se\u00f1ale la afirmaci\u00f3n correcta:","o":["Pilocarpina es un agonista colin\u00e9rgico de acci\u00f3n directa y bisoprolol un antagonista selectivo beta-1, por lo que es cardioselectivo","Pilocarpina es un agonista colin\u00e9rgico de acci\u00f3n indirecta y bisoprolol un agonista selectivo beta-1","Pilocarpina es un antagonista colin\u00e9rgico y bisoprolol un antagonista selectivo","Pilocarpina es un agonista colin\u00e9rgico directo y bisoprolol un antagonista beta-1 que act\u00faa sobre los vasos sangu\u00edneos"],"c":1,"e":"La <b>pilocarpina</b> es un agonista muscar\u00ednico de <b>acci\u00f3n directa</b>. El <b>bisoprolol</b> bloquea selectivamente receptores <b>beta-1</b> cardiacos: es cardioselectivo."},{"n":"8","noShuffle":false,"img":null,"q":"NO es una acci\u00f3n de los antagonistas alfa-adren\u00e9rgicos:","o":["Facilitar la micci\u00f3n","Disminuir la presi\u00f3n arterial","Aumentar la liberaci\u00f3n central de adrenalina y serotonina","Broncodilataci\u00f3n"],"c":4,"e":"Los bloqueantes alfa relajan el m\u00fasculo liso vascular (hipotensi\u00f3n) y el del cuello vesical (facilitan la micci\u00f3n). La <b>broncodilataci\u00f3n</b> es un efecto <b>beta-2 adren\u00e9rgico</b>, no alfa."},{"n":"22","noShuffle":false,"img":null,"q":"Se\u00f1ale la relaci\u00f3n \u00abf\u00e1rmaco - reacci\u00f3n adversa\u00bb FALSA:","o":["Succinilcolina - hipertermia maligna","Propranolol - broncoconstricci\u00f3n","Atropina - salivaci\u00f3n y diarrea","Neostigmina - broncoconstricci\u00f3n y sudoraci\u00f3n"],"c":3,"e":"La <b>atropina</b> es antimuscar\u00ednica: produce <b>sequedad de boca, estre\u00f1imiento</b> y retenci\u00f3n, no salivaci\u00f3n ni diarrea (efectos colin\u00e9rgicos opuestos)."},{"n":"32","noShuffle":false,"img":null,"q":"Se\u00f1ale la relaci\u00f3n \u00abf\u00e1rmaco - indicaci\u00f3n terap\u00e9utica\u00bb CORRECTA:","o":["Adrenalina - hipertensi\u00f3n","Clonidina - s\u00edndrome de abstinencia a opioides","Propranolol - asma","Escopolamina - miastenia gravis"],"c":2,"e":"La <b>clonidina</b> (agonista alfa-2 central) aten\u00faa la hiperactividad simp\u00e1tica de la <b>abstinencia a opioides</b>. El propranolol est\u00e1 contraindicado en asma y la escopolamina no trata la miastenia."},{"n":"50","noShuffle":false,"img":null,"q":"Sobre la sinapsis preganglionar del sistema nervioso simp\u00e1tico es cierto:","o":["Neurotransmisor acetilcolina - receptor nicot\u00ednico","Neurotransmisor acetilcolina - receptor muscar\u00ednico","Neurotransmisor noradrenalina - receptor adren\u00e9rgico","Neurotransmisor noradrenalina - receptor nicot\u00ednico"],"c":1,"e":"Todas las fibras <b>preganglionares</b> (simp\u00e1ticas y parasimp\u00e1ticas) liberan <b>acetilcolina</b> sobre receptores <b>nicot\u00ednicos</b> ganglionares. La noradrenalina aparece en la fibra posganglionar simp\u00e1tica."},{"n":"54","noShuffle":false,"img":null,"q":"Se\u00f1ale la afirmaci\u00f3n correcta sobre los bloqueantes neuromusculares:","o":["Todos son antagonistas de los receptores nicot\u00ednicos del m\u00fasculo esquel\u00e9tico","Los despolarizantes act\u00faan como antagonistas de los receptores nicot\u00ednicos produciendo una despolarizaci\u00f3n prolongada","Los no despolarizantes act\u00faan como antagonistas de los receptores nicot\u00ednicos del m\u00fasculo esquel\u00e9tico, produciendo menor despolarizaci\u00f3n de la membrana","Se administran solo por v\u00eda oral"],"c":3,"e":"Los <b>no despolarizantes</b> (curarizantes) son <b>antagonistas competitivos</b> del receptor nicot\u00ednico: impiden la despolarizaci\u00f3n. Los despolarizantes (succinilcolina) son agonistas que despolarizan de forma mantenida."},{"n":"55","noShuffle":false,"img":null,"q":"\u00bfPor qu\u00e9 la tamsulosina no se utiliza para tratar la hipertensi\u00f3n arterial?","o":["Porque es un agonista alfa-1","Porque no es un antagonista alfa-1","Porque es antagonista selectivo alfa-1A, siendo un f\u00e1rmaco uroselectivo","Porque es un antagonista colin\u00e9rgico"],"c":3,"e":"La <b>tamsulosina</b> bloquea selectivamente el subtipo <b>alfa-1A</b> (predominante en pr\u00f3stata y cuello vesical): es <b>uroselectiva</b> y apenas afecta a los alfa-1B vasculares, por lo que no es antihipertensiva."},{"n":"66","noShuffle":false,"img":null,"q":"Indique la relaci\u00f3n FALSA:","o":["Fisostigmina - inhibidor de la acetilcolinesterasa","Carvedilol - bloqueo beta-1 selectivo y agonista beta-2 selectivo","Adrenalina - agonista alfa y beta adren\u00e9rgico","Ipratropio - antagonista de los receptores muscar\u00ednicos"],"c":2,"e":"El <b>carvedilol</b> es un <b>betabloqueante no selectivo</b> (beta-1 y beta-2) con bloqueo alfa-1 adicional; no es beta-1 selectivo ni agonista beta-2."},{"n":"69","noShuffle":false,"img":null,"q":"Los agonistas colin\u00e9rgicos pueden emplearse en los siguientes casos, EXCEPTO:","o":["Tratamiento del glaucoma","S\u00edndrome de Sj\u00f6gren","Tratamiento del \u00edleo paral\u00edtico no obstructivo","Tratamiento del EPOC y el asma"],"c":4,"e":"Los colin\u00e9rgicos provocan <b>broncoconstricci\u00f3n</b>, por lo que est\u00e1n <b>contraindicados en EPOC y asma</b>. S\u00ed se usan en glaucoma, xerostom\u00eda (Sj\u00f6gren) e \u00edleo/aton\u00eda vesical."}],"cv":[{"n":"7","noShuffle":false,"img":null,"q":"Indique la respuesta FALSA:","o":["Bisoprolol + verapamilo favorecen bradicardia, hipotensi\u00f3n e insuficiencia cardiaca","El amlodipino tiene un efecto vasodilatador inferior al verapamilo","El diltiazem tiene un efecto antiarr\u00edtmico superior a las dihidropiridinas","El losart\u00e1n no afecta a la bradicinina"],"c":2,"e":"Es falsa: las <b>dihidropiridinas como el amlodipino</b> son potentes <b>vasodilatadores</b>, superiores en este efecto al verapamilo, que act\u00faa m\u00e1s sobre el coraz\u00f3n (cronotropo/dromotropo negativo)."},{"n":"15","noShuffle":false,"img":null,"q":"Ante un paciente con angina de reposo (vasoesp\u00e1stica), \u00bfqu\u00e9 tratamiento de primera l\u00ednea instaurar\u00eda?","o":["5-mononitrato de isosorbida + propranolol","Bisoprolol + amlodipino","Dinitrato de isosorbida + nifedipino","Nitroglicerina + propranolol"],"c":3,"e":"En la angina de reposo (Prinzmetal) por <b>vasoespasmo</b> se usan <b>nitratos + calcioantagonistas (nifedipino)</b>. Los <b>betabloqueantes est\u00e1n desaconsejados</b> porque favorecen el espasmo coronario."},{"n":"17","noShuffle":false,"img":null,"q":"Paciente con hipertrigliceridemia que ya ha fracasado con dieta + fibratos. \u00bfQu\u00e9 estrategia aplicar\u00eda?","o":["Dieta + fibratos + estatinas","Dieta + fibratos + colestiramina","Dieta + fibratos + ezetimiba","Dieta + fibratos + \u00e1cido nicot\u00ednico"],"c":4,"e":"El <b>\u00e1cido nicot\u00ednico (niacina)</b> reduce eficazmente los triglic\u00e9ridos y eleva el HDL, complementando a los fibratos. Las resinas pueden incluso aumentar los triglic\u00e9ridos."},{"n":"18","noShuffle":false,"img":null,"q":"Marque la relaci\u00f3n INCORRECTA:","o":["Espironolactona / antagonista de la aldosterona","Amilorida / bloqueante de los canales de Na+","Torasemida / acci\u00f3n en el asa de Henle","Hidroclorotiazida / inhibici\u00f3n de la prote\u00edna cotransportadora Na-K-2Cl"],"c":4,"e":"Es incorrecta: la <b>hidroclorotiazida</b> inhibe el cotransportador <b>Na-Cl del t\u00fabulo distal</b>. El cotransportador <b>Na-K-2Cl</b> es la diana de los diur\u00e9ticos de asa (furosemida)."},{"n":"20","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 f\u00e1rmaco causa ototoxicidad cuando se asocia a aminogluc\u00f3sidos?","o":["Furosemida","Hidroclorotiazida","Triamtereno","Acetazolamida"],"c":1,"e":"La <b>furosemida</b> es otot\u00f3xica y su asociaci\u00f3n con aminogluc\u00f3sidos <b>potencia el da\u00f1o coclear</b>, aumentando el riesgo de sordera. Conviene evitar la combinaci\u00f3n."},{"n":"60","noShuffle":false,"img":null,"q":"Var\u00f3n de 70 a\u00f1os hipertenso con insuficiencia cardiaca que consulta por tos seca persistente (picor far\u00edngeo) e hiperpotasemia anal\u00edtica. \u00bfCu\u00e1l es el f\u00e1rmaco sospechoso?","o":["Hidralazina","Enalapril","Hidroclorotiazida","Bisoprolol"],"c":2,"e":"El <b>enalapril (IECA)</b> produce <b>tos seca</b> por acumulaci\u00f3n de bradicinina e <b>hiperpotasemia</b> al reducir la aldosterona. Es la causa t\u00edpica de esta combinaci\u00f3n cl\u00ednica."},{"n":"61","noShuffle":false,"img":null,"q":"Indique una contraindicaci\u00f3n de la dopamina:","o":["Insuficiencia cardiaca aguda con hipotensi\u00f3n","A dosis altas en estados de choque","Arritmia ventricular","Insuficiencia renal"],"c":3,"e":"La dopamina es proarritm\u00f3gena; est\u00e1 <b>contraindicada en arritmias ventriculares</b> (taquicardia/fibrilaci\u00f3n ventricular). S\u00ed se emplea en shock e IC aguda con hipotensi\u00f3n."},{"n":"68","noShuffle":false,"img":null,"q":"Se\u00f1ale la relaci\u00f3n INCORRECTA:","o":["Levosimend\u00e1n / troponina C","Flecainida / uni\u00f3n al estado inactivo del canal de Na+","Dinitrato de isosorbida / reduce la precarga","Amiodarona / taquicardia asociada al s\u00edndrome de Wolff-Parkinson-White"],"c":2,"e":"Es incorrecta: la <b>flecainida</b> (antiarr\u00edtmico clase IC) se une preferentemente al canal de sodio en estado <b>activado/abierto</b>, con disociaci\u00f3n lenta, no al estado inactivo."}],"snc":[{"n":"14","noShuffle":false,"img":null,"q":"Indique la relaci\u00f3n INCORRECTA:","o":["Levetiracetam / fijaci\u00f3n a la prote\u00edna SV2A de las ves\u00edculas presin\u00e1pticas","Topiramato / inhibici\u00f3n de canales de Na+ dependientes de voltaje","Lamotrigina / eficaz en episodios depresivos del trastorno bipolar","\u00c1cido valproico / disminuye el \u00e1cido f\u00f3lico"],"c":4,"e":"Es incorrecta esa relaci\u00f3n: el <b>\u00e1cido valproico</b> es <b>antagonista del \u00e1cido f\u00f3lico</b> (interfiere en su metabolismo), por lo que es terat\u00f3geno (defectos del tubo neural), no lo \u00abdisminuye\u00bb como mecanismo de acci\u00f3n atribuido err\u00f3neamente."},{"n":"19","noShuffle":false,"img":null,"q":"Se\u00f1ale la respuesta INCORRECTA:","o":["El muscimol es an\u00e1logo natural del GABA y tiene alta afinidad por su receptor","La p\u00e9rdida de funciones del sistema noradren\u00e9rgico se relaciona con la depresi\u00f3n","El baclofeno es un an\u00e1logo sint\u00e9tico de la glicina que causa relajaci\u00f3n muscular","La p\u00e9rdida de funci\u00f3n del sistema colin\u00e9rgico se relaciona con el Alzheimer"],"c":3,"e":"Es incorrecta: el <b>baclofeno</b> es un agonista del receptor <b>GABA-B</b> (an\u00e1logo del GABA), no de la glicina, y produce relajaci\u00f3n muscular espinal."},{"n":"23","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 f\u00e1rmaco es apropiado para el trastorno de ansiedad ligado a estr\u00e9s postraum\u00e1tico?","o":["Paroxetina","Fluoxetina","Bupropi\u00f3n","Amitriptilina"],"c":1,"e":"La <b>paroxetina</b> (ISRS) est\u00e1 espec\u00edficamente aprobada para el <b>trastorno de estr\u00e9s postraum\u00e1tico</b>, adem\u00e1s de otros trastornos de ansiedad."},{"n":"24","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 f\u00e1rmaco presenta buena correlaci\u00f3n entre concentraci\u00f3n plasm\u00e1tica y grado de sedaci\u00f3n, permitiendo diferenciar sedaci\u00f3n de anestesia?","o":["Propofol","Midazolam","Fentanilo","Ketamina"],"c":1,"e":"El <b>propofol</b> tiene una relaci\u00f3n concentraci\u00f3n-efecto predecible y de inicio/recuperaci\u00f3n r\u00e1pidos, lo que permite titular con precisi\u00f3n desde la <b>sedaci\u00f3n hasta la anestesia</b>."},{"n":"27","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 medicamento se emplea en anestesia epidural?","o":["Mepivaca\u00edna","Bupivaca\u00edna","Benzoca\u00edna","Tetraca\u00edna"],"c":2,"e":"La <b>bupivaca\u00edna</b> es un anest\u00e9sico local de larga duraci\u00f3n ampliamente utilizado en <b>anestesia epidural y raqu\u00eddea</b> por su potencia y duraci\u00f3n."},{"n":"30","noShuffle":false,"img":null,"q":"F\u00e1rmaco utilizado en el delirium tremens (abstinencia alcoh\u00f3lica) y en estados de confusi\u00f3n y agitaci\u00f3n del anciano:","o":["Hidroxicina","Clometiazol","Gabapentina","Propranolol"],"c":2,"e":"El <b>clometiazol</b> es un sedante-hipn\u00f3tico empleado en el <b>delirium tremens</b> y en la agitaci\u00f3n/confusi\u00f3n del anciano, con efecto anticonvulsivante."},{"n":"34","noShuffle":false,"img":null,"q":"Indique la respuesta INCORRECTA sobre la serotonina:","o":["Act\u00faa sobre receptores 5-HT2 aumentando la agregaci\u00f3n plaquetaria","La metisergida tiene acci\u00f3n agonista parcial sobre receptores 5-HT1A","El receptor 5-HT4 es responsable de la acci\u00f3n procin\u00e9tica","Los agonistas de receptores 5-HT1B/1D provocan vasoconstricci\u00f3n e inhibici\u00f3n neuronal"],"c":2,"e":"Es incorrecta: la <b>metisergida</b> es un <b>antagonista 5-HT2</b> (profilaxis de la migra\u00f1a), no un agonista parcial 5-HT1A."},{"n":"37","noShuffle":false,"img":null,"q":"Marque el opioide que se comporta como agonista parcial:","o":["Tramadol","Buprenorfina","Pentazocina","Oxicodona"],"c":2,"e":"La <b>buprenorfina</b> es un <b>agonista parcial</b> del receptor mu (con efecto techo), de alta afinidad; \u00fatil en dolor y en deshabituaci\u00f3n a opioides. La pentazocina es agonista-antagonista."},{"n":"38","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 f\u00e1rmaco se administra junto a levodopa y carbidopa aumentando la biodisponibilidad de la levodopa?","o":["Entacapona","Rasagilina","Cabergolida","Pramipexol"],"c":1,"e":"La <b>entacapona</b> inhibe la <b>COMT</b> perif\u00e9rica, frena la degradaci\u00f3n de la levodopa y prolonga su disponibilidad, reduciendo las fluctuaciones motoras."},{"n":"39","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 es cierto sobre el potencial de reforzamiento o de adictividad de un f\u00e1rmaco?","o":["Solo depende de la farmacodinamia del f\u00e1rmaco","Solo depende de la farmacocin\u00e9tica del f\u00e1rmaco","La probabilidad de adicci\u00f3n es inversamente proporcional a su liposolubilidad","Los f\u00e1rmacos que alteran la neurotransmisi\u00f3n dopamin\u00e9rgica pueden producir adictividad"],"c":4,"e":"El refuerzo adictivo se vincula a la activaci\u00f3n de la v\u00eda <b>dopamin\u00e9rgica mesol\u00edmbica</b> (n\u00facleo accumbens). Mayor liposolubilidad y rapidez de acci\u00f3n aumentan el potencial adictivo."},{"n":"42","noShuffle":false,"img":null,"q":"Indique la respuesta INCORRECTA:","o":["Los salicilatos inhiben la COX-1 disminuyendo la producci\u00f3n de TXA2","La agranulocitosis es la principal RAM del diclofenaco","El paracetamol es de elecci\u00f3n en la infecci\u00f3n v\u00edrica en ni\u00f1os","El meloxicam bloquea preferentemente la COX-2"],"c":2,"e":"Es incorrecta: la <b>agranulocitosis</b> es una reacci\u00f3n caracter\u00edstica del <b>metamizol</b>, no del diclofenaco. El paracetamol se prefiere en ni\u00f1os por el riesgo de Reye con AAS."},{"n":"43","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l NO es una caracter\u00edstica de la clozapina?","o":["Mayor efectividad en s\u00edntomas negativos","Baja incidencia de reacciones extrapiramidales","Agranulocitosis","Hiperprolactinemia"],"c":4,"e":"La <b>clozapina</b> apenas eleva la prolactina (baja afinidad D2): la <b>hiperprolactinemia no es t\u00edpica</b>. S\u00ed destaca por su eficacia, escasos extrapiramidalismos y riesgo de agranulocitosis."},{"n":"47","noShuffle":false,"img":null,"q":"Se\u00f1ale la relaci\u00f3n INCORRECTA:","o":["Donepezilo / tratamiento de elecci\u00f3n en Alzheimer de leve a moderado","Rivastigmina / demencia leve a moderadamente grave con enfermedad de Parkinson","Memantina / antagonista no competitivo del receptor NMDA","Galantamina / inhibici\u00f3n selectiva reversible de la AChE"],"c":3,"e":"Seg\u00fan la clave del examen, la relaci\u00f3n se\u00f1alada es esta. La <b>memantina</b> es un antagonista no competitivo del NMDA, pero indicada en fases <b>moderada-grave</b>, no en las leves que tratan los anticolinester\u00e1sicos."}],"inf":[{"n":"10","noShuffle":false,"img":null,"q":"Se\u00f1ale el f\u00e1rmaco de primera elecci\u00f3n en infecciones por Chlamydia:","o":["Tetraciclina","Ampicilina","Estreptomicina","Amoxicilina + \u00e1cido clavul\u00e1nico"],"c":1,"e":"Las <b>tetraciclinas (doxiciclina)</b> son de elecci\u00f3n frente a <b>Chlamydia</b>, microorganismo intracelular; los macr\u00f3lidos (azitromicina) son la alternativa. Los betalact\u00e1micos son ineficaces."},{"n":"13","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 antibi\u00f3tico aumenta el vaciado g\u00e1strico y resulta eficaz contra la gastroparesia?","o":["Eritromicina","Amoxicilina","Neomicina","Cotrimoxazol"],"c":1,"e":"La <b>eritromicina</b> es <b>agonista del receptor de motilina</b>, estimula la motilidad g\u00e1strica y se usa como procin\u00e9tico en la gastroparesia."},{"n":"29","noShuffle":false,"img":null,"q":"Se\u00f1ale la relaci\u00f3n CORRECTA sobre los mecanismos de acci\u00f3n de los antibi\u00f3ticos:","o":["Vancomicina / inhibici\u00f3n de la s\u00edntesis de prote\u00ednas","Trimetoprim / bloqueo de la s\u00edntesis de \u00e1cido f\u00f3lico","Cloranfenicol / inhibici\u00f3n de la topoisomerasa II","Sulfamidas / alteraci\u00f3n de la membrana citoplasm\u00e1tica"],"c":2,"e":"El <b>trimetoprim</b> inhibe la <b>dihidrofolato reductasa</b>, bloqueando la s\u00edntesis de folato. La vancomicina act\u00faa sobre la pared, el cloranfenicol sobre el ribosoma 50S y las sulfamidas inhiben la dihidropteroato sintetasa."},{"n":"33","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 f\u00e1rmaco bactericida es muy t\u00f3xico, por lo que su uso se limita a la aplicaci\u00f3n t\u00f3pica?","o":["Fosfomicina","Cicloserina","Cloxacilina","Bacitracina"],"c":4,"e":"La <b>bacitracina</b> es muy nefrot\u00f3xica por v\u00eda sist\u00e9mica; inhibe la s\u00edntesis de la pared bacteriana y se reserva para <b>uso t\u00f3pico</b>."},{"n":"36","noShuffle":false,"img":null,"q":"Ante una infecci\u00f3n intrahospitalaria por Pseudomonas aeruginosa, \u00bfqu\u00e9 cefalosporina propondr\u00eda?","o":["Ceftazidima","Cefuroxima","Cefazolina","Cefotaxima"],"c":1,"e":"La <b>ceftazidima</b> (cefalosporina de 3.\u00aa generaci\u00f3n) posee <b>actividad antipseudom\u00f3nica</b>, a diferencia de cefuroxima, cefazolina o cefotaxima."},{"n":"40","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l es la acci\u00f3n terap\u00e9utica de la mefloquina?","o":["Antiarr\u00edtmica","Antiem\u00e9tica","Antihipertensiva","Antipal\u00fadica"],"c":4,"e":"La <b>mefloquina</b> es un <b>antipal\u00fadico</b> empleado en profilaxis y tratamiento de la malaria, incluyendo cepas resistentes a la cloroquina."},{"n":"41","noShuffle":false,"img":null,"q":"Ante un al\u00e9rgico a la penicilina con infecci\u00f3n por estreptococos, \u00bfqu\u00e9 f\u00e1rmaco elegir\u00eda?","o":["Eritromicina","Claritromicina","Azitromicina","Gentamicina"],"c":1,"e":"En al\u00e9rgicos a betalact\u00e1micos, los <b>macr\u00f3lidos como la eritromicina</b> son alternativa frente a estreptococos. La gentamicina (aminogluc\u00f3sido) carece de actividad fiable frente a estreptococos en monoterapia."},{"n":"46","noShuffle":false,"img":null,"q":"Desplazan a la bilirrubina de su uni\u00f3n a la alb\u00famina provocando ictericia (kern\u00edcterus en el neonato):","o":["Sulfamidas","Polimixinas","Quinolonas","Fluoroquinolonas"],"c":1,"e":"Las <b>sulfamidas</b> desplazan la bilirrubina de la alb\u00famina; en el neonato aumentan la bilirrubina libre con riesgo de <b>kern\u00edcterus</b>, por lo que se evitan en el embarazo a t\u00e9rmino y lactantes."},{"n":"49","noShuffle":false,"img":null,"q":"Se\u00f1ale una RAM del cloranfenicol:","o":["S\u00edndrome del cuello o del hombre rojo","S\u00edndrome de Stevens-Johnson","S\u00edndrome gris del reci\u00e9n nacido","Hipertermia maligna"],"c":3,"e":"El <b>cloranfenicol</b> produce el <b>s\u00edndrome gris del reci\u00e9n nacido</b> (cianosis, hipotensi\u00f3n y colapso) por inmadurez de la glucuronoconjugaci\u00f3n. El \u00abhombre rojo\u00bb corresponde a la vancomicina."},{"n":"52","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 antif\u00fangico inhibe la timidilato sintasa?","o":["Nistatina","Flucitosina","Griseofulvina","Anfotericina B"],"c":2,"e":"La <b>flucitosina</b> se convierte en 5-fluorouracilo, que inhibe la <b>timidilato sintasa</b> y altera la s\u00edntesis de ADN/ARN f\u00fangico. Suele asociarse a anfotericina B."},{"n":"56","noShuffle":false,"img":null,"q":"Se\u00f1ale el f\u00e1rmaco con acci\u00f3n microfilaricida:","o":["Mebendazol","Praziquantel","Ivermectina","Niclosamida"],"c":3,"e":"La <b>ivermectina</b> es <b>microfilaricida</b>; tratamiento de la oncocercosis y otras filariasis y de la estrongiloidiasis. Act\u00faa sobre los canales de cloro glutamato-dependientes del par\u00e1sito."},{"n":"57","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 f\u00e1rmaco es \u00fatil por v\u00eda t\u00f3pica para tratar la candidiasis bucofar\u00edngea?","o":["Ketoconazol","Fluconazol","Itraconazol","Miconazol"],"c":4,"e":"El <b>miconazol</b> (gel oral) es un azol de uso <b>t\u00f3pico</b> eficaz en la candidiasis orofar\u00edngea. Los dem\u00e1s se usan habitualmente por v\u00eda sist\u00e9mica."},{"n":"63","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l fue el primer f\u00e1rmaco empleado en el tratamiento del VIH?","o":["Lamivudina","Zidovudina","Nevirapina","Inhibidores de la proteasa"],"c":2,"e":"La <b>zidovudina (AZT)</b>, an\u00e1logo de nucle\u00f3sido inhibidor de la transcriptasa inversa, fue el <b>primer antirretroviral</b> aprobado frente al VIH (1987)."},{"n":"65","noShuffle":false,"img":null,"q":"Es un antiv\u00edrico an\u00e1logo de la guanosina:","o":["Foscarnet","Zanamivir","Oseltamivir","Aciclovir"],"c":4,"e":"El <b>aciclovir</b> es un an\u00e1logo de la <b>guanosina</b> que, fosforilado por la timidina cinasa viral, inhibe la ADN polimerasa del virus herpes."},{"n":"67","noShuffle":false,"img":null,"q":"Indique el f\u00e1rmaco oral usado en profilaxis y tratamiento de las infecciones por virus influenza tipo A:","o":["Amantadina","Imiquimod","Valaciclovir","Palivizumab"],"c":1,"e":"La <b>amantadina</b> bloquea la prote\u00edna M2 del <b>virus influenza A</b>; se usa por v\u00eda oral en profilaxis y tratamiento (tambi\u00e9n en Parkinson)."},{"n":"78","noShuffle":false,"img":null,"q":"Marque la afirmaci\u00f3n INCORRECTA:","o":["Los al\u00e9rgicos a penicilinas pueden tener hipersensibilidad cruzada con cefalosporinas","Algunas cefalosporinas pueden producir hemorragias","Algunas cefalosporinas pueden causar convulsiones y mioclon\u00edas cuando hay fallo renal","Algunas penicilinas pueden causar alteraciones hematol\u00f3gicas como anemia"],"c":3,"e":"Seg\u00fan la clave del examen se marca esta opci\u00f3n, aunque las cuatro afirmaciones son cl\u00ednicamente correctas (la acumulaci\u00f3n de betalact\u00e1micos en insuficiencia renal puede causar neurotoxicidad). Es una pregunta discutible."}],"endo":[{"n":"4","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 es FALSO del octreotido?","o":["Indicado para la prevenci\u00f3n y el tratamiento de f\u00edstulas pancre\u00e1ticas","Indicado para tumores del tubo digestivo","Es un inhibidor de la liberaci\u00f3n de hormonas prosecretoras","Se utiliza para adsorber sustancias t\u00f3xicas e impedir que act\u00faen sobre la mucosa"],"c":4,"e":"Es falso: el <b>octreotido</b> es un <b>an\u00e1logo de la somatostatina</b> que inhibe la secreci\u00f3n hormonal (GH, hormonas gastrointestinales); no es un adsorbente de t\u00f3xicos."},{"n":"9","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l es un requisito para la politerapia antineopl\u00e1sica?","o":["Toxicidad diferente","Mecanismos de acci\u00f3n iguales","Mecanismos que act\u00faen sobre las mismas fases del ciclo celular","No es necesario que sean sin\u00e9rgicos"],"c":1,"e":"En quimioterapia combinada se eligen f\u00e1rmacos con <b>toxicidades no solapadas</b>, mecanismos distintos, sin resistencia cruzada y preferiblemente sin\u00e9rgicos, para maximizar eficacia y minimizar la toxicidad acumulada."},{"n":"11","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 f\u00e1rmaco cataliza la oxidaci\u00f3n de \u00e1cido \u00farico a alanto\u00edna?","o":["Rasburicasa","Colchicina","Alopurinol","Febuxostat"],"c":1,"e":"La <b>rasburicasa</b> es una urato oxidasa recombinante que <b>degrada el \u00e1cido \u00farico a alanto\u00edna</b> (m\u00e1s soluble); se usa en el s\u00edndrome de lisis tumoral. Alopurinol y febuxostat inhiben la xantina oxidasa."},{"n":"25","noShuffle":false,"img":null,"q":"Mujer de 55 a\u00f1os con osteonecrosis mandibular detectada en el dentista. \u00bfQu\u00e9 f\u00e1rmaco lleva consumiendo a largo plazo?","o":["Alendronato","Raloxifeno","Teriparatida","Calcitonina"],"c":1,"e":"Los <b>bisfosfonatos como el alendronato</b> se asocian a <b>osteonecrosis de los maxilares</b>, sobre todo tras procedimientos dentales y uso prolongado."},{"n":"44","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l NO es una aplicaci\u00f3n de los corticoides?","o":["Enfermedades al\u00e9rgicas","S\u00edndrome de Cushing","Dermatitis at\u00f3pica y psoriasis","Shock anafil\u00e1ctico"],"c":2,"e":"El <b>s\u00edndrome de Cushing</b> es precisamente un cuadro de <b>exceso de glucocorticoides</b>; los corticoides no lo tratan, lo causan (Cushing iatrog\u00e9nico). S\u00ed se usan en alergia, dermatosis y shock."},{"n":"48","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 f\u00e1rmaco ve modificada su absorci\u00f3n por el caf\u00e9, la fibra y la soja, y debe tomarse 1 h antes de las comidas?","o":["Levotiroxina (T4)","Metimazol","Yodo radiactivo","Sales de yoduro"],"c":1,"e":"La <b>levotiroxina</b> tiene absorci\u00f3n muy sensible a alimentos (caf\u00e9, fibra, soja, calcio, hierro); debe tomarse en <b>ayunas</b>, separada de las comidas, para garantizar una dosis estable."},{"n":"51","noShuffle":false,"img":null,"q":"Se\u00f1ale la respuesta INCORRECTA sobre la finasterida:","o":["Bloquea la formaci\u00f3n de la DHT (dihidrotestosterona)","Indicada en el c\u00e1ncer de pr\u00f3stata","Inhibe la 5-alfa-reductasa","Indicada en la hiperplasia benigna de pr\u00f3stata"],"c":2,"e":"Es incorrecta: la <b>finasterida</b> inhibe la 5-alfa-reductasa reduciendo la DHT y se indica en la <b>hiperplasia benigna de pr\u00f3stata</b> y la alopecia, no como tratamiento del c\u00e1ncer de pr\u00f3stata."}],"rdg":[{"n":"28","noShuffle":false,"img":null,"q":"Se\u00f1ale la relaci\u00f3n INCORRECTA:","o":["Difenhidramina / antagonista H1 de 1.\u00aa generaci\u00f3n","Ebastina / efecto sedante","Loratadina / antagonista H1 de 2.\u00aa generaci\u00f3n","Hidroxicina / sequedad de boca y mucosas"],"c":2,"e":"Es incorrecta: la <b>ebastina</b> es un antihistam\u00ednico H1 de <b>2.\u00aa generaci\u00f3n</b>, no atraviesa apenas la barrera hematoencef\u00e1lica y <b>carece de efecto sedante</b> relevante."},{"n":"53","noShuffle":false,"img":null,"q":"Indique la respuesta INCORRECTA:","o":["El formoterol es un agonista beta-2 adren\u00e9rgico de acci\u00f3n prolongada","Los glucocorticoides revierten el broncoespasmo","El bromuro de ipratropio no es de 1.\u00aa elecci\u00f3n en EPOC","La teofilina se usa por v\u00eda intravenosa en casos graves de asma"],"c":2,"e":"Es incorrecta: los <b>glucocorticoides son antiinflamatorios</b>, no broncodilatadores; <b>no revierten el broncoespasmo agudo</b>. Para ello se emplean beta-2 agonistas de acci\u00f3n r\u00e1pida."},{"n":"58","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l es el f\u00e1rmaco de elecci\u00f3n IV para la prevenci\u00f3n de la preeclampsia/eclampsia, incluso por delante de antihipertensivos y anticonvulsivantes?","o":["Sulfato de magnesio","Ritodrina","Atosib\u00e1n","Terbutalina"],"c":1,"e":"El <b>sulfato de magnesio</b> intravenoso es de elecci\u00f3n para <b>prevenir y tratar las convulsiones ecl\u00e1mpsicas</b> y como neuroprotector. Los dem\u00e1s son tocol\u00edticos."},{"n":"59","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 f\u00e1rmaco NO aumenta la actividad de la prote\u00edna CFTR en la fibrosis qu\u00edstica?","o":["Elexacaftor","Ivacaftor","Tezacaftor","Guaifenesina"],"c":4,"e":"La <b>guaifenesina</b> es un mucol\u00edtico/expectorante sin efecto sobre la CFTR. Ivacaftor (potenciador), elexacaftor y tezacaftor (correctores) s\u00ed modulan directamente la prote\u00edna."},{"n":"62","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 f\u00e1rmaco est\u00e1 contraindicado en el embarazo por riesgo de aborto?","o":["Misoprostol","Hidr\u00f3xido de aluminio","Derivados de magnesio","Sucralfato"],"c":1,"e":"El <b>misoprostol</b> (an\u00e1logo de prostaglandina E1) provoca <b>contracciones uterinas</b> y aborto; est\u00e1 contraindicado en el embarazo (se usa, de hecho, para inducir parto/aborto)."},{"n":"64","noShuffle":false,"img":null,"q":"Indique la relaci\u00f3n INCORRECTA:","o":["Cinetosis / escopolamina","Lorazepam / v\u00f3mitos inducidos por antineopl\u00e1sicos","Dexametasona / v\u00f3mitos graves del embarazo","Doxilamina / antihistam\u00ednico H1"],"c":3,"e":"Es incorrecta: en los <b>v\u00f3mitos del embarazo</b> se emplean doxilamina con piridoxina; la <b>dexametasona</b> se usa como antiem\u00e9tico en la quimioterapia, no en la hiper\u00e9mesis grav\u00eddica."},{"n":"76","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 f\u00e1rmaco es \u00fatil para la colitis ulcerosa?","o":["Sulfametoxazol","Sulfasalazina","Sulfadiazina arg\u00e9ntica","Sulfatiazol"],"c":2,"e":"La <b>sulfasalazina</b> (5-ASA unido a sulfapiridina) es un antiinflamatorio intestinal de uso cl\u00e1sico en la <b>colitis ulcerosa</b> y la enfermedad inflamatoria intestinal."}]};
+var IMGS={};
+
+/* ── Estado ── */
+var canSave=typeof localStorage!=='undefined';
+var saved={};try{saved=JSON.parse(localStorage.getItem(KEY)||'null')||{};}catch(e){}
+var state   =saved.state   ||{};
+var qOrd    =saved.qOrd    ||{};
+var oOrd    =saved.oOrd    ||{};
+var starred =saved.starred ||{};
+var failHist=saved.failHist||{};  // {qid: count} entre sesiones
+var darkMode=saved.dark    ||false;
+var timerSec=saved.timerSec||0;   // segundos configurados
+var SECS=Object.keys(META.secciones||{});
+var fFailed={};
+var qIdx={};           // {sec: {n: q}}
+var qNums={};          // {sec: {n: numero_correlativo}}
+var allOrder=null;     // orden mezclado inter-secciones para pestaña Todos
+var activeCid=null;
+var currentTab='all';
+var currentMode='test';
+var saveTimer=null;
+var starsFilter=false;
+var statsVisible=false;
+var timerRunning=false;
+var timerRemaining=timerSec;
+var timerInterval=null;
+
+/* ── INIT ── */
+(function init(){
+  SECS.forEach(function(s){fFailed[s]=false;});
+  injectSecCSS();
+  buildHeader();
+  buildTabs();
+  buildPanels();
+  buildIdx();
+  buildNums();
+  buildAllOrder();
+  SECS.forEach(render);
+  renderAll();
+  updateScores();
+  updateProg();
+  applyTheme();
+  initTimer();
+  setBadge(canSave?'Guardado':'Sin guardado',canSave?'ok':'warn');
+  document.addEventListener('keydown',handleKey);
+  var si=document.getElementById('search-input');
+  if(si)si.addEventListener('keydown',function(e){if(e.key==='Escape'){clearSearch();}});
+})();
+
+/* ── CSS dinámico ── */
+function injectSecCSS(){
+  var css='';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{};
+    var c=m.color||'#1a56db',cd=m.colorDim||'#e8f0fe';
+    css+='.tab.t-'+s+'.on{background:'+cd+';color:'+c+';border-color:'+c+'}\n';
+    css+='.ph.s-'+s+'{border-left:4px solid '+c+'}\n';
+    // Variables CSS por sección para el badge coloreado
+    css+='#panel-'+s+' .qnum.sec-colored{background:'+cd+';color:'+c+'}\n';
+  });
+  var st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+}
+
+/* ── Header ── */
+function buildHeader(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var t=document.getElementById('h-tit');if(t)t.textContent=META.titulo||'Banco MIR';
+  var pt=document.getElementById('page-title');if(pt)pt.textContent=META.titulo||'Banco MIR';
+  var m=document.getElementById('h-meta');
+  if(m){var p=[];if(total)p.push(total+' preguntas');if(META.examen)p.push(META.examen);m.textContent=p.join(' · ');}
+  var d=document.getElementById('ph-gdesc');if(d)d.textContent=META.subtitulo||'';
+  var r=document.getElementById('sc-rem-all');if(r)r.textContent='○ '+total;
+}
+
+/* ── Tabs ── */
+function buildTabs(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var h='<button class="tab t-all on" onclick="showTab(\'all\')">📋 Todos ('+total+')</button>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<button class="tab t-'+s+'" onclick="showTab(\''+s+'\')">'+(m.emoji?m.emoji+' ':'')+escH(m.label||s)+' ('+cnt+')</button>';
+  });
+  var w=document.getElementById('tabs-wrap');if(w)w.innerHTML=h;
+}
+
+/* ── Paneles ── */
+function buildPanels(){
+  var h='<div id="panel-all" class="sec-panel visible"><div id="qs-all"></div><div class="no-results" id="nr-all">No se encontraron preguntas</div></div>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<div id="panel-'+s+'" class="sec-panel">';
+    h+='<div class="ph s-'+s+'">';
+    h+='<div class="ph-left">';
+    h+='<span class="ph-label">'+(m.emoji?m.emoji+'&nbsp;':'')+escH(m.label||s)+'</span>';
+    if(m.desc)h+='<span class="ph-desc">'+escH(m.desc)+'</span>';
+    h+='<div class="score-row">';
+    h+='<span class="sc ok" id="sc-ok-'+s+'">✓ 0</span>';
+    h+='<span class="sc ko" id="sc-ko-'+s+'">✗ 0</span>';
+    h+='<span class="sc rem" id="sc-rem-'+s+'">○ '+cnt+'</span>';
+    h+='</div></div>';
+    h+='<button class="fbtn" id="fb-'+s+'" onclick="toggleFail(\''+s+'\')">Solo falladas</button>';
+    h+='</div>';
+    h+='<div id="qs-'+s+'"></div>';
+    h+='<div class="no-failed" id="nf-'+s+'">Aún no has fallado ninguna 🎉</div>';
+    h+='<div class="no-results" id="nr-'+s+'">No se encontraron preguntas</div>';
+    h+='<div class="sec-actions">';
+    h+='<button class="reset-btn" onclick="resetSec(\''+s+'\')">↺ Reiniciar</button>';
+    h+='<button class="nota-btn" onclick="calcNota(\''+s+'\')">✎ Calcular nota</button>';
+    h+='</div>';
+    h+='<div class="nota-box" id="nota-'+s+'"></div>';
+    h+='</div>';
+  });
+  var pw=document.getElementById('panels-wrap');if(pw)pw.innerHTML=h;
+}
+
+/* ── Índice O(1) + numeración fija ── */
+function buildIdx(){
+  SECS.forEach(function(s){
+    qIdx[s]={};
+    if(D[s])D[s].forEach(function(q){qIdx[s][q.n]=q;});
+  });
+}
+function buildNums(){
+  // Numeración correlativa fija: 1, 2, 3... por sección
+  SECS.forEach(function(s){
+    qNums[s]={};
+    if(D[s])D[s].forEach(function(q,i){qNums[s][q.n]=i+1;});
+  });
+}
+function getNum(sec,n){return qNums[sec]?qNums[sec][n]||n:n;}
+function findQ(qid){
+  var d=qid.indexOf('-'),s=qid.substring(0,d),n=qid.substring(d+1);
+  return(qIdx[s]&&qIdx[s][n])||null;
+}
+function getSecFromQid(qid){return qid.substring(0,qid.indexOf('-'));}
+function getNFromQid(qid){return qid.substring(qid.indexOf('-')+1);}
+
+/* ── Orden inter-secciones para Todos ── */
+function buildAllOrder(){
+  var all=[];
+  SECS.forEach(function(s){if(D[s])D[s].forEach(function(q){all.push({sec:s,n:q.n});});});
+  if(!qOrd['__all__'])qOrd['__all__']=shuffle(all.map(function(x){return x.sec+'|'+x.n;}));
+  allOrder=qOrd['__all__'].map(function(key){
+    var p=key.indexOf('|'),sec=key.substring(0,p),n=key.substring(p+1);
+    return{sec:sec,n:n,q:qIdx[sec]&&qIdx[sec][n]};
+  }).filter(function(x){return x.q;});
+}
+
+/* ── Utilidades ── */
+function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function shuffle(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=b[i];b[i]=b[j];b[j]=t;}return b;}
+function getQOrd(s,qs){if(!qOrd[s])qOrd[s]=shuffle(qs.map(function(q){return q.n;}));return qOrd[s];}
+function getOOrd(qid){
+  var q=findQ(qid);var n=q&&q.o?q.o.length:4;
+  if(q&&q.noShuffle){var a=[];for(var i=0;i<n;i++)a.push(i);return a;}
+  if(!oOrd[qid]){var a=[];for(var i=0;i<n;i++)a.push(i);oOrd[qid]=shuffle(a);}
+  return oOrd[qid];
+}
+function imgHtml(key){
+  if(!IMGS[key]){console.warn('IMGS: clave no encontrada →',key);return'';}
+  return'<div class="clinimg-wrap"><img src="'+IMGS[key]+'" class="clinimg" alt="Imagen clínica" loading="lazy"><div class="clinimg-cap">Imagen clínica</div></div>';
+}
+
+/* ── localStorage debounce ── */
+function saveLocal(){
+  if(!canSave)return;
+  if(saveTimer)clearTimeout(saveTimer);
+  saveTimer=setTimeout(function(){
+    try{
+      localStorage.setItem(KEY,JSON.stringify({state:state,qOrd:qOrd,oOrd:oOrd,starred:starred,failHist:failHist,dark:darkMode,timerSec:timerSec}));
+      setBadge('Guardado','ok');
+    }catch(e){setBadge('Sin guardado','warn');}
+  },300);
+}
+function setBadge(t,c){var b=document.getElementById('save-badge');if(b){b.textContent=t;b.className='sbadge '+c;}}
+
+/* ── Construcción de tarjeta ── */
+function buildCard(q,sec,inAll,allPos){
+  var qid=sec+'-'+q.n;
+  var cid=(inAll?'A-':'S-')+qid;
+  var num=inAll?(allPos+1):getNum(sec,q.n);
+  var oo=getOOrd(qid);
+  var sOpts=oo.map(function(i){return q.o[i];});
+  var nc=oo.indexOf(q.c-1)+1;
+  var ans=state[qid];
+  var cc=ans?(ans.r?' answered-ok':' answered-wrong'):'';
+  var badgeCls='qnum'+(inAll?'':' sec-colored');
+  var h='<div class="qcard s-'+sec+cc+'" id="card-'+cid+'">';
+  h+='<div class="qhead" id="h-'+cid+'" data-cid="'+cid+'" data-qid="'+qid+'" data-sec="'+sec+'" onclick="tog(this.dataset.cid)">';
+  h+='<span class="'+badgeCls+'">'+num+'</span>';
+  h+='<span class="qtxt">'+q.q+(ans?'<span class="atag '+(ans.r?'ok':'ko')+'">'+(ans.r?'✓ acertada':'✗ fallada')+'</span>':'')+'</span>';
+  h+='<button class="star-btn'+(starred[qid]?' on':'')+'\" id="star-'+cid+'" onclick="event.stopPropagation();toggleStar(\''+qid+'\')" title="Marcar (S)"><span class="si">\u2606</span><span class="sf">\u2605</span></button>';
+  h+='<span class="chev">▾</span>';
+  h+='</div>';
+  h+='<div class="qbody" id="b-'+cid+'">';
+  if(q.img)h+=imgHtml(q.img);
+  if(currentMode==='quick'){
+    h+='<div class="quick-card"><div class="quick-rc">✓ Respuesta correcta: opción '+nc+' — '+escH(q.o[q.c-1])+'</div><div class="expbox">'+q.e+'</div></div>';
+  } else {
+    h+='<ul class="opts" id="opts-'+cid+'">';
+    h+=sOpts.map(function(o,i){
+      var p=i+1,oc='opt';
+      if(ans){oc+=' done';if(p===nc)oc+=' correct';else if(p===ans.c&&!ans.r)oc+=' wrong';}
+      return'<li class="'+oc+'" data-qid="'+qid+'" data-pos="'+p+'" data-sec="'+sec+'" onclick="answer(this.dataset.qid,+this.dataset.pos,this.dataset.sec)"><span class="onum">'+p+'.</span><span>'+o+'</span></li>';
+    }).join('');
+    h+='</ul>';
+    if(ans){h+='<div class="expbox"><span class="et">'+(ans.r?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e+'</div>';}
+  }
+  h+='</div></div>';
+  return h;
+}
+
+/* ── Render sección ── */
+function render(sec){
+  var qs=D[sec];if(!qs)return;
+  var ord=getQOrd(sec,qs);
+  var sorted=ord.map(function(n){return qIdx[sec]&&qIdx[sec][n];}).filter(Boolean);
+  var el=document.getElementById('qs-'+sec);
+  if(el)el.innerHTML=sorted.map(function(q){return buildCard(q,sec,false,0);}).join('');
+}
+
+/* ── Render Todos (mezcla inter-secciones) ── */
+function renderAll(){
+  if(!allOrder)buildAllOrder();
+  var el=document.getElementById('qs-all');
+  if(el)el.innerHTML=allOrder.map(function(x,i){return buildCard(x.q,x.sec,true,i);}).join('');
+}
+
+/* ── Toggle open/close ── */
+function tog(cid){
+  var b=document.getElementById('b-'+cid),h=document.getElementById('h-'+cid);
+  if(!b||!h)return;
+  var opening=!b.classList.contains('open');
+  b.classList.toggle('open');h.classList.toggle('open');
+  if(opening){
+    if(activeCid&&activeCid!==cid){var pc=document.getElementById('card-'+activeCid);if(pc)pc.classList.remove('kb-focus');}
+    activeCid=cid;
+    var card=document.getElementById('card-'+cid);if(card)card.classList.add('kb-focus');
+  }else{
+    if(activeCid===cid){activeCid=null;var card=document.getElementById('card-'+cid);if(card)card.classList.remove('kb-focus');}
+  }
+}
+
+/* ── Responder ── */
+function answer(qid,pos,sec){
+  if(state[qid])return;
+  var q=findQ(qid);if(!q)return;
+  var oo=getOOrd(qid);
+  var nc=oo.indexOf(q.c-1)+1;
+  var isRight=pos===nc;
+  state[qid]={c:pos,r:isRight};
+  // Registro de errores
+  if(!isRight){failHist[qid]=(failHist[qid]||0)+1;}
+  saveLocal();
+  // Actualizar todas las instancias del card (panel sección + panel all)
+  // Actualizar opciones en todas las instancias del card
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var optsEl=document.querySelectorAll('#opts-'+cid+' .opt');
+    optsEl.forEach(function(el,i){
+      el.classList.add('done');
+      if(i+1===nc)el.classList.add('correct');
+      else if(i+1===pos&&!isRight)el.classList.add('wrong');
+    });
+    var bdy=document.getElementById('b-'+cid);
+    if(bdy){
+      var eb=bdy.querySelector('.expbox');
+      if(!eb){eb=document.createElement('div');eb.className='expbox';bdy.appendChild(eb);}
+      eb.innerHTML='<span class="et">'+(isRight?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e;
+    }
+    var hd=document.getElementById('h-'+cid);
+    if(hd){var qt=hd.querySelector('.qtxt');if(qt&&!qt.querySelector('.atag')){var at=document.createElement('span');at.className='atag '+(isRight?'ok':'ko');at.innerHTML=isRight?'✓ acertada':'✗ fallada';qt.appendChild(at);}}
+    var card=document.getElementById('card-'+cid);
+    if(card)card.classList.add(isRight?'answered-ok':'answered-wrong');
+  });
+  updateScores();updateProg();
+  if(fFailed[sec]&&isRight){
+    var fcard=document.getElementById('card-S-'+qid);
+    if(fcard)fcard.style.display='none';
+    refreshNF(sec);
+  }
+}
+
+/* ── Estrella ── */
+function toggleStar(qid){
+  starred[qid]=!starred[qid];
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var btn=document.getElementById('star-'+cid);
+    if(btn)btn.classList.toggle('on',starred[qid]);
+  });
+  saveLocal();
+}
+function filterStarred(){
+  starsFilter=!starsFilter;
+  var btn=document.getElementById('btn-stars');
+  if(btn){btn.style.background=starsFilter?'#fef3c7':'';btn.style.fontWeight=starsFilter?'700':'';}
+  document.querySelectorAll('.qcard').forEach(function(card){
+    if(starsFilter){
+      var hd=card.querySelector('.qhead');
+      var qid=hd?hd.dataset.qid:'';
+      card.style.display=starred[qid]?'':'none';
+    }else{card.style.display='';}
+  });
+}
+
+/* ── Filtro falladas ── */
+function refreshNF(sec){
+  var c=document.getElementById('qs-'+sec);if(!c||!fFailed[sec])return;
+  var n=c.querySelectorAll('.qcard.answered-wrong').length;
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',n===0);
+}
+function toggleFail(sec){
+  fFailed[sec]=!fFailed[sec];
+  var btn=document.getElementById('fb-'+sec);
+  if(btn){btn.classList.toggle('on',fFailed[sec]);btn.textContent=fFailed[sec]?'← Ver todas':'Solo falladas';}
+  var c=document.getElementById('qs-'+sec);if(!c)return;
+  var nf=0;
+  c.querySelectorAll('.qcard').forEach(function(card){
+    if(fFailed[sec]){var show=card.classList.contains('answered-wrong');card.style.display=show?'':'none';if(show)nf++;}
+    else{card.style.display='';}
+  });
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',fFailed[sec]&&nf===0);
+}
+
+/* ── Scores y progreso ── */
+function updateScores(){
+  var tok=0,tok2=0,tok3=0;
+  SECS.forEach(function(sec){
+    var ok=0,ko=0;
+    if(D[sec])D[sec].forEach(function(q){var a=state[sec+'-'+q.n];if(a){if(a.r)ok++;else ko++;}});
+    var tot=D[sec]?D[sec].length:0,rem=tot-ok-ko;
+    tok+=ok;tok2+=ko;tok3+=rem;
+    var eok=document.getElementById('sc-ok-'+sec),eko=document.getElementById('sc-ko-'+sec),erm=document.getElementById('sc-rem-'+sec);
+    if(eok)eok.textContent='✓ '+ok;if(eko)eko.textContent='✗ '+ko;if(erm)erm.textContent='○ '+rem;
+  });
+  var eok=document.getElementById('sc-ok-all'),eko=document.getElementById('sc-ko-all'),erm=document.getElementById('sc-rem-all');
+  if(eok)eok.textContent='✓ '+tok;if(eko)eko.textContent='✗ '+tok2;if(erm)erm.textContent='○ '+tok3;
+}
+function updateProg(){
+  var total=0,done=Object.keys(state).length;
+  SECS.forEach(function(s){if(D[s])total+=D[s].length;});
+  var pct=total>0?Math.round(done/total*100):0;
+  var bar=document.getElementById('prog-bar');if(bar)bar.style.width=pct+'%';
+}
+
+/* ── Tabs ── */
+function showTab(t){
+  currentTab=t;
+  document.querySelectorAll('.tab').forEach(function(b){b.classList.remove('on');});
+  var tb=document.querySelector('.tab.t-'+t);if(tb)tb.classList.add('on');
+  var mc=document.getElementById('main-cont');if(mc)mc.setAttribute('data-tab',t);
+  var panelAll=document.getElementById('panel-all');
+  if(panelAll)panelAll.classList.toggle('visible',t==='all');
+  SECS.forEach(function(s){
+    var p=document.getElementById('panel-'+s);
+    if(p)p.classList.toggle('visible',t===s);
+  });
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  clearSearch();
+}
+
+/* ── Reset ── */
+function resetSec(sec){
+  if(D[sec])D[sec].forEach(function(q){var qid=sec+'-'+q.n;delete state[qid];delete oOrd[qid];});
+  delete qOrd[sec];fFailed[sec]=false;activeCid=null;
+  var btn=document.getElementById('fb-'+sec);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+  var nb=document.getElementById('nota-'+sec);if(nb){nb.style.display='none';nb.className='nota-box';}
+  saveLocal();render(sec);
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.remove('show');
+  updateScores();updateProg();
+  // Reconstruir panel all para reflejar cambios
+  buildAllOrder();renderAll();
+}
+function resetAll(){
+  Object.keys(state).forEach(function(k){delete state[k];});
+  Object.keys(oOrd).forEach(function(k){delete oOrd[k];});
+  Object.keys(qOrd).forEach(function(k){delete qOrd[k];});
+  activeCid=null;starsFilter=false;allOrder=null;
+  var bs=document.getElementById('btn-stars');if(bs){bs.style.background='';bs.style.fontWeight='';}
+  SECS.forEach(function(s){
+    fFailed[s]=false;
+    var btn=document.getElementById('fb-'+s);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+    var nb=document.getElementById('nota-'+s);if(nb){nb.style.display='none';nb.className='nota-box';}
+  });
+  saveLocal();
+  SECS.forEach(render);
+  buildAllOrder();renderAll();
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  updateScores();updateProg();
+}
+
+/* ── Nota y revisión ── */
+function buildRevList(sec){
+  var qs=D[sec];if(!qs)return'';
+  var failed=qs.filter(function(q){var a=state[sec+'-'+q.n];return a&&!a.r;});
+  if(!failed.length)return'';
+  var html='<div class="review-list"><div class="review-title">📋 '+failed.length+' pregunta'+(failed.length>1?'s':'')+' fallada'+(failed.length>1?'s':'')+' — repasa aquí:</div>';
+  failed.forEach(function(q){
+    var qid=sec+'-'+q.n;var oo=getOOrd(qid);var nc=oo.indexOf(q.c-1)+1;
+    html+='<details class="review-item"><summary><span><b>'+getNum(sec,q.n)+'.</b> '+q.q+'</span></summary>';
+    html+='<div class="review-body"><div class="review-ans">✓ Opción '+nc+': '+escH(q.o[q.c-1]||'')+'</div>';
+    html+='<div class="expbox">'+q.e+'</div></div></details>';
+  });
+  return html+'</div>';
+}
+function calcNota(sec){
+  var qs=D[sec];if(!qs)return;
+  var total=qs.length,ok=0,ko=0,skip=0;
+  qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-'+sec);if(!box)return;
+  box.className='nota-box '+(pass?'pass':'fail');
+  box.innerHTML='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>'
+    +buildRevList(sec);
+  box.style.display='block';
+}
+function calcNotaAll(){
+  var total=0,ok=0,ko=0,skip=0;
+  SECS.forEach(function(sec){
+    var qs=D[sec];if(!qs)return;
+    total+=qs.length;
+    qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  });
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-all');if(!box)return;
+  box.className='global-nota-box '+(pass?'pass':'fail');
+  var html='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10 (global)</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>';
+  SECS.forEach(function(sec){
+    var rv=buildRevList(sec);
+    if(rv){var m=META.secciones[sec]||{};html+='<div class="review-sec-label">'+(m.emoji?m.emoji+' ':'')+escH(m.label||sec)+'</div>'+rv;}
+  });
+  box.innerHTML=html;box.style.display='block';
+}
+
+/* ── Estadísticas de errores ── */
+function toggleStats(){
+  statsVisible=!statsVisible;
+  var btn=document.getElementById('btn-stats');
+  if(btn){btn.style.background=statsVisible?'var(--ko-bg)':'';btn.style.color=statsVisible?'var(--ko-t)':'';}
+  var box=document.getElementById('stats-global');
+  if(!box)return;
+  if(!statsVisible){box.classList.remove('show');return;}
+  var entries=Object.entries(failHist).filter(function(e){return e[1]>0;});
+  if(!entries.length){box.innerHTML='<div class="stats-title">📊 Sin errores registrados todavía</div>';box.classList.add('show');return;}
+  entries.sort(function(a,b){return b[1]-a[1];});
+  var top=entries.slice(0,10);
+  var maxV=top[0][1];
+  var html='<div class="stats-title">📊 Preguntas más falladas (acumulado entre sesiones)</div>';
+  top.forEach(function(e,i){
+    var qid=e[0],count=e[1];
+    var q=findQ(qid);if(!q)return;
+    var sec=getSecFromQid(qid),n=getNFromQid(qid);
+    var m=META.secciones[sec]||{};
+    var pct=Math.round(count/maxV*100);
+    html+='<div class="stats-item">';
+    html+='<span class="stats-n" style="min-width:18px;color:var(--ko-t);font-weight:700">'+(i+1)+'.</span>';
+    html+='<span class="stats-q">'+(m.emoji?m.emoji+' ':'')+getNum(sec,n)+'. '+q.q.substring(0,60)+(q.q.length>60?'…':'')+'</span>';
+    html+='<div class="stats-bar-wrap"><div class="stats-bar" style="width:'+pct+'%"></div></div>';
+    html+='<span class="stats-n">'+count+'✗</span>';
+    html+='</div>';
+  });
+  box.innerHTML=html;box.classList.add('show');
+}
+
+/* ── Buscador ── */
+function onSearch(val){
+  var v=val.trim().toLowerCase();
+  var clr=document.getElementById('search-clear');
+  var cnt=document.getElementById('search-count');
+  if(clr)clr.style.display=v?'block':'none';
+  var found=0,total=0;
+  document.querySelectorAll('.qcard').forEach(function(card){
+    total++;
+    if(!v){card.classList.remove('search-hidden');found++;}
+    else{
+      var qtxt=card.querySelector('.qtxt');
+      var match=qtxt&&qtxt.textContent.toLowerCase().indexOf(v)!==-1;
+      card.classList.toggle('search-hidden',!match);
+      if(match)found++;
+    }
+  });
+  if(cnt){
+    if(v){cnt.textContent=found+' de '+total+' preguntas';cnt.style.display='block';}
+    else{cnt.style.display='none';}
+  }
+  // Mostrar "sin resultados" por panel
+  ['all'].concat(SECS).forEach(function(s){
+    var panel=document.getElementById('panel-'+s);if(!panel||!panel.classList.contains('visible'))return;
+    var cards=panel.querySelectorAll('.qcard:not(.search-hidden)');
+    var nr=document.getElementById('nr-'+s);if(nr)nr.style.display=cards.length===0&&v?'block':'none';
+  });
+}
+function clearSearch(){
+  var si=document.getElementById('search-input');if(si)si.value='';
+  onSearch('');
+}
+
+/* ── Modo ── */
+function setMode(mode){
+  currentMode=mode;
+  document.getElementById('mode-test').classList.toggle('on',mode==='test');
+  document.getElementById('mode-quick').classList.toggle('on',mode==='quick');
+  // Rerenderizar todo
+  SECS.forEach(render);renderAll();
+}
+
+/* ── Modo oscuro ── */
+function applyTheme(){
+  document.documentElement.setAttribute('data-theme',darkMode?'dark':'light');
+  var btn=document.getElementById('btn-dark');if(btn)btn.textContent=darkMode?'☀️':'🌙';
+}
+function toggleDark(){darkMode=!darkMode;applyTheme();saveLocal();}
+
+/* ── Temporizador ── */
+function initTimer(){
+  timerRemaining=timerSec;
+  renderTimer();
+  var disp=document.getElementById('timer-display');
+  if(disp){
+    disp.addEventListener('click',function(){startEditTimer();});
+  }
+}
+function fmtTime(s){
+  var h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60;
+  return h+':'+(m<10?'0':'')+m+':'+(ss<10?'0':'')+ss;
+}
+function renderTimer(){
+  var disp=document.getElementById('timer-display');
+  if(!disp)return;
+  disp.textContent=fmtTime(timerRemaining);
+  disp.classList.toggle('danger',timerSec>0&&timerRemaining===0);
+}
+function timerToggle(){
+  if(timerRunning){
+    clearInterval(timerInterval);timerRunning=false;
+    document.getElementById('btn-tplay').textContent='▶';
+  }else{
+    if(timerRemaining<=0&&timerSec>0)timerRemaining=timerSec;
+    timerRunning=true;
+    document.getElementById('btn-tplay').textContent='⏸';
+    timerInterval=setInterval(function(){
+      if(timerRemaining>0){timerRemaining--;renderTimer();}
+      else{clearInterval(timerInterval);timerRunning=false;document.getElementById('btn-tplay').textContent='▶';renderTimer();}
+    },1000);
+  }
+}
+function timerReset(){
+  clearInterval(timerInterval);timerRunning=false;
+  timerRemaining=timerSec;
+  document.getElementById('btn-tplay').textContent='▶';
+  renderTimer();
+}
+function startEditTimer(){
+  var disp=document.getElementById('timer-display');if(!disp)return;
+  if(timerRunning){timerToggle();}
+  var old=fmtTime(timerRemaining);
+  disp.contentEditable='true';disp.classList.add('editing');
+  disp.textContent=old;
+  disp.focus();
+  var range=document.createRange();range.selectNodeContents(disp);
+  var sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
+  function commit(){
+    disp.contentEditable='false';disp.classList.remove('editing');
+    var txt=disp.textContent.trim();
+    var parts=txt.split(':').map(Number);
+    var secs=0;
+    if(parts.length===3)secs=parts[0]*3600+parts[1]*60+parts[2];
+    else if(parts.length===2)secs=parts[0]*60+parts[1];
+    else if(parts.length===1)secs=parts[0]*60;
+    if(!isNaN(secs)&&secs>=0){timerSec=secs;timerRemaining=secs;saveLocal();}
+    renderTimer();
+  }
+  disp.addEventListener('blur',commit,{once:true});
+  disp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();disp.blur();}});
+}
+
+/* ── Helpers cid ── */
+function cidToQid(cid){return cid.replace(/^[AS]-/,'');}
+
+/* ── Teclado ── */
+function handleKey(e){
+  var tg=e.target.tagName;
+  if(tg==='INPUT'||tg==='TEXTAREA'||e.target.contentEditable==='true')return;
+  var k=e.key;
+  if(k>='1'&&k<='5'){
+    if(activeCid&&!state[cidToQid(activeCid)]){
+      var aqid=cidToQid(activeCid);
+      var pos=parseInt(k),q=findQ(aqid);
+      if(q&&pos<=q.o.length){e.preventDefault();answer(aqid,pos,getSecFromQid(aqid));}
+    }
+  }else if(k==='ArrowDown'||k==='ArrowUp'){
+    e.preventDefault();navigateQ(k==='ArrowDown'?1:-1);
+  }else if(k==='s'||k==='S'){
+    if(activeCid)toggleStar(cidToQid(activeCid));
+  }
+}
+function navigateQ(dir){
+  var cards=Array.from(document.querySelectorAll('.sec-panel.visible .qcard')).filter(function(c){return c.style.display!=='none'&&!c.classList.contains('search-hidden');});
+  var cids=cards.map(function(c){return c.id.replace('card-','');});
+  if(!cids.length)return;
+  var idx=activeCid?cids.indexOf(activeCid):-1;
+  var nidx=Math.max(0,Math.min(cids.length-1,idx+dir));
+  var ncid=cids[nidx];if(!ncid||ncid===activeCid)return;
+  if(activeCid){var ob=document.getElementById('b-'+activeCid);var oh=document.getElementById('h-'+activeCid);if(ob)ob.classList.remove('open');if(oh)oh.classList.remove('open');var oc=document.getElementById('card-'+activeCid);if(oc)oc.classList.remove('kb-focus');}
+  activeCid=ncid;
+  var nb=document.getElementById('b-'+ncid);var nh=document.getElementById('h-'+ncid);
+  if(nb)nb.classList.add('open');if(nh)nh.classList.add('open');
+  var nc2=document.getElementById('card-'+ncid);if(nc2){nc2.classList.add('kb-focus');nc2.scrollIntoView({behavior:'smooth',block:'nearest'});}
+}
+</script>
+</body>
+</html>
