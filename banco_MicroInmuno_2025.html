@@ -1,0 +1,898 @@
+<!--
+=============================================================
+  MOTOR BANCO MIR — v10
+  Novedades respecto a v9:
+  - Numeración correlativa fija por sección (no se mezcla)
+  - Badge neutro en pestaña "Todos" + mezcla real inter-secciones
+  - Temporizador sticky editable en header (play/pausa/reset)
+  - Buscador de texto en tiempo real
+  - Modo repaso rápido (muestra RC + explicación directamente)
+  - Estadísticas de errores recurrentes entre sesiones
+=============================================================
+-->
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title id="page-title">Banco MIR</title>
+<style>
+:root{
+  --bg:#f4f3ef;--surf:#fff;--bd:#e5e5e5;--bd2:#ddd;
+  --txt:#1a1a1a;--txt2:#555;--txt3:#999;--txt4:#666;
+  --hdr:#1a1a1a;--hdr-t:#fff;
+  --ok-bg:#e6f9ef;--ok-t:#0b6e52;--ok-bd:#2da060;
+  --ko-bg:#fdecea;--ko-t:#b91c1c;--ko-bd:#d94f45;
+  --sc-ok:#dcf5ed;--sc-ko:#fdecea;--sc-rem:#f0f0f0;--sc-rem-t:#666;
+  --exp:#fffbe6;--exp-bd:#f0c04a;--exp-t:#5a4500;
+  --prog:#e5e5e5;--prog-fill:#1a56db;
+  --star:#ccc;--star-on:#f59e0b;
+  --hint:#fafafa;--hint-bd:#eee;
+  --tab-bd:#ddd;--tab-t:#555;
+  --all-bg:#e8f0fe;--all-t:#1a56db;--all-bd:#1a56db;
+  --fab:#1a1a1a;--fab-t:#fff;
+  --nota-btn-t:#1a56db;--nota-btn-bd:#1a56db;--nota-btn-bg:var(--surf);
+  --timer-bg:#222;--timer-t:#fff;--timer-danger:#ef4444;
+}
+[data-theme="dark"]{
+  --bg:#0f0f1a;--surf:#1e1e30;--bd:#2a2a45;--bd2:#333355;
+  --txt:#e8e8f0;--txt2:#aaa;--txt3:#555;--txt4:#888;
+  --hdr:#0a0a14;--hdr-t:#e8e8f0;
+  --ok-bg:#0b3020;--ok-t:#4ade80;--ok-bd:#166534;
+  --ko-bg:#2d0a0a;--ko-t:#f87171;--ko-bd:#7f1d1d;
+  --sc-ok:#0b3020;--sc-ko:#2d0a0a;--sc-rem:#252540;--sc-rem-t:#aaa;
+  --exp:#1a1500;--exp-bd:#a37f10;--exp-t:#d4b84a;
+  --prog:#2a2a45;--prog-fill:#60a5fa;
+  --star:#444;--star-on:#f59e0b;
+  --hint:#1a1a2e;--hint-bd:#2a2a45;
+  --tab-bd:#2a2a45;--tab-t:#aaa;
+  --all-bg:#1a2a4a;--all-t:#60a5fa;--all-bd:#3b82f6;
+  --fab:#2a2a50;--fab-t:#e8e8f0;
+  --nota-btn-t:#60a5fa;--nota-btn-bd:#3b82f6;--nota-btn-bg:var(--surf);
+  --timer-bg:#1a1a2e;--timer-t:#e8e8f0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;transition:background .25s,color .25s}
+
+/* ── Header ── */
+header{background:var(--hdr);color:var(--hdr-t);padding:9px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;position:sticky;top:0;z-index:100}
+header h1{font-size:13.5px;font-weight:600;white-space:nowrap}
+.hright{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.hmeta{font-size:11px;color:#888}
+.hbtn{background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:3px 5px;border-radius:5px;transition:background .15s;color:var(--hdr-t)}
+.hbtn:hover{background:rgba(255,255,255,.12)}
+.sbadge{font-size:11px;padding:3px 9px;border-radius:5px;font-weight:500}
+.sbadge.ok{background:#15803d;color:#dcfce7}.sbadge.warn{background:#92400e;color:#fef3c7}
+
+/* ── Temporizador ── */
+#timer-wrap{display:flex;align-items:center;gap:4px;background:var(--timer-bg);border-radius:7px;padding:3px 8px;border:1px solid rgba(255,255,255,.1)}
+#timer-display{font-size:13px;font-weight:700;font-family:monospace;color:var(--timer-t);min-width:58px;text-align:center;cursor:pointer;border-radius:3px;padding:1px 3px}
+#timer-display:hover{background:rgba(255,255,255,.08)}
+#timer-display.editing{background:rgba(255,255,255,.15);outline:none;color:var(--timer-t)}
+#timer-display.danger{color:var(--timer-danger)}
+#timer-wrap button{background:none;border:none;cursor:pointer;color:rgba(255,255,255,.7);font-size:12px;padding:1px 3px;border-radius:3px;line-height:1}
+#timer-wrap button:hover{background:rgba(255,255,255,.12);color:#fff}
+
+/* ── Barra de progreso ── */
+#prog-wrap{height:3px;background:var(--prog);position:sticky;top:40px;z-index:99}
+#prog-bar{height:100%;background:var(--prog-fill);width:0%;transition:width .4s}
+
+/* ── Contenedor ── */
+.container{max-width:820px;margin:0 auto;padding:16px 12px}
+
+/* ── Buscador ── */
+.search-wrap{position:relative;margin-bottom:13px}
+.search-wrap input{width:100%;padding:8px 34px 8px 12px;border:1.5px solid var(--bd2);border-radius:8px;font-size:13px;background:var(--surf);color:var(--txt);outline:none;transition:border-color .15s}
+.search-wrap input:focus{border-color:var(--prog-fill)}
+.search-clear{position:absolute;right:9px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--txt3);font-size:16px;display:none;line-height:1}
+#search-count{font-size:11px;color:var(--txt3);margin-top:4px;display:none}
+
+/* ── Modo repaso ── */
+.mode-bar{display:flex;gap:6px;margin-bottom:12px;align-items:center}
+.mode-btn{padding:5px 12px;border:1.5px solid var(--bd2);border-radius:7px;cursor:pointer;font-size:12px;font-weight:500;background:var(--surf);color:var(--txt2);transition:all .15s}
+.mode-btn:hover{border-color:#999}
+.mode-btn.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Tabs ── */
+.tabs{display:flex;gap:7px;margin-bottom:13px;flex-wrap:wrap}
+.tab{padding:7px 14px;border:1.5px solid var(--tab-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;background:var(--surf);color:var(--tab-t);transition:all .15s}
+.tab:hover{border-color:#999;color:var(--txt)}
+.tab.t-all.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Score global ── */
+.ph-global{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 15px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-left:4px solid var(--prog-fill)}
+.score-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.sc{font-size:12px;font-weight:600;padding:3px 9px;border-radius:6px}
+.sc.ok{background:var(--sc-ok);color:var(--ok-t)}.sc.ko{background:var(--sc-ko);color:var(--ko-t)}.sc.rem{background:var(--sc-rem);color:var(--sc-rem-t)}
+
+/* ── Acciones ── */
+.global-actions{display:none;margin-bottom:10px;gap:7px;flex-wrap:wrap;align-items:center}
+.container[data-tab="all"] .global-actions{display:flex}
+.sec-actions{margin:6px 0 15px;display:flex;gap:7px;flex-wrap:wrap}
+.reset-btn{padding:7px 14px;background:var(--fab);color:var(--fab-t);border:none;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:opacity .15s}
+.reset-btn:hover{opacity:.82}
+.nota-btn{padding:7px 14px;background:var(--nota-btn-bg);color:var(--nota-btn-t);border:1.5px solid var(--nota-btn-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:background .15s}
+.nota-btn:hover{background:var(--all-bg)}
+
+/* ── Nota box ── */
+.nota-box,.global-nota-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:2px solid var(--bd2);font-size:13px;line-height:1.7;display:none}
+.nota-box.pass,.global-nota-box.pass{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t)}
+.nota-box.fail,.global-nota-box.fail{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t)}
+.nota-score{font-size:26px;font-weight:700;display:block;margin-bottom:4px}
+.nota-detail{font-size:12px;opacity:.85;font-family:monospace}
+
+/* ── Vista revisión ── */
+.review-list{margin-top:12px;border-top:1px solid var(--bd2);padding-top:10px}
+.review-title{font-size:12px;font-weight:700;margin-bottom:9px;color:var(--txt)}
+.review-sec-label{font-size:11.5px;font-weight:700;color:var(--txt3);margin:8px 0 5px;padding-top:6px;border-top:1px solid var(--bd)}
+.review-item{background:var(--surf);border-radius:8px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden}
+.review-item summary{padding:9px 12px;cursor:pointer;font-size:12.5px;color:var(--txt);list-style:none;display:flex;gap:8px;align-items:flex-start}
+.review-item summary::-webkit-details-marker{display:none}
+.review-item summary::before{content:'▶';font-size:9px;color:var(--txt3);flex-shrink:0;margin-top:4px;transition:transform .18s}
+details[open] summary::before{transform:rotate(90deg)}
+.review-body{padding:0 12px 11px}
+.review-ans{font-size:12px;color:var(--ok-t);margin-bottom:7px;font-weight:500}
+
+/* ── Estadísticas ── */
+.stats-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:1.5px solid var(--bd2);background:var(--surf);display:none}
+.stats-box.show{display:block}
+.stats-title{font-size:12px;font-weight:700;margin-bottom:10px;color:var(--txt)}
+.stats-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:12.5px}
+.stats-item:last-child{border-bottom:none}
+.stats-bar-wrap{flex:1;background:var(--sc-rem);border-radius:4px;height:6px;overflow:hidden}
+.stats-bar{height:100%;background:var(--ko-bd);border-radius:4px;transition:width .4s}
+.stats-n{font-size:11px;color:var(--txt3);white-space:nowrap}
+.stats-q{flex:2;color:var(--txt);font-size:12px;line-height:1.3}
+
+/* ── Panel secciones ── */
+.sec-panel{display:none}.sec-panel.visible{display:block}
+.ph{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ph-left{flex:1;display:flex;flex-direction:column;gap:5px}
+.ph-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt3);margin-bottom:1px}
+.ph-desc{font-size:12px;color:var(--txt4)}
+.fbtn{padding:6px 12px;font-size:12px;font-weight:500;border:1.5px solid var(--bd2);border-radius:8px;cursor:pointer;background:var(--surf);color:var(--txt2);transition:all .15s;white-space:nowrap}
+.fbtn:hover{border-color:#999;color:var(--txt)}.fbtn.on{background:var(--ko-bg);color:#b91c1c;border-color:#f87171}
+.no-failed{display:none;text-align:center;padding:16px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin-top:4px}
+.no-failed.show{display:block}
+.no-results{display:none;text-align:center;padding:20px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin:8px 0}
+
+/* ── Hint ── */
+.hint{font-size:11px;color:var(--txt3);margin-bottom:15px;padding:7px 11px;background:var(--hint);border-radius:6px;border:1px solid var(--hint-bd)}
+
+/* ── Tarjeta ── */
+.qcard{background:var(--surf);border-radius:10px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden;transition:box-shadow .15s}
+.qcard:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.qcard.kb-focus{outline:2px solid var(--prog-fill);outline-offset:-2px}
+.qcard.search-hidden{display:none}
+.qhead{padding:11px 13px;cursor:pointer;display:flex;align-items:flex-start;gap:9px}
+
+/* ── Badge numérico ── */
+.qnum{font-size:11px;font-weight:700;padding:3px 7px;border-radius:5px;white-space:nowrap;flex-shrink:0;margin-top:2px;background:var(--sc-rem);color:var(--sc-rem-t)}
+/* En pestaña "Todos" siempre neutro; en sección aplica color de sección */
+.qnum.sec-colored{background:var(--sec-dim);color:var(--sec-col)}
+
+.qtxt{font-size:13px;line-height:1.5;flex:1}
+.star-btn{background:none;border:none;cursor:pointer;font-size:15px;color:var(--star);padding:0 2px;flex-shrink:0;margin-top:2px;line-height:1;transition:color .15s,transform .15s}
+.star-btn:hover{transform:scale(1.2)}
+.star-btn .si{display:inline}.star-btn .sf{display:none}
+.star-btn.on .si{display:none}.star-btn.on .sf{display:inline;color:var(--star-on)}
+.chev{font-size:15px;color:var(--bd2);flex-shrink:0;margin-top:2px;transition:transform .2s}
+.qhead.open .chev{transform:rotate(180deg)}
+.qbody{display:none;padding:0 13px 13px}.qbody.open{display:block}
+
+/* ── Imagen ── */
+.clinimg-wrap{margin:9px 0 7px;background:#111;border-radius:8px;overflow:hidden;border:1px solid var(--bd2);text-align:center}
+.clinimg{max-width:100%;max-height:340px;object-fit:contain;display:block;margin:0 auto}
+.clinimg-cap{font-size:11px;color:var(--txt3);padding:4px 0 5px;background:var(--hint);border-top:1px solid var(--bd)}
+
+/* ── Opciones ── */
+.opts{list-style:none;margin-top:9px;display:flex;flex-direction:column;gap:5px}
+.opt{padding:9px 12px;border-radius:8px;border:1.5px solid var(--bd2);cursor:pointer;display:flex;align-items:flex-start;gap:9px;color:var(--txt);font-size:13px;line-height:1.45;transition:border-color .12s,background .12s;user-select:none}
+.opt:hover:not(.done){border-color:#999;background:var(--hint)}
+.opt.correct{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t);font-weight:500;cursor:default}
+.opt.wrong{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t);cursor:default}
+.opt.done:not(.correct):not(.wrong){cursor:default;opacity:.7}
+.onum{font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px;min-width:15px}
+
+/* ── Modo repaso rápido ── */
+.quick-card{padding:9px 12px;border-radius:8px;border:1.5px solid var(--ok-bd);background:var(--ok-bg);margin-top:8px}
+.quick-rc{font-size:12.5px;font-weight:600;color:var(--ok-t);margin-bottom:6px}
+
+/* ── Explicación ── */
+.expbox{margin-top:10px;padding:10px 12px;background:var(--exp);border-left:4px solid var(--exp-bd);border-radius:0 8px 8px 0;font-size:12.5px;color:var(--exp-t);line-height:1.65}
+.expbox b,.expbox strong{font-weight:600}
+.et{display:block;margin-bottom:4px;font-weight:600;font-size:13px}
+.atag{font-size:10px;padding:2px 6px;border-radius:4px;margin-left:5px;vertical-align:middle}
+.atag.ok{background:var(--sc-ok);color:var(--ok-t)}.atag.ko{background:var(--sc-ko);color:#c0392b}
+
+/* ── All-tab CSS ── */
+.container[data-tab="all"] .ph{display:none!important}
+.container[data-tab="all"] .sec-actions{display:none!important}
+.container[data-tab="all"] .no-failed{display:none!important}
+.container[data-tab="all"] .nota-box{display:none!important}
+.container:not([data-tab="all"]) .global-nota-box{display:none!important}
+.container:not([data-tab="all"]) #stats-global{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="h-tit">Banco MIR</h1>
+  <div class="hright">
+    <span class="hmeta" id="h-meta"></span>
+    <!-- Temporizador -->
+    <div id="timer-wrap" title="Haz clic en el tiempo para editar">
+      <span id="timer-display">0:00:00</span>
+      <button id="btn-tplay" onclick="timerToggle()" title="Play/Pausa">▶</button>
+      <button onclick="timerReset()" title="Reset">↺</button>
+    </div>
+    <button class="hbtn" id="btn-dark" onclick="toggleDark()" title="Modo oscuro">🌙</button>
+    <span id="save-badge" class="sbadge"></span>
+  </div>
+</header>
+<div id="prog-wrap"><div id="prog-bar"></div></div>
+
+<div class="container" id="main-cont" data-tab="all">
+  <!-- Buscador -->
+  <div class="search-wrap">
+    <input type="text" id="search-input" placeholder="🔍 Buscar en enunciados..." oninput="onSearch(this.value)">
+    <button class="search-clear" id="search-clear" onclick="clearSearch()">✕</button>
+  </div>
+  <div id="search-count"></div>
+
+  <!-- Modo -->
+  <div class="mode-bar">
+    <span style="font-size:11.5px;color:var(--txt3);font-weight:600">MODO:</span>
+    <button class="mode-btn on" id="mode-test" onclick="setMode('test')">📝 Test</button>
+    <button class="mode-btn" id="mode-quick" onclick="setMode('quick')">⚡ Repaso rápido</button>
+    <button class="mode-btn" id="btn-stars" onclick="filterStarred()" style="margin-left:auto;border-color:#f59e0b;color:#b45309">⭐ Marcadas</button>
+    <button class="mode-btn" id="btn-stats" onclick="toggleStats()">📊 Errores</button>
+  </div>
+
+  <!-- Stats globales -->
+  <div class="stats-box" id="stats-global"></div>
+
+  <!-- Tabs -->
+  <div class="tabs" id="tabs-wrap"></div>
+
+  <!-- Score global -->
+  <div class="ph-global">
+    <div class="ph-left">
+      <span class="ph-desc" id="ph-gdesc"></span>
+      <div class="score-row">
+        <span class="sc ok" id="sc-ok-all">✓ 0</span>
+        <span class="sc ko" id="sc-ko-all">✗ 0</span>
+        <span class="sc rem" id="sc-rem-all">○ 0</span>
+      </div>
+    </div>
+  </div>
+  <div class="global-actions">
+    <button class="reset-btn" onclick="resetAll()">↺ Reiniciar y mezclar</button>
+    <button class="nota-btn" onclick="calcNotaAll()">✎ Calcular nota global</button>
+  </div>
+  <div class="global-nota-box" id="nota-all"></div>
+  <p class="hint">💡 <b>1–5</b> responde · <b>↑↓</b> navega · <b>S</b> marca ⭐ · Progreso guardado automáticamente</p>
+
+  <div id="panels-wrap"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════ MOTOR v10 ═══════════════════════════════════════ */
+
+var KEY=/*__KEY__*/'microinmuno_banco_2025_v1';
+var META=/*__META_JSON__*/{"titulo":"MicroInmuno \u2014 Banco Completo","subtitulo":"Microbiolog\u00eda \u00b7 Inmunolog\u00eda \u00b7 Universidad","examen":"Banco integrado \u00b7 Todos los ex\u00e1menes","secciones":{"micro":{"label":"Microbiolog\u00eda","emoji":"\ud83e\uddeb","color":"#0b7c5a","colorDim":"#dcf5ed","desc":"Bacterias \u00b7 Virus \u00b7 Hongos \u00b7 Par\u00e1sitos \u00b7 Diagn\u00f3stico"},"inmuno":{"label":"Inmunolog\u00eda","emoji":"\ud83d\udee1","color":"#7c3aed","colorDim":"#ede9fe","desc":"Inmunidad innata \u00b7 Adaptativa \u00b7 Anticuerpos \u00b7 Complemento \u00b7 Hipersensibilidad"}}};
+var D=/*__D_JSON__*/{"micro":[{"n":"1","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes afirmaciones NO corresponde a los postulados originales de Koch (aunque es verdadera)?","o":["En una enfermedad infecciosa, el microorganismo que causa la infecci\u00f3n se encuentra en el individuo enfermo y no en los individuos sanos.","Algunas enfermedades infecciosas est\u00e1n provocadas por diversos microorganismos.","El microorganismo causante de la infecci\u00f3n debe poder ser cultivado a partir de los productos o secreciones del individuo enfermo.","Cuando el microorganismo pat\u00f3geno es inoculado a un animal susceptible de infectarse, debe reproducir la sintomatolog\u00eda de la enfermedad observada en el individuo enfermo."],"c":2,"e":"El postulado original de Koch exige que el microorganismo se halle <b>exclusivamente</b> en el enfermo. La excepci\u00f3n (enfermedades por m\u00faltiples microorganismos) es verdadera pero no figura en los postulados cl\u00e1sicos."},{"n":"2","noShuffle":false,"img":null,"q":"De las siguientes combinaciones microorganismo/t\u00e9cnica de diagn\u00f3stico directo, se\u00f1ala cu\u00e1l ser\u00eda la m\u00e1s adecuada:","o":["Detecci\u00f3n de par\u00e1sitos por microscopia","Detecci\u00f3n de hongos y bacterias por PCR","Detecci\u00f3n de hongos y bacterias por inmunocromatograf\u00eda","Detecci\u00f3n de virus por cultivo"],"c":1,"e":"La <b>microscopia</b> es el m\u00e9todo directo de elecci\u00f3n para par\u00e1sitos: su tama\u00f1o y morfolog\u00eda permiten identificarlos visualmente."},{"n":"3","noShuffle":false,"img":null,"q":"El peptidoglicano:","o":["Es degradado por la lisozima","Est\u00e1 compuesto por cadenas de p\u00e9ptidos unidas a trav\u00e9s de enlaces en los que participan az\u00facares","Forma parte de la c\u00e1psula bacteriana","Solamente est\u00e1 presente en las bacterias Gram negativas"],"c":1,"e":"La <b>lisozima</b> hidroliza los enlaces \u03b2-1,4 entre el NAM y el NAG del peptidoglicano. Est\u00e1 presente en ambos tipos bacterianos."},{"n":"4","noShuffle":false,"img":null,"q":"El carbunco:","o":["Es una enfermedad infecciosa que afecta \u00fanicamente a humanos","Est\u00e1 provocada por la especie Bacillus cereus","La forma gastrointestinal puede ser em\u00e9tica o diarreica","La inhalaci\u00f3n de esporas est\u00e1 relacionada con el bioterrorismo"],"c":4,"e":"El carbunco por inhalaci\u00f3n de esporas de <b>Bacillus anthracis</b> es potencialmente letal y ha sido usado como agente de bioterrorismo. Es una zoonosis."},{"n":"5","noShuffle":false,"img":null,"q":"Cronol\u00f3gicamente las fases de la curva de crecimiento de un microorganismo son:","o":["Exponencial, estacionaria, latencia y muerte","Latencia, exponencial, estacionaria y muerte","Estacionaria, exponencial, latencia y muerte","Estacionaria, exponencial, muerte y latencia"],"c":2,"e":"La curva de crecimiento bacteriano sigue: <b>latencia</b> \u2192 <b>exponencial</b> \u2192 <b>estacionaria</b> \u2192 <b>muerte</b>."},{"n":"6","noShuffle":false,"img":null,"q":"La fiebre reum\u00e1tica y la glomerulonefritis aguda est\u00e1n provocadas por:","o":["Toxinas secretadas por Streptococcus pneumoniae","Una reacci\u00f3n cruzada de los anticuerpos generados frente a Streptococcus pyogenes","Una reacci\u00f3n cruzada de los anticuerpos generados frente a Enterococcus faecalis","Toxinas secretadas por Staphylococcus aureus"],"c":2,"e":"<b>Streptococcus pyogenes</b> genera anticuerpos que por reactividad cruzada atacan tejidos propios (miocardio, ri\u00f1\u00f3n). Mecanismo de hipersensibilidad tipo II/III."},{"n":"7","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de los siguientes m\u00e9todos f\u00edsicos o qu\u00edmicos NO es esterilizante?","o":["Calor h\u00famedo","\u00d3xido de etileno","Radiaci\u00f3n ionizante","Hipoclorito de sodio"],"c":4,"e":"El <b>hipoclorito de sodio</b> es desinfectante de alto nivel pero NO esterilizante: no elimina todas las esporas en condiciones est\u00e1ndar."},{"n":"8","noShuffle":false,"img":null,"q":"Un pat\u00f3geno oportunista:","o":["No necesita producir factores de virulencia para provocar una enfermedad infecciosa","Su patogenicidad depende en exclusiva de la susceptibilidad del hu\u00e9sped","No se puede aislar de un individuo sano","Puede mantener una relaci\u00f3n de mutualismo o parasitismo con su hospedador"],"c":3,"e":"Un pat\u00f3geno oportunista puede colonizar individuos sanos sin causar enfermedad, pero en <b>inmunocomprometidos</b> genera infecci\u00f3n grave."},{"n":"9","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes afirmaciones sobre el g\u00e9nero Neisseria es correcta?","o":["Neisseria meningitidis provoca una enfermedad de declaraci\u00f3n obligatoria (EDO)","Existen vacunas eficaces frente a las dos especies que provocan infecci\u00f3n en humanos","Neisseria gonorrhoeae se clasifica en serovares seg\u00fan la c\u00e1psula","Las bacterias se agrupan en diplococos"],"c":4,"e":"<b>Neisseria</b> son diplococos Gram negativos. N. meningitidis tiene vacuna; N. gonorrhoeae carece de c\u00e1psula y no tiene vacuna comercial eficaz."},{"n":"10","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l es la diferencia principal entre Campylobacter jejuni y Helicobacter pylori?","o":["La transmisi\u00f3n de persona a persona es importante en C. jejuni pero rara en H. pylori","C. jejuni provoca linfomas asociados a mucosa y H. pylori provoca complicaciones autoinmunitarias","C. jejuni es sensible a los \u00e1cidos g\u00e1stricos mientras que H. pylori los consigue neutralizar","C. jejuni es microaer\u00f3filo y H. pylori es aerobio estricto"],"c":3,"e":"<b>H. pylori</b> produce ureasa que neutraliza el pH g\u00e1strico. C. jejuni es sensible al \u00e1cido y coloniza el intestino delgado. Ambos son microaer\u00f3filos."},{"n":"11","noShuffle":false,"img":null,"q":"En una enfermedad infecciosa:","o":["La aparici\u00f3n/desaparici\u00f3n de s\u00edntomas significa presencia/ausencia de microorganismos","No tienen por qu\u00e9 aparecer alteraciones fisiol\u00f3gicas en el individuo","Siempre existe un periodo de incubaci\u00f3n","Siempre existe un periodo de convalecencia"],"c":3,"e":"Toda enfermedad infecciosa tiene un <b>periodo de incubaci\u00f3n</b>. No siempre hay convalecencia ni s\u00edntomas (portadores asintom\u00e1ticos)."},{"n":"12","noShuffle":true,"img":null,"q":"\u00bfCu\u00e1l de las siguientes afirmaciones sobre Salmonella enterica serovar typhi es correcta?","o":["Es un pat\u00f3geno humano estricto","En los portadores cr\u00f3nicos sobrevive en la ves\u00edcula biliar","Provoca la fiebre tifoidea","Todas son correctas"],"c":4,"e":"<b>Salmonella typhi</b> es pat\u00f3geno humano estricto que causa fiebre tifoidea. En portadores cr\u00f3nicos persiste en la ves\u00edcula biliar."},{"n":"13","noShuffle":false,"img":null,"q":"Clostridium perfringens provoca:","o":["Peste","Gangrena gaseosa","Colitis postantibi\u00f3tica","S\u00edndrome de Guillain-Barr\u00e9"],"c":2,"e":"<b>C. perfringens</b> produce alfa-toxina (lecitinasa) que destruye tejidos blandos generando gas: <b>gangrena gaseosa</b>. Colitis postantibi\u00f3tica es por C. difficile."},{"n":"14","noShuffle":false,"img":null,"q":"Inoculamos un microorganismo en tubo de cultivo. Crece a lo largo de todo el tubo pero con mayor crecimiento en la zona de contacto con el aire. Este microorganismo es:","o":["Aerobio facultativo","Aerobio estricto","Microaer\u00f3filo","Anaerobio estricto"],"c":1,"e":"Un <b>aerobio facultativo</b> crece en todo el tubo pero prefiere la zona superior rica en O\u2082. Aerobio estricto solo crecer\u00eda arriba; anaerobio solo en el fondo."},{"n":"15","noShuffle":true,"img":null,"q":"Una cepa es:","o":["Un conjunto de microorganismos gen\u00e9ticamente id\u00e9nticos","El rango taxon\u00f3mico m\u00e1s bajo en el que se suelen agrupar los organismos","El primer aislado que se obtiene de una especie","Todas son correctas"],"c":4,"e":"Una <b>cepa</b> es un cultivo puro derivado de un \u00fanico aislado, con caracter\u00edsticas gen\u00e9ticas propias."},{"n":"16","noShuffle":false,"img":null,"q":"Las opsoninas facilitan:","o":["La lisis de dichos microorganismos.","La fagocitosis de dichos microorganismos.","La actividad de los anticuerpos.","La citotoxicidad de las c\u00e9lulas NK."],"c":2,"e":"Las <b>opsoninas</b> (IgG, C3b) recubren la superficie microbiana y se unen a receptores Fc o del complemento en fagocitos, potenciando la <b>fagocitosis</b>."},{"n":"17","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 especie bacteriana coincide con la siguiente descripci\u00f3n? Bacilos en forma de coma, aerobios, gram-negativos y fermentadores que provocan diarrea acuosa y v\u00f3mitos con riesgo de deshidrataci\u00f3n grave.","o":["Vibrio cholerae","Shigella dysenteriae","Campylobacter jejuni","Yersinia enterocolitica"],"c":1,"e":"<b>Vibrio cholerae</b> son bacilos curvos Gram negativos. Produce toxina col\u00e9rica causando diarrea acuosa masiva con riesgo de deshidrataci\u00f3n letal."},{"n":"18","noShuffle":true,"img":null,"q":"Legionella pneumophila:","o":["Tiene tropismo por los macr\u00f3fagos debido a su parecido con las amebas","Se transmite por la ingesta de agua contaminada","En hospedadores inmunodeprimidos provoca Fiebre de Pontiac","Todas son correctas"],"c":4,"e":"<b>L. pneumophila</b> infecta macr\u00f3fagos alveolares, se transmite por aerosoles y en inmunodeprimidos provoca Fiebre de Pontiac o legionelosis grave."},{"n":"19","noShuffle":false,"img":null,"q":"\u00bfPor qu\u00e9 tenemos que cambiar las variantes de la vacuna de la gripe cada a\u00f1o?","o":["Porque la RNA polimerasa del virus tiene elevada tasa de error","Por la acumulaci\u00f3n de mutaciones puntuales en prote\u00ednas clave del proceso infectivo","Por la capacidad del virus de llevar a cabo recombinaci\u00f3n hom\u00f3loga","Porque el genoma del virus est\u00e1 segmentado, provocando reorganizaciones entre cepas"],"c":4,"e":"El genoma <b>segmentado</b> del virus Influenza permite el <b>reordenamiento antig\u00e9nico</b> (reassortment) entre cepas, generando nuevas variantes ante las que la vacuna previa es ineficaz."},{"n":"20","noShuffle":false,"img":null,"q":"Mycobacterium tuberculosis:","o":["Es una bacteria que no tiene pared celular","Provoca infecciones latentes porque tiene un ciclo de vida lis\u00f3geno","Es un pat\u00f3geno intracelular estricto","En los individuos infectados, se forman granulomas para contener su capacidad invasiva"],"c":4,"e":"<b>M. tuberculosis</b> es un pat\u00f3geno intracelular facultativo que sobrevive en macr\u00f3fagos. La respuesta inmune forma <b>granulomas</b> para contener la infecci\u00f3n."},{"n":"21","noShuffle":false,"img":null,"q":"En relaci\u00f3n al diagn\u00f3stico del agente etiol\u00f3gico de una enfermedad infecciosa:","o":["La inmunocromatograf\u00eda y el ELISA pueden usarse como m\u00e9todos directos e indirectos","Un m\u00e9todo indirecto es la detecci\u00f3n de ant\u00edgenos","La detecci\u00f3n de componentes del microorganismo (DNA, prote\u00ednas) es imprescindible","Un m\u00e9todo directo es la detecci\u00f3n de anticuerpos"],"c":1,"e":"La <b>inmunocromatograf\u00eda</b> y el <b>ELISA</b> pueden detectar ant\u00edgenos (directo) o anticuerpos (indirecto). La detecci\u00f3n de anticuerpos es siempre m\u00e9todo indirecto."},{"n":"22","noShuffle":false,"img":null,"q":"La neumon\u00eda at\u00edpica o neumon\u00eda del caminante se caracteriza por:","o":["No poderse tratar con antibi\u00f3ticos que alteren la s\u00edntesis de la pared celular bacteriana","Presentar tos productiva y esputo purulento","Estar provocada por Streptococcus pneumoniae","Tener un inicio abrupto y riguroso"],"c":1,"e":"La neumon\u00eda at\u00edpica no responde a beta-lact\u00e1micos porque los <b>pat\u00f3genos carecen de pared celular</b> o son intracelulares. Cursa con tos seca e inicio gradual."},{"n":"23","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de estos virus tiene simetr\u00eda icosa\u00e9drica?","o":["Virus del dengue","Virus del \u00e9bola","Coronavirus","Virus de la rabia"],"c":1,"e":"El virus del <b>dengue</b> (Flaviviridae) tiene c\u00e1pside icosa\u00e9drica. El \u00e9bola y la rabia tienen simetr\u00eda helicoidal; el coronavirus tiene c\u00e1pside helicoidal envuelta."},{"n":"24","noShuffle":true,"img":null,"q":"\u00bfQu\u00e9 tienen en com\u00fan las Familia Coxiellaceae y Chlamydiaceae?","o":["Las bacterias de ambas familias presentan pleomorfismo","Tanto la variante celular grande como los cuerpos elementales son formas intracelulares","Tanto la variante celular peque\u00f1a como los cuerpos reticulados son formas extracelulares","Todas son correctas"],"c":4,"e":"Ambas familias son <b>bacterias intracelulares obligadas</b>. Chlamydia alterna cuerpos elementales (infecciosos, extracelulares) y reticulados (reproductivos, intracelulares)."},{"n":"25","noShuffle":false,"img":null,"q":"Respecto a la transferencia horizontal de informaci\u00f3n gen\u00e9tica mediante transformaci\u00f3n:","o":["Se requiere el contacto entre las bacterias","En el proceso act\u00faa un virus como v\u00eda de transferencia","Material gen\u00e9tico libre se incorpora a la bacteria","Es un proceso com\u00fan en la mayor\u00eda de las bacterias"],"c":3,"e":"En la <b>transformaci\u00f3n</b>, la bacteria capta <b>DNA libre del medio</b>. No requiere contacto (conjugaci\u00f3n) ni virus (transducci\u00f3n)."},{"n":"26","noShuffle":false,"img":null,"q":"Respecto a la transferencia horizontal de informaci\u00f3n gen\u00e9tica mediante conjugaci\u00f3n:","o":["Se requiere el contacto entre las bacterias","En el proceso act\u00faa un virus como v\u00eda de transferencia","Material gen\u00e9tico libre se incorpora a la bacteria","Interviene una estructura celular denominada fimbria"],"c":1,"e":"La <b>conjugaci\u00f3n</b> requiere contacto f\u00edsico directo mediante el <b>pili sexual (fimbria F)</b>. El pl\u00e1smido F se transfiere de la donante a la receptora."},{"n":"27","noShuffle":false,"img":null,"q":"Enfermedad causada por una micobacteria que se caracteriza por provocar lesiones cut\u00e1neas en sus dos formas cl\u00ednicas:","o":["S\u00edndrome de la piel escaldada","Escarlatina","Lepra","Ti\u00f1a"],"c":3,"e":"La <b>lepra</b> (Mycobacterium leprae) tiene dos formas: lepromatosa (n\u00f3dulos, p\u00e9rdida de sensibilidad) y tuberculoide (lesiones cut\u00e1neas bien delimitadas)."},{"n":"28","noShuffle":false,"img":null,"q":"Respecto a la esterilizaci\u00f3n, se\u00f1ala la FALSA:","o":["El autoclavado es el m\u00e9todo de elecci\u00f3n para materiales resistentes a altas temperaturas","La esterilizaci\u00f3n por \u00f3xido de etileno se utiliza en material termosensible","Los rayos ionizantes se utilizan para esterilizar suministros farmac\u00e9uticos y desechables","No se ve afectada por la presencia de materia org\u00e1nica en el instrumental a esterilizar"],"c":4,"e":"La materia org\u00e1nica <b>interfiere</b> en todos los m\u00e9todos de esterilizaci\u00f3n, protegiendo a los microorganismos. El instrumental debe limpiarse previamente."},{"n":"29","noShuffle":false,"img":null,"q":"El s\u00edndrome de Guillain-Barr\u00e9 est\u00e1 provocado por:","o":["Toxinas secretadas por Campylobacter jejuni","Una reacci\u00f3n cruzada de los anticuerpos generados frente a Campylobacter jejuni","Una reacci\u00f3n cruzada de los anticuerpos generados frente a Streptococcus pyogenes","Toxinas secretadas por Bordetella pertussis"],"c":2,"e":"El <b>GBS</b> post-infeccioso se debe a anticuerpos anti-Campylobacter que por mimetismo molecular atacan los gangli\u00f3sidos nerviosos, causando neuropat\u00eda desmielinizante ascendente."},{"n":"30","noShuffle":false,"img":null,"q":"Las bacterias se distinguen de los hongos porque:","o":["Las bacterias presentan membrana plasm\u00e1tica y los hongos no","Las bacterias presentan pared celular y los hongos no","Las bacterias pueden reproducirse de forma independiente y los hongos no","Las bacterias son c\u00e9lulas procariotas mientras que los hongos son eucariotas"],"c":4,"e":"La diferencia fundamental: bacterias son <b>procariotas</b> y hongos son <b>eucariotas</b>. Ambos tienen pared celular y membrana plasm\u00e1tica."},{"n":"31","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de estas enfermedades se adquiere por consumo de alimentos contaminados o por diseminaci\u00f3n transplacentaria?","o":["Carbunco","Infecci\u00f3n por Bacillus cereus","Listeriosis","Shigelosis"],"c":3,"e":"<b>Listeria monocytogenes</b> contamina alimentos y puede atravesar la barrera placentaria, causando aborto o listeriosis neonatal grave."},{"n":"32","noShuffle":true,"img":null,"q":"Seg\u00fan la producci\u00f3n de \u00e1cidos nucleicos y prote\u00ednas, los virus de clase IV:","o":["Tienen genoma de RNA simple cadena","Su genoma se puede usar directamente como mRNA","Los mRNA son policistr\u00f3nicos","Todas son correctas"],"c":4,"e":"Los virus de clase IV (Baltimore) tienen <b>RNA de cadena simple positiva</b> que funciona directamente como mRNA policistr\u00f3nico. Ejemplos: poliovirus, Flavivirus."},{"n":"33","noShuffle":false,"img":null,"q":"Gusano plano, segmentado, que provoca cisticercosis:","o":["Taenia spp","Echinococcus granulosus","Enterobius vermiculis","Fasciola spp"],"c":1,"e":"<b>Taenia solium</b> provoca cisticercosis cuando el humano ingiere huevos. Las larvas migran a m\u00fasculos y SNC. Echinococcus provoca hidatidosis; Enterobius causa oxiuriasis."},{"n":"34","noShuffle":false,"img":null,"q":"Respecto a las candidiasis, se\u00f1ala la FALSA:","o":["Representan la gran mayor\u00eda de las infecciones f\u00fangicas nosocomiales","En cuanto a la cl\u00ednica, destacan las infecciones pulmonares","Est\u00e1n provocadas por un hongo levaduriforme","Las candidiasis sist\u00e9micas tienen una tasa de mortalidad elevada"],"c":2,"e":"<b>Candida</b> causa principalmente infecciones orales, vaginales o cut\u00e1neas, no pulmonares. Aspergillus destaca por infecciones pulmonares invasivas."},{"n":"35","noShuffle":false,"img":null,"q":"Respecto a la peste:","o":["Los piojos act\u00faan como vectores de transmisi\u00f3n","Puede desarrollarse por la inhalaci\u00f3n de aerosoles","Est\u00e1 provocada por una bacteria Gram positiva","Se caracteriza por cuadros de gastroenteritis"],"c":2,"e":"La <b>peste neum\u00f3nica</b> se transmite por inhalaci\u00f3n de aerosoles. El vector habitual es la <b>pulga</b>. Yersinia pestis es Gram negativa."},{"n":"36","noShuffle":false,"img":null,"q":"Virus que se caracteriza por tener largos periodos de latencia en ganglios neurol\u00f3gicos dorsales o craneales:","o":["Virus de la Viruela","Virus del Herpes simple","Virus Varicela-Zoster","Virus del papiloma humano"],"c":3,"e":"El <b>virus Varicela-Zoster</b> queda latente en ganglios sensitivos dorsales tras la primofecci\u00f3n. Su reactivaci\u00f3n causa herpes z\u00f3ster."},{"n":"37","noShuffle":true,"img":null,"q":"Son estructuras que median la adhesi\u00f3n del microorganismo a la c\u00e9lula hospedadora:","o":["La c\u00e1psula","El pelo sexual","Las fimbrias","a y c son correctas"],"c":4,"e":"La <b>c\u00e1psula</b> y las <b>fimbrias</b> median la adhesi\u00f3n al hu\u00e9sped. El pelo sexual (pili F) participa en conjugaci\u00f3n."},{"n":"38","noShuffle":false,"img":null,"q":"Las endosporas:","o":["Facilitan la reproducci\u00f3n de las bacterias","Se pueden eliminar mediante desinfecci\u00f3n","Son producidas por los g\u00e9neros Bacillus y Clostridium","Se forman dentro de los individuos o animales infectados"],"c":3,"e":"Solo los g\u00e9neros <b>Bacillus</b> y <b>Clostridium</b> forman endosporas. Son estructuras de resistencia, no reproductivas. Muy resistentes a la desinfecci\u00f3n."},{"n":"39","noShuffle":false,"img":null,"q":"En parasitolog\u00eda, se define como fuente de par\u00e1sitos infectantes para los humanos al hospedador:","o":["Intermediario","Reservorio","Parat\u00e9nico","Definitivo"],"c":2,"e":"El <b>reservorio</b> mantiene el par\u00e1sito en la naturaleza y es fuente de infecci\u00f3n para humanos."},{"n":"40","noShuffle":false,"img":null,"q":"Un cultivo puro es:","o":["Una poblaci\u00f3n de microorganismos en fase exponencial","Una poblaci\u00f3n que desciende de un \u00fanico microorganismo inicial","Una poblaci\u00f3n obtenida a partir de un individuo enfermo","Todas son correctas"],"c":2,"e":"Un <b>cultivo puro</b> es la poblaci\u00f3n que desciende de un \u00fanico organismo progenitor (todos gen\u00e9ticamente id\u00e9nticos)."},{"n":"41","noShuffle":false,"img":null,"q":"En el crecimiento microbiano, la fase de latencia:","o":["Es la fase donde se generan el mismo n\u00famero de microorganismos que mueren","Aparece porque los microorganismos necesitan sintetizar prote\u00ednas y enzimas espec\u00edficas para crecer","Es la fase de crecimiento exponencial","Aparece porque los microorganismos cambian su metabolismo a respiraci\u00f3n aer\u00f3bica"],"c":2,"e":"La <b>fase de latencia</b> es de adaptaci\u00f3n: las bacterias sintetizan enzimas y maquinaria necesaria para el nuevo medio antes de comenzar a dividirse."},{"n":"42","noShuffle":false,"img":null,"q":"Var\u00f3n de 52 a\u00f1os con peritonitis post-ap\u00e9ndiceal. Tras cirug\u00eda y antibi\u00f3ticos, desarrolla 5 d\u00edas despu\u00e9s diarrea, fiebre y placas blancas en mucosa col\u00f3nica. \u00bfCu\u00e1l es el microorganismo m\u00e1s probable?","o":["Bacillus cereus","Escherichia coli","Pseudomonas aeruginosa","Clostridium difficile"],"c":4,"e":"<b>Clostridium difficile</b> es la causa m\u00e1s frecuente de colitis pseudomembranosa post-antibi\u00f3tica. Las pseudomembranas (placas blancas) en la mucosa col\u00f3nica son patognom\u00f3nicas."},{"n":"43","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l ser\u00eda una buena diana para generar un f\u00e1rmaco antif\u00fangico?","o":["Ergosterol","Peptidoglicano","C\u00e1pside","Lipopolisac\u00e1rido"],"c":1,"e":"El <b>ergosterol</b> es el esterol de la membrana de los hongos, ausente en c\u00e9lulas mam\u00edferas. Es diana de anfotericina B y azoles."},{"n":"44","noShuffle":false,"img":null,"q":"\u00bfEn qu\u00e9 punto del ciclo infectivo del VIH act\u00faa la transcriptasa inversa?","o":["Al inicio, para que el genoma viral se inserte en el genoma del hospedador en forma de provirus","Una vez generado el RNA mensajero, para producir los genomas de futuros viriones","Al inicio, para dar lugar al RNA mensajero a partir del cual se sintetiza una poliprote\u00edna","Durante la maduraci\u00f3n de los viriones, generando las dos copias del genoma"],"c":1,"e":"La <b>transcriptasa inversa</b> del VIH convierte el RNA viral en DNA de doble cadena, que se integra en el genoma del hu\u00e9sped (provirus) mediante la integrasa."},{"n":"45","noShuffle":false,"img":null,"q":"Paciente con fatiga y fiebre ondulante (picos cada 10 d\u00edas) que trabaja en granja de vacas con abortos recientes. \u00bfQu\u00e9 enfermedad sospechamos?","o":["Enfermedad de Lyme","Brucelosis","Carbunco","Triquinosis"],"c":2,"e":"La <b>brucelosis</b> (Brucella spp.) es una zoonosis que causa fiebre ondulante. Los abortos en el reba\u00f1o y la exposici\u00f3n laboral a ganado son datos epidemiol\u00f3gicos clave."},{"n":"46","noShuffle":false,"img":null,"q":"Los antibi\u00f3ticos \u03b2-lact\u00e1micos inhiben la s\u00edntesis de peptidoglicano, por tanto:","o":["Solo act\u00faan frente a bacterias Gram positivas","Solo act\u00faan frente a bacterias Gram negativas","Son m\u00e1s efectivos frente a bacterias Gram positivas","Son m\u00e1s efectivos frente a bacterias Gram negativas"],"c":3,"e":"Los <b>\u03b2-lact\u00e1micos</b> son m\u00e1s efectivos frente a Gram positivas: su gruesa pared de peptidoglicano es el principal blanco. En Gram negativas, la membrana externa dificulta el acceso."},{"n":"47","noShuffle":false,"img":null,"q":"Candida albicans:","o":["Es un hongo filamentoso","Puede diseminarse al cerebro y provocar meningitis","En el caso de producir enfermedad sist\u00e9mica, la tasa de mortalidad es baja","Representa la gran mayor\u00eda de las infecciones f\u00fangicas nosocomiales"],"c":4,"e":"<b>Candida albicans</b> es la principal causa de infecciones f\u00fangicas nosocomiales. Es levadura (no filamentosa). La candidiasis diseminada tiene alta mortalidad en inmunodeprimidos."},{"n":"48","noShuffle":true,"img":null,"q":"Las geonematodosis pueden darse por:","o":["Ingesti\u00f3n de huevos de los nem\u00e1todos","Penetraci\u00f3n transcutan\u00e9a","a y b son correctas","Intervenci\u00f3n de vectores"],"c":3,"e":"Las <b>geonematodosis</b> se adquieren por <b>ingesti\u00f3n de huevos</b> (Ascaris, Trichuris) o por <b>penetraci\u00f3n transcutan\u00e9a</b> de larvas (Ancylostoma, Strongyloides)."},{"n":"49","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes ETS puede provocar complicaciones neurol\u00f3gicas?","o":["Gonorrea","S\u00edfilis","Hepatitis","Clamidiasis"],"c":2,"e":"La <b>s\u00edfilis</b> (Treponema pallidum) puede causar neuros\u00edfilis en fase terciaria: meningitis, demencia, ataxia y tabes dorsal."},{"n":"50","noShuffle":false,"img":null,"q":"Respecto a la malaria, se\u00f1ala la respuesta correcta:","o":["El ser humano es el hospedador definitivo del agente causal","El agente causal es la hembra del mosquito Anopheles","La prueba principal para su diagn\u00f3stico es un frotis sangu\u00edneo","Uno de los s\u00edntomas m\u00e1s destacados son las fiebres altas ininterrumpidas"],"c":3,"e":"El <b>frotis sangu\u00edneo</b> es el gold standard para diagnosticar malaria, visualizando Plasmodium en eritrocitos. El humano es hu\u00e9sped intermediario; el mosquito Anopheles es el vector."},{"n":"51","noShuffle":false,"img":null,"q":"Coco-bacilo gram negativo que provoca tos ferina:","o":["Bordetella pertussis","Mycoplasma pneumoniae","Francisella tularensis","Coxiella burnetii"],"c":1,"e":"<b>Bordetella pertussis</b> es un cocobacilo Gram negativo causante de la tos ferina. Produce toxina pertussis que bloquea la se\u00f1alizaci\u00f3n celular, causando tos parox\u00edstica."},{"n":"52","noShuffle":false,"img":null,"q":"Inoculamos un microorganismo en tubo de cultivo. Crece \u00fanicamente en el fondo del tubo. Este microorganismo es:","o":["Aerobio facultativo","Aerobio estricto","Microaer\u00f3filo","Anaerobio estricto"],"c":4,"e":"Un <b>anaerobio estricto</b> solo crece en ausencia de ox\u00edgeno, por lo que el crecimiento se localiza exclusivamente en el <b>fondo</b> del tubo."},{"n":"53","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes especies bacterianas NO se transmite por vector artr\u00f3podo?","o":["Yersinia pestis","Borrelia burgdorferi","Leptospira interrogans","Rickettsia rickettsii"],"c":3,"e":"<b>Leptospira interrogans</b> se transmite por contacto con agua o suelo contaminados con orina de animales. Yersinia (pulga), Borrelia (garrapata) y Rickettsia (garrapata) s\u00ed requieren artr\u00f3podo."},{"n":"54","noShuffle":false,"img":null,"q":"Virus de RNA que se caracteriza por provocar hematemesis de sangre negra coagulada (v\u00f3mito negro):","o":["Virus de la Fiebre amarilla","Virus del Dengue","Virus del \u00c9bola","Virus de la rabia"],"c":1,"e":"El <b>virus de la fiebre amarilla</b> (Flavivirus) provoca hepatitis grave con ictericia y hemorragias digestivas. Transmitido por Aedes aegypti."},{"n":"55","noShuffle":false,"img":null,"q":"Entre las infecciones que provoca Staphylococcus aureus, NO se encuentra:","o":["Imp\u00e9tigo","Faringitis","S\u00edndrome del shock t\u00f3xico","Intoxicaci\u00f3n alimentaria"],"c":2,"e":"La <b>faringitis</b> bacteriana es causada principalmente por Streptococcus pyogenes, no S. aureus. S. aureus causa imp\u00e9tigo, shock t\u00f3xico (TSST-1) e intoxicaci\u00f3n alimentaria."},{"n":"56","noShuffle":false,"img":null,"q":"Un frasco de hemocultivo contiene:","o":["Compuestos que neutralizan o inactivan componentes del sistema inmunitario","Antibi\u00f3ticos para mantener en buen estado la muestra","Detergentes como la saponina para lisar las c\u00e9lulas","Fijadores como el formol para determinar la presencia de par\u00e1sitos"],"c":1,"e":"Los frascos de hemocultivo contienen <b>resinas o carb\u00f3n activado</b> que neutralizan antibi\u00f3ticos y componentes inmunitarios, permitiendo el crecimiento de microorganismos en peque\u00f1a cantidad."},{"n":"57","noShuffle":false,"img":null,"q":"Virus de DNA con tropismo por c\u00e9lulas renales:","o":["Poliomavirus BK","Virus de la parotiditis","Citomegalovirus","Virus del papiloma humano"],"c":1,"e":"El <b>Poliomavirus BK</b> tiene especial tropismo por el epitelio tubular renal. En trasplantados renales inmunosuprimidos puede reactivarse causando nefropat\u00eda por BK."},{"n":"58","noShuffle":true,"img":null,"q":"La mononucleosis infecciosa puede estar causada por:","o":["El virus de Epstein Barr","Citomegalovirus","Toxoplasma","Todas son correctas"],"c":4,"e":"El s\u00edndrome mononucle\u00f3sico puede ser causado por <b>VEB</b> (m\u00e1s frecuente), <b>CMV</b> y <b>Toxoplasma gondii</b>. Todos cursan con fiebre, adenopat\u00edas y linfocitosis at\u00edpica."},{"n":"59","noShuffle":false,"img":null,"q":"Seg\u00fan la clasificaci\u00f3n de Spaulding, se considera art\u00edculo cr\u00edtico:","o":["Art\u00edculos que se ponen en contacto con cavidades normalmente est\u00e9riles del organismo o el tejido vascular","Art\u00edculos que s\u00f3lo toman contacto con piel sana","Art\u00edculos que entran en contacto con piel no intacta o con mucosas","Art\u00edculos que requieren desinfecci\u00f3n a alto nivel"],"c":1,"e":"Los art\u00edculos <b>cr\u00edticos</b> contactan con tejidos est\u00e9riles o sistema vascular y requieren <b>esterilizaci\u00f3n</b>. Los semicr\u00edticos (mucosas) necesitan desinfecci\u00f3n de alto nivel."},{"n":"60","noShuffle":false,"img":null,"q":"Leishmania:","o":["Se encuentra dentro del grupo de los apicomplejos","Se transmite a trav\u00e9s de chinches","Los gatos son frecuentemente hospedadores reservorio","Provoca la enfermedad de Kala-azar"],"c":4,"e":"<b>Leishmania donovani</b> causa el Kala-azar (leishmaniasis visceral). Es un flagelado, se transmite por flebotomos y el reservorio principal es el perro."},{"n":"61","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de los siguientes componentes de la pared celular NO es diana de f\u00e1rmacos antif\u00fangicos?","o":["Ergosterol","Quitina","Glucano","Lipopolisac\u00e1rido"],"c":4,"e":"El <b>LPS</b> no existe en hongos. Ergosterol, glucano y quitina s\u00ed son dianas de antif\u00fangicos."},{"n":"62","noShuffle":true,"img":null,"q":"\u00bfQu\u00e9 mecanismos provocan que el virus del VIH tenga una gran variabilidad?","o":["Elevada tasa de error de la transcriptasa reversa","R\u00e1pida replicaci\u00f3n","Capacidad de recombinaci\u00f3n","Todas son correctas"],"c":4,"e":"La gran variabilidad del <b>VIH</b> se debe a: alta tasa de error de la transcriptasa inversa, elevada velocidad de replicaci\u00f3n y recombinaci\u00f3n entre variantes."},{"n":"63","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de los siguientes hongos NO es un hongo oportunista?","o":["Candida albicans","Aspergillus fumigatus","Cryptococcus neoformans","Histoplasma capsulatum"],"c":4,"e":"<b>Histoplasma capsulatum</b> es un hongo dim\u00f3rfico pat\u00f3geno primario: puede infectar individuos inmunocompetentes. Candida, Aspergillus y Cryptococcus son principalmente oportunistas."},{"n":"64","noShuffle":false,"img":null,"q":"Virus de la hepatitis frente al cual no existen vacunas y que tiende a producir enfermedad cr\u00f3nica:","o":["Hepatitis A","Hepatitis B","Hepatitis C","Hepatitis D"],"c":3,"e":"El <b>VHC</b> carece de vacuna eficaz y cronifica en el 70-80% de los casos. VHA no cronifica; para VHB existe vacuna; VHD requiere cofecci\u00f3n con VHB."},{"n":"65","noShuffle":false,"img":null,"q":"Neisseria meningitidis:","o":["Se detecta en l\u00edquido cefalorraqu\u00eddeo (LCR) cuando provoca meningitis","Es una especie de diplococos Gram positivos","No existen vacunas eficaces para prevenir su infecci\u00f3n","Se transmite por v\u00eda fecal-oral"],"c":1,"e":"<b>N. meningitidis</b> es un diplococo Gram <b>negativo</b> que causa meningitis bacteriana y se detecta en LCR. Existen vacunas conjugadas. La transmisi\u00f3n es respiratoria, no fecal-oral."},{"n":"66","noShuffle":false,"img":null,"q":"Virus de la hepatitis que es un virus defectivo:","o":["Hepatitis A","Hepatitis B","Hepatitis C","Hepatitis D"],"c":4,"e":"El <b>VHD (hepatitis delta)</b> es defectivo: solo puede replicarse con la env\u00f8ltura del HBsAg del VHB. No puede causar infecci\u00f3n sin VHB activo."},{"n":"67","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes enfermedades infecciosas NO ser\u00eda de declaraci\u00f3n obligatoria en Espa\u00f1a?","o":["Leishmaniasis","Escarlatina","SIDA","Polio"],"c":1,"e":"En Espa\u00f1a, la <b>leishmaniasis</b> no figura como EDO en el listado nacional. Escarlatina, SIDA y polio s\u00ed son de declaraci\u00f3n obligatoria."},{"n":"68","noShuffle":false,"img":null,"q":"La malaria o paludismo: \u00bfcu\u00e1l es correcta?","o":["Est\u00e1 provocada por distintas especies del g\u00e9nero Plasmodium","Las hembras de la mosca tse-tse act\u00faan como vector","Los s\u00edntomas cursan inicialmente con chancro o \u00falcera en el lugar de la picada","Todas son correctas"],"c":1,"e":"La malaria est\u00e1 causada por <b>Plasmodium</b> spp. y transmitida por el mosquito Anopheles hembra. La mosca tse-tse transmite tripanosomiasis africana."},{"n":"69","noShuffle":false,"img":null,"q":"Virus de RNA que provoca diarrea aguda en ni\u00f1os, causa frecuente de epidemias en guarder\u00edas:","o":["Virus de la Parainfluenza","Virus de Epstein Barr","Parvovirus","Rotavirus"],"c":4,"e":"El <b>Rotavirus</b> es la causa m\u00e1s frecuente de gastroenteritis grave en menores de 5 a\u00f1os. RNA doble cadena (Reoviridae), causa epidemias en invierno en guarder\u00edas."},{"n":"70","noShuffle":false,"img":null,"q":"Paciente VIH+ con afectaci\u00f3n pulmonar. La tinci\u00f3n de Ziehl-Neelsen del esputo muestra bacterias \u00e1cido-alcohol resistentes. \u00bfCu\u00e1l es el diagn\u00f3stico m\u00e1s probable?","o":["Aspergilosis","Tuberculosis","Neumon\u00eda at\u00edpica","Legionelosis"],"c":2,"e":"La <b>tinci\u00f3n de Ziehl-Neelsen</b> identifica bacilos \u00e1cido-alcohol resistentes (BAAR): micobacterias. En VIH+ con afectaci\u00f3n pulmonar, lo m\u00e1s probable es <b>tuberculosis</b>."},{"n":"71","noShuffle":false,"img":null,"q":"Trasplantado renal con infecci\u00f3n renal de origen v\u00edrico. \u00bfCu\u00e1l es el agente causal m\u00e1s probable?","o":["Virus de Epstein Barr","Virus de la parotiditis","Poliomavirus BK","Parvovirus B19"],"c":3,"e":"El <b>Poliomavirus BK</b> tiene tropismo renal. En trasplantados renales inmunosuprimidos puede reactivarse causando nefropat\u00eda por BK y p\u00e9rdida del injerto."},{"n":"72","noShuffle":false,"img":null,"q":"Seg\u00fan la clasificaci\u00f3n de Spaulding, se considera art\u00edculo semicr\u00edtico:","o":["Art\u00edculos que se ponen en contacto con cavidades normalmente est\u00e9riles del organismo o el tejido vascular","Art\u00edculos que s\u00f3lo toman contacto con piel sana","Art\u00edculos que entran en contacto con piel no intacta o con mucosas","Art\u00edculos que requieren desinfecci\u00f3n a alto nivel"],"c":3,"e":"Los art\u00edculos <b>semicr\u00edticos</b> contactan con mucosas o piel no intacta. Requieren desinfecci\u00f3n de alto nivel."},{"n":"73","noShuffle":false,"img":null,"q":"En parasitolog\u00eda, se define como hospedador en el cual el par\u00e1sito alcanza su madurez sexual:","o":["Intermediario","Reservorio","Parat\u00e9nico","Definitivo"],"c":4,"e":"El <b>hospedador definitivo</b> alberga al par\u00e1sito adulto y es donde se reproduce sexualmente."},{"n":"74","noShuffle":false,"img":null,"q":"Parvovirus:","o":["Provocan da\u00f1o indirecto por formaci\u00f3n de inmunocomplejos","Tienen tropismo por c\u00e9lulas renales","Son virus de genoma RNA","Se utilizan como vectores virales para terapia g\u00e9nica"],"c":4,"e":"Los <b>parvovirus</b> (DNA monocatenario) se utilizan como vectores AAV en terapia g\u00e9nica. Parvovirus B19 tiene tropismo eritroide, no renal."},{"n":"75","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes caracter\u00edsticas NO es com\u00fan de los g\u00e9neros Borrelia, Treponema y Leptospira?","o":["Son espiroquetas","La respuesta inmune es uno de los mecanismos principales por el que ejercen su acci\u00f3n lesiva","Son microaer\u00f3filas","Presentan flagelos peripl\u00e1smicos"],"c":3,"e":"No todas son microaer\u00f3filas: <b>Leptospira</b> es aerobia estricta. Las tres son espiroquetas con flagelos peripl\u00e1smicos."},{"n":"76","noShuffle":true,"img":null,"q":"Las funciones de la microbiota son:","o":["Ejercer de barrera protectora frente a infecciones","Participar en la digesti\u00f3n de ciertos compuestos ingeridos mediante dieta","Participar en el desarrollo y regulaci\u00f3n de la inmunidad","Todas son correctas"],"c":4,"e":"La <b>microbiota</b> tiene m\u00faltiples funciones: barrera frente a pat\u00f3genos, fermentaci\u00f3n de fibra y producci\u00f3n de vitaminas, y entrenamiento del sistema inmunol\u00f3gico."},{"n":"77","noShuffle":true,"img":null,"q":"Respecto a las levaduras, se\u00f1ala la respuesta correcta:","o":["Su crecimiento en placa se asemeja al de las bacterias","Se dividen por bipartici\u00f3n","Es necesario te\u00f1irlas para observarlas","Todas son correctas"],"c":4,"e":"Las <b>levaduras</b> crecen en placa formando colonias similares a las bacterianas. Se dividen por gemaci\u00f3n. Son visibles al microscopio sin tinci\u00f3n."},{"n":"78","noShuffle":false,"img":null,"q":"Paciente con erupci\u00f3n vesicular dolorosa en el t\u00f3rax en dermatoma, con antecedente de varicela. \u00bfCu\u00e1l es el diagn\u00f3stico m\u00e1s probable?","o":["Escarlatina","Herpes-Zoster","Ti\u00f1a","S\u00edndrome febril exant\u00e9mico"],"c":2,"e":"El <b>Herpes Z\u00f3ster</b> es la reactivaci\u00f3n del VZV latente en ganglios sensoriales. Cursa con erupci\u00f3n vesicular unilateral dolorosa siguiendo un dermatoma."},{"n":"79","noShuffle":false,"img":null,"q":"El primer cient\u00edfico que prepar\u00f3 una vacuna y demostr\u00f3 su poder inmunizante fue:","o":["Jenner","Leeuwenhoek","Fleming","Pasteur"],"c":1,"e":"<b>Edward Jenner</b> (1796) demostr\u00f3 que la inoculaci\u00f3n de viruela bovina proteg\u00eda frente a la viruela humana. Pasteur acu\u00f1\u00f3 el t\u00e9rmino vacuna."},{"n":"80","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de los siguientes microorganismos est\u00e1 relacionado con el desarrollo de c\u00e1ncer?","o":["Helicobacter pylori","Adenovirus","Trichomonas vaginalis","Streptococcus pyogenes"],"c":1,"e":"<b>H. pylori</b> es carcin\u00f3geno clase I: causa gastritis cr\u00f3nica que evoluciona a adenocarcinoma g\u00e1strico y linfoma MALT."},{"n":"81","noShuffle":false,"img":null,"q":"Ni\u00f1o de 6 a\u00f1os con artritis s\u00e9ptica de rodilla tras traumatismo. L\u00edquido articular turbio con cocos Gram positivos. \u00bfCu\u00e1l es el microorganismo m\u00e1s probable?","o":["Clostridium tetani","Staphylococcus aureus","Enterococcus faecalis","Streptococcus pyogenes"],"c":2,"e":"<b>Staphylococcus aureus</b> es la causa m\u00e1s frecuente de artritis s\u00e9ptica en ni\u00f1os, especialmente post-traumatismo. Es coco Gram positivo."},{"n":"82","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de los siguientes helmintos es un nem\u00e1todo?","o":["Fasciola hepatica","Echinococcus granulosus","Schistosoma mansoni","Trichinella spiralis"],"c":4,"e":"<b>Trichinella spiralis</b> es un nem\u00e1todo que causa triquinosis por consumo de carne cruda infectada. Fasciola y Schistosoma son trematodos; Echinococcus es un ces\u00f3todo."},{"n":"83","noShuffle":false,"img":null,"q":"Seg\u00fan la producci\u00f3n de \u00e1cidos nucleicos, indica la respuesta INCORRECTA sobre los virus clase IV de Baltimore:","o":["Tienen genoma de RNA simple cadena","Para obtener RNA mensajero se genera un DNA doble cadena intermediario","Los RNA mensajeros son policistr\u00f3nicos","Las prote\u00ednas tempranas sintetizadas son t\u00edpicamente con actividad catal\u00edtica"],"c":2,"e":"Los virus clase IV usan su propio genoma directamente como mRNA sin generar <b>intermedio de DNA</b>. Ese intermedio ocurre en retrovirus (clase VI)."},{"n":"84","noShuffle":false,"img":null,"q":"Respecto a la esterilizaci\u00f3n: \u00bfcu\u00e1l es FALSA? (\u00bfcal\u00f3r h\u00famedo para termosensibles?)","o":["El autoclavado es el m\u00e9todo de elecci\u00f3n para los materiales termosensibles","El material esterilizado por \u00f3xido de etileno requiere aireaci\u00f3n previa a su uso","Los rayos ionizantes se utilizan para esterilizar suministros farmac\u00e9uticos y desechables","Se ve afectada por la presencia de materia org\u00e1nica en el instrumental"],"c":1,"e":"El autoclave (calor h\u00famedo 121\u00b0C) es para materiales <b>termorresistentes</b>, NO termosensibles. Para termosensibles: \u00f3xido de etileno, radiaci\u00f3n ionizante o plasma de per\u00f3xido de hidr\u00f3geno."},{"n":"85","noShuffle":false,"img":null,"q":"Durante un conflicto en Somalia, soldados con fiebre recurrente con exantema petequial y s\u00edntomas que recurren a los 10 d\u00edas. \u00bfQu\u00e9 vector es el responsable?","o":["Pulga","Garrapata dura","Piojo","Mosquito"],"c":3,"e":"La fiebre recurrente epid\u00e9mica (Borrelia recurrentis) es transmitida por el <b>piojo</b> del cuerpo. Asociada a hacinamiento y guerras."},{"n":"86","noShuffle":false,"img":null,"q":"Orina sembrada en MacConkey (crecimiento rosa) y TSI (crecimiento amarillo). \u00bfQu\u00e9 conclusiones sacamos?","o":["Es un bacilo Gram negativo, no degrada lactosa y produce H2S","Es una enterobacteria, no degrada lactosa pero s\u00ed glucosa","Es una enterobacteria que degrada glucosa, sacarosa y lactosa","Es una enterobacteria, no degrada lactosa y produce H2S"],"c":3,"e":"Color rosa en MacConkey indica fermentaci\u00f3n de <b>lactosa</b>; color amarillo en TSI indica fermentaci\u00f3n de az\u00facares (glucosa, lactosa, sacarosa) sin H2S."},{"n":"87","noShuffle":false,"img":null,"q":"En referencia a los virus de la hepatitis:","o":["Nunca puede darse infecci\u00f3n por VHD en ausencia de infecci\u00f3n activa por VHB","Existen vacunas para VHB y VHC, pero no para VHA","Los VHB y VHC son envueltos y de genoma DNA, mientras que VHA es no envuelto RNA","La transmisi\u00f3n del VHA se da por v\u00eda parenteral, igual que VHB y VHC"],"c":1,"e":"El <b>VHD es defectivo</b> y requiere VHB activo para ensamblarse (usa el HBsAg). Sin VHB no puede replicarse. VHC es RNA (no DNA); VHA se transmite fecal-oral."},{"n":"88","noShuffle":false,"img":null,"q":"\u00bfC\u00f3mo distinguir si una colonia aislada pertenece al g\u00e9nero Pseudomonas o al g\u00e9nero Escherichia?","o":["Mediante tinci\u00f3n de Gram","Mediante la prueba de la oxidasa","Mediante la prueba de la catalasa","Mediante la observaci\u00f3n de la morfolog\u00eda de la colonia"],"c":2,"e":"La <b>prueba de la oxidasa</b> diferencia: Pseudomonas es <b>oxidasa positivo</b>; Escherichia es oxidasa negativo. Ambas son Gram negativas."},{"n":"89","noShuffle":false,"img":null,"q":"La reactivaci\u00f3n de las infecciones latentes por Herpesviridae posee todas las siguientes caracter\u00edsticas, excepto:","o":["Es com\u00fan a todos estos virus","S\u00f3lo la realiza algunos de estos virus","Puede inducirse por est\u00edmulos f\u00edsicos","Se produce con frecuencia en estados de inmunodeficiencia"],"c":1,"e":"Todos los <b>Herpesviridae</b> tienen capacidad de latencia y reactivaci\u00f3n. La opci\u00f3n FALSA es que solo \u201calguno\u201d la realice."},{"n":"90","noShuffle":false,"img":null,"q":"El valor de la CMI en un antibiograma se debe interpretar como:","o":["La m\u00ednima concentraci\u00f3n del agente antimicrobiano que se debe aplicar en la terapia","La m\u00ednima concentraci\u00f3n del agente antimicrobiano que inhibe el crecimiento in vitro","La m\u00e1xima concentraci\u00f3n que se debe alcanzar para conseguir la terapia \u00f3ptima","La m\u00ednima concentraci\u00f3n que se debe alcanzar en la sangre durante el tratamiento"],"c":2,"e":"La <b>CMI</b> es la concentraci\u00f3n m\u00e1s baja de antibi\u00f3tico que inhibe el crecimiento visible del microorganismo <b>in vitro</b>."},{"n":"91","noShuffle":false,"img":null,"q":"Un ciclo de multiplicaci\u00f3n con cuerpos elementales y cuerpos reticulados se encuentra en:","o":["Erlichia chaffensis","Chlamydia trachomatis","Mycoplasma pneumoniae","Coxiella burnetii"],"c":2,"e":"<b>Chlamydia trachomatis</b> tiene el ciclo bif\u00e1sico exclusivo: <b>cuerpo elemental</b> (extracelular, infeccioso) y <b>cuerpo reticulado</b> (intracelular, reproductivo)."},{"n":"92","noShuffle":false,"img":null,"q":"En la pared de las micobacterias se encuentran todos los siguientes componentes EXCEPTO:","o":["Lipopolisac\u00e1ridos","\u00c1cidos mic\u00f3licos","Arabinogalactano","Peptidoglicano"],"c":1,"e":"La pared de las <b>micobacterias</b> contiene \u00e1cidos mic\u00f3licos, arabinogalactano y peptidoglicano, pero <b>NO LPS</b>. El LPS es exclusivo de Gram negativas."},{"n":"93","noShuffle":false,"img":null,"q":"Los experimentos que refutaron en 1861 la teor\u00eda de la generaci\u00f3n espont\u00e1nea fueron realizados por:","o":["Robert Koch","Joseph Lister","Louis Pasteur","Ninguno de los anteriores"],"c":3,"e":"<b>Louis Pasteur</b> (1861) dise\u00f1\u00f3 los matraces de cuello de cisne que demostraron que los caldos est\u00e9riles no se contaminaban espont\u00e1neamente."},{"n":"94","noShuffle":false,"img":null,"q":"En el \u00e1rbol de la vida, los sistemas celulares se clasifican en los siguientes Dominios:","o":["Bacteria, Plantae y Animalia","Procariotas, Bacterias y Eucariotas","Bacteria, Archaea y Eukarya","Procariotas, Arqueas, Eucariotas y Virus"],"c":3,"e":"Seg\u00fan la clasificaci\u00f3n de Woese, los seres vivos se dividen en 3 dominios: <b>Bacteria</b>, <b>Archaea</b> y <b>Eukarya</b>. Los virus no son organismos vivos."},{"n":"95","noShuffle":false,"img":null,"q":"Mujer con inflamaci\u00f3n vaginal y secreci\u00f3n blanquecina espesa. El cultivo muestra levaduras. \u00bfCu\u00e1l es el diagn\u00f3stico m\u00e1s probable?","o":["Gonorrea","Infecci\u00f3n por clamidias","Tricomoniasis","Candidiasis"],"c":4,"e":"La <b>candidiasis vulvovaginal</b> cursa con secreci\u00f3n blanquecina espesa, prurito intenso y eritema. El cultivo muestra levaduras y pseudohifas de Candida albicans."},{"n":"96","noShuffle":true,"img":null,"q":"La virulencia de un microorganismo:","o":["Es la capacidad del microorganismo de producir enfermedad en un hu\u00e9sped susceptible","Depende del n\u00famero de microorganismos","Es una caracter\u00edstica de la especie","Todas son correctas"],"c":4,"e":"La <b>virulencia</b> es la capacidad de causar enfermedad. Depende de factores del microorganismo y la susceptibilidad del hu\u00e9sped. Es espec\u00edfica de especie y cepa."},{"n":"97","noShuffle":false,"img":null,"q":"Bacilo, Gram positivo, aerobio, no formador de esporas y pat\u00f3geno intracelular:","o":["Bacillus anthracis","Corynebacterium diphteriae","Listeria monocytogenes","Clostridium perfingens"],"c":3,"e":"<b>Listeria monocytogenes</b>: bacilo Gram positivo, aerobio facultativo, no esporulado, <b>pat\u00f3geno intracelular</b> facultativo. Bacillus forma esporas; Clostridium es anaerobio."},{"n":"98","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 tipo de transmisi\u00f3n se aplica a los microorganismos transmitidos a trav\u00e9s de objetos inanimados como vestiduras y s\u00e1banas?","o":["Transmisi\u00f3n por got\u00edculas","Transmisi\u00f3n por vectores","Transmisi\u00f3n a\u00e9rea","Transmisi\u00f3n por f\u00f3mites"],"c":4,"e":"Los <b>f\u00f3mites</b> son objetos inanimados (ropa, instrumental, superficies) que pueden transmitir microorganismos. V\u00eda de transmisi\u00f3n indirecta de contacto."},{"n":"99","noShuffle":false,"img":null,"q":"Paciente con diarrea dado de alta hospitalaria hace menos de 3 d\u00edas. \u00bfCu\u00e1l es el agente m\u00e1s probable?","o":["Rotavirus","Clostridium difficile","Staphylococcus aureus","Entamoeba histolytica"],"c":2,"e":"<b>Clostridium difficile</b> es la principal causa de diarrea nosocomial post-antibi\u00f3tica. Un alta hospitalaria reciente es el contexto epidemiol\u00f3gico cl\u00e1sico."},{"n":"100","noShuffle":false,"img":null,"q":"Neonato con fiebre, irritabilidad y hemocultivo con betahemolisis. La madre rompi\u00f3 aguas prematuramente. \u00bfCu\u00e1l es el microorganismo m\u00e1s probable?","o":["Streptococcus agalactiae","Streptococcus pyogenes","Staphylococcus aureus","Campylobacter jejuni"],"c":1,"e":"<b>Streptococcus agalactiae</b> (grupo B) es la principal causa de sepsis neonatal de inicio precoz. Coloniza el canal del parto e infecta al reci\u00e9n nacido. Es betahemol\u00edtico."},{"n":"101","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 es el concepto \u201cOne Health\u201d?","o":["La colaboraci\u00f3n entre m\u00faltiples disciplinas para lograr salud \u00f3ptima para personas, animales y medio ambiente","La investigaci\u00f3n para evitar la transmisi\u00f3n de resistencias desde animales a humanos","El esfuerzo por mantener el h\u00e1bitat natural de los animales","Una nueva t\u00e9cnica terap\u00e9utica para frenar la aparici\u00f3n de resistencias"],"c":1,"e":"<b>One Health</b> reconoce la interconexion entre la salud humana, animal y del ecosistema. Requiere colaboraci\u00f3n multidisciplinar para prevenir zoonosis y resistencias."},{"n":"102","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de los pasos de la tinci\u00f3n de Gram es el paso clave que diferencia Gram positivas de Gram negativas?","o":["La fijaci\u00f3n, que solo inactiva a las bacterias Gram positivas","La tinci\u00f3n primaria, que ti\u00f1e solo a las Gram positivas","La decoloraci\u00f3n, que afecta a las bacterias Gram negativas y no a las Gram positivas","La tinci\u00f3n de contraste, que ti\u00f1e a las Gram negativas y no a las Gram positivas"],"c":3,"e":"El paso diferencial es la <b>decoloraci\u00f3n</b> con alcohol-acetona. Gram positivas retienen el cristal violeta-lugol; Gram negativas lo pierden por la membrana externa m\u00e1s permeable."},{"n":"103","noShuffle":false,"img":null,"q":"Dos organismos betahemol\u00edticos en agar-sangre. \u00bfC\u00f3mo distinguir si son el mismo microorganismo?","o":["Haciendo el test de la catalasa","Haciendo el test de la oxidasa","Haciendo una resiembra en MacConkey","Determinando si son Gram positivos o Gram negativos"],"c":4,"e":"Determinar si son <b>Gram positivos o negativos</b> es el primer paso discriminatorio fundamental."},{"n":"104","noShuffle":true,"img":null,"q":"Las bacterias multirresistentes son un grave problema de salud p\u00fablica por:","o":["La ausencia de tratamientos antibi\u00f3ticos activos frente a estos pat\u00f3genos","La facilidad para la dispersi\u00f3n de la multiresistencia","La gravedad de las infecciones que pueden causar","Todas son correctas"],"c":4,"e":"Las <b>bacterias multirresistentes</b> suponen un problema triple: escasez de opciones terap\u00e9uticas, f\u00e1cil diseminaci\u00f3n de genes de resistencia y alta mortalidad."},{"n":"105","noShuffle":false,"img":null,"q":"En relaci\u00f3n con la vacunaci\u00f3n:","o":["Se administran inmunoglobulinas para inducir una respuesta activa frente a pat\u00f3genos.","Permite hacer frente a infecciones gracias a la r\u00e1pida desaparici\u00f3n de anticuerpos.","Expone al organismo a un ant\u00edgeno para generar una respuesta inmunitaria adquirida.","La duraci\u00f3n protectora es menor que si se administran anticuerpos de pacientes hiperinmunes."],"c":3,"e":"La <b>vacunaci\u00f3n</b> es inmunidad activa inducida artificialmente: expone al organismo a un ant\u00edgeno para generar linfocitos de memoria y anticuerpos propios."},{"n":"106","noShuffle":false,"img":null,"q":"Salmonella enterica serovar typhi: (\u00bfqu\u00e9 afirmaci\u00f3n es correcta?)","o":["Puede provocar s\u00edndrome hem\u00f3litico ur\u00e9mico","Es pat\u00f3geno humano estricto y puede colonizar de forma asintom\u00e1tica","En los portadores cr\u00f3nicos sobrevive en el intestino grueso","Todas son verdaderas"],"c":2,"e":"<b>S. typhi</b> es pat\u00f3geno humano estricto. En portadores cr\u00f3nicos persiste en la <b>ves\u00edcula biliar</b> (no en el intestino grueso). El SHU lo causa EHEC."}],"inmuno":[{"n":"1","noShuffle":false,"img":null,"q":"Una de las caracter\u00edsticas de la respuesta inmune innata es:","o":["La capacidad de establecer una respuesta primaria de anticuerpos.","La generaci\u00f3n de memoria inmunol\u00f3gica.","La capacidad de reconocer PAMPs (patrones moleculares asociados a pat\u00f3genos).","La especificidad por el ant\u00edgeno."],"c":3,"e":"La inmunidad innata reconoce <b>PAMPs</b> mediante PRRs como los TLRs. No genera memoria ni anticuerpos espec\u00edficos; esas son caracter\u00edsticas de la inmunidad adaptativa."},{"n":"2","noShuffle":false,"img":null,"q":"Indique la afirmaci\u00f3n VERDADERA. En los \u00f3rganos linfoides primarios:","o":["Se produce la filtraci\u00f3n de los ant\u00edgenos de la sangre y de la linfa.","Se activan los linfocitos.","Se produce la presentaci\u00f3n antig\u00e9nica.","Todas son falsas."],"c":4,"e":"Los \u00f3rganos linfoides primarios (m\u00e9dula \u00f3sea y timo) son donde los linfocitos <b>maduran y se desarrollan</b>. La filtraci\u00f3n antig\u00e9nica, activaci\u00f3n y presentaci\u00f3n ocurren en \u00f3rganos <b>secundarios</b>."},{"n":"3","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de los siguientes \u00f3rganos no es un \u00f3rgano linfoide secundario?","o":["Bazo","Ganglio linf\u00e1tico","Timo","Placas de Peyer"],"c":3,"e":"El <b>timo</b> es un \u00f3rgano linfoide <b>primario</b>. Bazo, ganglios linf\u00e1ticos y placas de Peyer son \u00f3rganos secundarios."},{"n":"4","noShuffle":false,"img":null,"q":"Indica la opci\u00f3n FALSA:","o":["La avidez de una IgG por un ant\u00edgeno es menor que la de una IgM.","Las citocinas se producen cuando el individuo est\u00e1 sano y enfermo.","Las c\u00e9lulas dendr\u00edticas foliculares son las principales c\u00e9lulas presentadoras de ant\u00edgenos.","Los DAMPS son mol\u00e9culas intracelulares."],"c":3,"e":"Las principales CPAs profesionales son las <b>c\u00e9lulas dendr\u00edticas interdigitantes</b>, no las foliculares. Las foliculares presentan ant\u00edgenos a linfocitos B en centros germinales."},{"n":"5","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de estas c\u00e9lulas NO es caracter\u00edstica de la inflamaci\u00f3n aguda?","o":["Neutr\u00f3filos","Mastocitos","Macr\u00f3fagos tisulares","Linfocitos"],"c":4,"e":"Los <b>linfocitos</b> participan en inflamaci\u00f3n <b>cr\u00f3nica</b>. La inflamaci\u00f3n aguda se caracteriza por la llegada r\u00e1pida de neutr\u00f3filos y desgranulaci\u00f3n de mastocitos."},{"n":"6","noShuffle":false,"img":null,"q":"En relaci\u00f3n con el trasplante, se\u00f1ala la opci\u00f3n VERDADERA:","o":["La enfermedad del injerto contra hu\u00e9sped se produce en el autotrasplante.","El rechazo es mayor cuanto mayor es la compatibilidad HLA.","En los alotrasplantes solo las HLA clase II producen el rechazo.","Las mol\u00e9culas de histocompatibilidad se comportan como ant\u00edgenos."],"c":4,"e":"En el trasplante, las mol\u00e9culas <b>HLA del donante</b> son reconocidas como ant\u00edgenos extra\u00f1os por el sistema inmune del receptor. Mayor incompatibilidad HLA = mayor rechazo."},{"n":"7","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 le sucede a un linfocito T que recibe el est\u00edmulo antig\u00e9nico (CD3) y la coestimulaci\u00f3n mediante CD28?","o":["Se activa.","Entra en anergia.","Muere por apoptosis.","No ocurre nada porque el linfocito T no recibe la coestimulaci\u00f3n mediante CD28."],"c":1,"e":"La activaci\u00f3n completa del linfocito T requiere: 1\u00aa se\u00f1al (<b>TCR+CD3</b> con p\u00e9ptido-MHC) y 2\u00aa se\u00f1al (<b>CD28</b> con B7). Sin la 2\u00aa, entra en anergia."},{"n":"8","noShuffle":false,"img":null,"q":"Se\u00f1ale cu\u00e1l de los siguientes fenotipos puede corresponder a un linfocito T:","o":["TCR+CD3+CD19negCD4+.","TCR+CD3+CD19+CD4+.","TCRnegCD3+CD19negCD4+","TCR+CD3negCD19negCD4+."],"c":1,"e":"Un linfocito T se define por: <b>TCR+, CD3+, CD19-</b>. El CD19 es marcador de linfocitos B."},{"n":"9","noShuffle":true,"img":null,"q":"La principal causa de la gran variabilidad de los anticuerpos que existen es debido a:","o":["M\u00faltiples genes V, D y J.","Actividad de la recombinasa.","Hipermutaci\u00f3n de los genes V, D y J.","Todas son ciertas."],"c":4,"e":"La diversidad de anticuerpos se genera por: m\u00faltiples segmentos <b>V, D, J</b>, actividad de la <b>recombinasa RAG</b> y <b>hipermutaci\u00f3n som\u00e1tica</b>."},{"n":"10","noShuffle":false,"img":null,"q":"Sobre el receptor CD16 de los linfocitos NK, \u00bfcu\u00e1l es la VERDADERA?","o":["Interviene en un mecanismo de citotoxicidad mediada por anticuerpos.","Es un receptor para el Fab de la IgG.","Es un receptor para el Fab de la IgM.","Es un receptor para el Fc de la IgM."],"c":1,"e":"El <b>CD16 (Fc\u03b3RIII)</b> es un receptor para la regi\u00f3n <b>Fc de la IgG</b> en c\u00e9lulas NK. Permite la <b>ADCC</b>."},{"n":"11","noShuffle":false,"img":null,"q":"En relaci\u00f3n con el isotipo M, se\u00f1ale la VERDADERA.","o":["Es la inmunoglobulina de la respuesta primaria en fase aguda.","Su forma soluble es predominantemente menom\u00e9rica.","Se relaciona con los procesos al\u00e9rgicos uni\u00e9ndose a mastocitos a trav\u00e9s del FcR.","No activa el complemento por la v\u00eda cl\u00e1sica."],"c":1,"e":"La <b>IgM</b> es la primera inmunoglobulina producida en la respuesta primaria. Su forma soluble es un <b>pent\u00e1mero</b>. Activa eficientemente el complemento por v\u00eda cl\u00e1sica."},{"n":"12","noShuffle":true,"img":null,"q":"Indica cu\u00e1l es un mecanismo de tolerancia en el linfocito B:","o":["Selecci\u00f3n positiva.","Apoptosis.","Anergia.","Las respuestas b y c son correctas."],"c":4,"e":"Los mecanismos de tolerancia de linfocitos B incluyen: <b>apoptosis</b> (delecci\u00f3n clonal de autorreactivos) y <b>anergia</b> (inactivaci\u00f3n en periferia). La selecci\u00f3n positiva es del timo."},{"n":"13","noShuffle":false,"img":null,"q":"La funci\u00f3n biol\u00f3gica de las mol\u00e9culas MHC es:","o":["Producir rechazo del trasplante.","Receptor de los linfocitos T.","Presentar p\u00e9ptidos antig\u00e9nicos a los linfocitos T.","Presentar ant\u00edgenos enteros a los linfocitos T."],"c":3,"e":"Las mol\u00e9culas <b>MHC (HLA)</b> presentan <b>p\u00e9ptidos antig\u00e9nicos procesados</b> a linfocitos T. MHC-I presenta p\u00e9ptidos end\u00f3genos a TCD8+; MHC-II presenta p\u00e9ptidos ex\u00f3genos a TCD4+."},{"n":"14","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes c\u00e9lulas NO es capaz de presentar ant\u00edgenos a los linfocitos T CD8+?","o":["Fibroblastos.","Monocitos.","Hemat\u00edas.","Plaquetas."],"c":3,"e":"Los <b>hemat\u00edas</b> no expresan MHC de clase I y no pueden presentar p\u00e9ptidos a TCD8+."},{"n":"15","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 define a los linfocitos TCD4+?","o":["Producen lisis celular.","Son cooperadores.","Tienen funciones parecidas a los TCD8+.","Reconocen p\u00e9ptidos presentados por MHC clase I y II."],"c":2,"e":"Los linfocitos <b>TCD4+</b> son <b>cooperadores (helper)</b>: coordinan la respuesta inmune secretando citocinas. Reconocen p\u00e9ptidos en MHC clase II."},{"n":"16","noShuffle":false,"img":null,"q":"El proceso de selecci\u00f3n negativa en el timo consiste en:","o":["La supervivencia de c\u00e9lulas T cuyos TCR reconocen mol\u00e9culas de MHC propias.","La eliminaci\u00f3n de las c\u00e9lulas T que reconocen p\u00e9ptidos propios.","La selecci\u00f3n de timocitos que expresan TCR.","La proliferaci\u00f3n de precursores de c\u00e9lulas T en la corteza externa."],"c":2,"e":"La <b>selecci\u00f3n negativa</b> en la m\u00e9dula t\u00edmica elimina por apoptosis los linfocitos T con alta afinidad por p\u00e9ptidos <b>propios</b>, previniendo la autoinmunidad."},{"n":"17","noShuffle":false,"img":null,"q":"Cuando un linfocito T reconoce MHC de otro individuo se produce:","o":["Hipersensibilidad.","Anergia.","Alorreactividad.","Autoinmunidad."],"c":3,"e":"La <b>alorreactividad</b> es la respuesta de linfocitos T frente a mol\u00e9culas HLA de otro individuo. Es el principal mecanismo del rechazo de trasplantes."},{"n":"18","noShuffle":false,"img":null,"q":"En relaci\u00f3n con el TCR del linfocito, se\u00f1ala la opci\u00f3n VERDADERA:","o":["Su diversidad se debe a la actividad de la recombinasa y a la hipermutaci\u00f3n som\u00e1tica.","Est\u00e1 asociado a la prote\u00edna CD79.","Funciona como un receptor espec\u00edfico de ant\u00edgeno.","Est\u00e1 formada por una inmunoglobulina alfa y la prote\u00edna beta-2 microglobulina."],"c":3,"e":"El <b>TCR</b> es el receptor espec\u00edfico de ant\u00edgeno de linfocitos T. Su diversidad se debe solo a la recombinasa (NO hipermutaci\u00f3n som\u00e1tica). CD79 es del BCR."},{"n":"19","noShuffle":false,"img":null,"q":"La conmutaci\u00f3n del isotipo:","o":["Se produce a nivel del DNA de la IgH induciendo modificaciones en el sitio de uni\u00f3n al ant\u00edgeno.","Afecta a la regi\u00f3n variable de la cadena pesada de la Ig.","Est\u00e1 inducida por la producci\u00f3n de citocinas por linfocitos T junto a la interacci\u00f3n directa linfocito T-linfocito B.","Consiste en el cambio de la cadena ligera de la Ig."],"c":3,"e":"La <b>conmutaci\u00f3n de isotipo</b> cambia la regi\u00f3n constante de la cadena pesada (IgM \u2192 IgG/IgA/IgE) sin alterar la especificidad. Est\u00e1 inducida por <b>citocinas de linfocitos T</b> y CD40L-CD40."},{"n":"20","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 citocina tiene un efecto antiinflamatorio e inmunosupresor?","o":["TGF beta.","IL 1 beta.","TNF alfa.","INF gamma."],"c":1,"e":"El <b>TGF-\u03b2</b> es antiinflamatorio e inmunosupresor: inhibe la proliferaci\u00f3n linfocitaria, favorece la diferenciaci\u00f3n de Treg y suprime la activaci\u00f3n macrof\u00e1gica."},{"n":"21","noShuffle":false,"img":null,"q":"Indique la relaci\u00f3n hipersensibilidad-mecanismo FALSA:","o":["Dermatitis at\u00f3pica- dependiente de IgE.","Hem\u00f3lisis intravascular intensa \u2013 mediada por anticuerpos.","Enfermedad del suero \u2013 dependiente de IgM.","Dermatitis por contacto - Hipersensibilidad mediada por c\u00e9lulas"],"c":3,"e":"La <b>enfermedad del suero</b> es hipersensibilidad tipo III mediada por <b>inmunocomplejos</b> (IgG/IgM + ant\u00edgeno), no dependiente exclusivamente de IgM."},{"n":"22","noShuffle":false,"img":null,"q":"Se\u00f1ale el trastorno autoinmune mediado por inmunocomplejos:","o":["Diabetes mellitus insulinodependiente.","Lupus eritematoso sist\u00e9mico.","Enfermedad de Graves.","Miastenia grave."],"c":2,"e":"El <b>LES</b> es el prototipo de enfermedad autoinmune mediada por <b>inmunocomplejos</b> (tipo III): autoanticuerpos anti-DNA forman complejos que se depositan en tejidos."},{"n":"23","noShuffle":false,"img":null,"q":"La respuesta inmunitaria innata precoz frente a las infecciones v\u00edricas es mediada principalmente por:","o":["IL-4.","IL-10.","IL-12.","Interferones (IFN) tipo I."],"c":4,"e":"Los <b>interferones tipo I</b> (IFN-\u03b1 e IFN-\u03b2) son la primera l\u00ednea de defensa antiviral innata. Inducen estado antiviral en c\u00e9lulas vecinas y activan c\u00e9lulas NK."},{"n":"24","noShuffle":false,"img":null,"q":"El t\u00e9rmino mimetismo molecular est\u00e1 relacionado con el desarrollo de:","o":["Hipersensibilidad.","Autoinmunidad.","Inmunodeficiencia primaria.","Inmunodeficiencia secundaria."],"c":2,"e":"El <b>mimetismo molecular</b> ocurre cuando un pat\u00f3geno tiene ant\u00edgenos similares a prote\u00ednas propias. Los anticuerpos anti-pat\u00f3geno pueden atacar tejidos propios, desencadenando <b>autoinmunidad</b>."},{"n":"25","noShuffle":true,"img":null,"q":"Indique el efecto lesivo que puede producirse por la respuesta inmunitaria frente a bacterias:","o":["Inflamaci\u00f3n relacionada con un aumento de la secreci\u00f3n de citocinas.","Da\u00f1o de prote\u00ednas propias causado por anticuerpos con reactividad cruzada.","Inflamaci\u00f3n granulomatosa relacionada con la activaci\u00f3n cr\u00f3nica de linfocitos y macr\u00f3fagos.","Todas son correctas."],"c":4,"e":"La respuesta inmune frente a bacterias puede causar da\u00f1o por: <b>tormenta de citocinas</b> (shock s\u00e9ptico), <b>reactividad cruzada</b> e <b>inflamaci\u00f3n granulomatosa</b> cr\u00f3nica."},{"n":"26","noShuffle":false,"img":null,"q":"En relaci\u00f3n con la expresi\u00f3n de las mol\u00e9culas del MHC, indique la afirmaci\u00f3n FALSA:","o":["La producci\u00f3n de IFN tipo I puede aumentar la expresi\u00f3n de las HLA-I.","La producci\u00f3n de IFN-\u03b3 por linfocitos NK puede aumentar la expresi\u00f3n de HLA-II.","Las citocinas de los linfocitos CD4+ participan en el incremento de expresi\u00f3n de HLA-II en linfocitos B.","Las HLA-II no var\u00edan su expresi\u00f3n en la superficie de los linfocitos T."],"c":4,"e":"Las HLA-II <b>s\u00ed pueden variar</b> su expresi\u00f3n en linfocitos T activados. IFN-\u03b3 aumenta HLA-II en muchos tipos celulares. La opci\u00f3n d es la falsa."},{"n":"27","noShuffle":false,"img":null,"q":"La cadena invariante:","o":["Bloquea el surco de uni\u00f3n al p\u00e9ptido de las HLA-I en el ret\u00edculo endopl\u00e1smico.","Se une a la HLA-II en el fagolisosoma.","Evita que la HLA-II reconozca los p\u00e9ptidos derivados de procesamiento citos\u00f3lico.","Se localiza al lado de la HLA-I en la superficie celular."],"c":3,"e":"La <b>cadena invariante (Ii)</b> ocupa el surco de la <b>HLA-II</b> en el RE, impidiendo que capte p\u00e9ptidos citos\u00f3licos. Se degrada en el endosoma liberando el surco para p\u00e9ptidos ex\u00f3genos."},{"n":"28","noShuffle":false,"img":null,"q":"El feto no genera rechazo en la madre ya que:","o":["Comparte con ella la mitad de su c\u00f3digo gen\u00e9tico.","Los trofoblastos producen una cantidad elevada de TNF-alfa.","Los trofoblastos expresan elevadas cantidades de HLA-II.","En la localizaci\u00f3n anat\u00f3mica del feto existe una elevada inmunosupresi\u00f3n local."],"c":4,"e":"El feto tolera la respuesta materna gracias a <b>inmunosupresi\u00f3n local</b>: linfocitos Treg, IL-10, TGF-\u03b2 y falta de expresi\u00f3n de HLA cl\u00e1sicos en trofoblastos (expresan HLA-G no inmunog\u00e9nico)."},{"n":"29","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes caracter\u00edsticas corresponde a un ant\u00edgeno T-independiente?","o":["Genera una elevada memoria.","Necesitan que el linfocito CD4+ interaccione con el linfocito B para activar la producci\u00f3n de anticuerpos.","El linfocito B puede reconocerlo directamente.","Se relaciona con la producci\u00f3n de los 5 isotipos de inmunoglobulinas."],"c":3,"e":"Los ant\u00edgenos <b>T-independientes</b> son reconocidos directamente por el linfocito B <b>sin necesidad de TCD4+</b>. Generan principalmente IgM, poca memoria."},{"n":"30","noShuffle":false,"img":null,"q":"La secuencia contigua de amino\u00e1cidos reconocida por un anticuerpo se conoce como:","o":["Ant\u00edgeno.","Hapteno.","Ep\u00edtopo conformacional.","Ep\u00edtopo lineal."],"c":4,"e":"Un <b>ep\u00edtopo lineal (secuencial)</b> est\u00e1 formado por amino\u00e1cidos contiguos en la secuencia primaria. El ep\u00edtopo conformacional depende de la estructura terciaria."},{"n":"31","noShuffle":false,"img":null,"q":"La fase l\u00edtica de las v\u00edas del complemento:","o":["Es caracter\u00edstica de las v\u00edas cl\u00e1sica y alternativa, pero no se produce en la v\u00eda de las lectinas.","Tiene como principal componente el MAC formado por la convertasa C5.","Produce la lisis del microorganismo al favorecer un desequilibrio osm\u00f3tico.","Es id\u00e9ntica en la v\u00eda cl\u00e1sica y de las lectinas, pero diferente en la alternativa."],"c":3,"e":"El <b>MAC (C5b-9)</b> inserta un poro en la membrana del microorganismo causando <b>desequilibrio osm\u00f3tico</b> y lisis. Es com\u00fan a las tres v\u00edas del complemento."},{"n":"32","noShuffle":true,"img":null,"q":"Indica el mecanismo por el que los neutr\u00f3filos son capaces de actuar sobre los pat\u00f3genos:","o":["Fagocitosis.","Liberaci\u00f3n de gr\u00e1nulos citot\u00f3xicos.","Liberaci\u00f3n de trampas extracelulares de neutr\u00f3filos.","Todos los anteriores son correctos."],"c":4,"e":"Los <b>neutr\u00f3filos</b> combaten pat\u00f3genos por: <b>fagocitosis</b>, <b>degranulaci\u00f3n</b> y <b>NETs</b> (redes de cromatina con prote\u00ednas antimicrobianas)."},{"n":"33","noShuffle":false,"img":null,"q":"En relaci\u00f3n con la citotoxicidad producida por los linfocitos CD8+, indica la afirmaci\u00f3n CORRECTA:","o":["La perforina es un mediador de la citotoxicidad mediada por receptores.","La granzima induce la apoptosis de la c\u00e9lula diana al ser reconocida por receptores de superficie.","La citotoxicidad mediada por gr\u00e1nulos requiere de la interacci\u00f3n del ligando Fas con su receptor.","La granzima puede acceder al interior de la c\u00e9lula diana gracias a la actividad de la perforina."],"c":4,"e":"La <b>perforina</b> forma poros en la membrana de la c\u00e9lula diana, permitiendo la entrada de <b>granzimas</b> que activan caspasas e inducen <b>apoptosis</b>."},{"n":"34","noShuffle":false,"img":null,"q":"Indica el orden correcto de las fases de la fagocitosis:","o":["Quimiotaxis, adherencia y reconocimiento del ant\u00edgeno a trav\u00e9s del PAMP, ingesti\u00f3n y destrucci\u00f3n del agente extra\u00f1o, formaci\u00f3n del fagolisosoma y eliminaci\u00f3n de los productos de degradaci\u00f3n.","Quimiotaxis, adherencia y reconocimiento del ant\u00edgeno a trav\u00e9s del PAMP, ingesti\u00f3n del agente extra\u00f1o y formaci\u00f3n del fagolisosoma, destrucci\u00f3n del agente extra\u00f1o y eliminaci\u00f3n de los productos de degradaci\u00f3n.","Rodamiento, activaci\u00f3n, adhesi\u00f3n firme a c\u00e9lulas endoteliales, di\u00e1pedesis y quimiotaxis.","Activaci\u00f3n, di\u00e1pedesis, rodamiento y quimiotaxis."],"c":2,"e":"La <b>fagocitosis</b> sigue: quimiotaxis \u2192 reconocimiento/adherencia \u2192 ingesti\u00f3n (fagosoma) \u2192 fusi\u00f3n con lisosoma (fagolisosoma) \u2192 destrucci\u00f3n \u2192 eliminaci\u00f3n de restos."},{"n":"35","noShuffle":false,"img":null,"q":"Los anticuerpos anti-PD1 son prometedores como estrategia terap\u00e9utica frente a tumores. \u00bfEn qu\u00e9 se basa su mecanismo?","o":["Bloquean la inhibici\u00f3n de los linfocitos T que producen las c\u00e9lulas tumorales.","Se unen al PD-1 de c\u00e9lulas tumorales facilitando la citotoxicidad mediada por c\u00e9lulas NK.","Activan la producci\u00f3n de citocinas por linfocitos T cooperadores.","Bloquean la apoptosis de los linfocitos T."],"c":1,"e":"Los anticuerpos <b>anti-PD-1</b> bloquean la interacci\u00f3n PD-1/PD-L1, eje que usan las c\u00e9lulas tumorales para inhibir linfocitos T. Al bloquearlo, se <b>reactivan los linfocitos T</b> antitumorales."},{"n":"36","noShuffle":false,"img":null,"q":"En la citometr\u00eda de flujo:","o":["El detector FSC nos da informaci\u00f3n sobre el tama\u00f1o de la c\u00e9lula.","El detector SSC nos da informaci\u00f3n sobre la presencia de anticuerpos fluorescentes.","Podemos discriminar las c\u00e9lulas CD3+CD4+ de las CD3-CD4+ mediante un anticuerpo fluorescente.","Las c\u00e9lulas a analizar deben encontrarse sobre un soporte s\u00f3lido."],"c":3,"e":"En citometr\u00eda de flujo: FSC indica tama\u00f1o; SSC indica <b>granularidad</b>. Se pueden discriminar poblaciones con anticuerpos fluorescentes. Las c\u00e9lulas van en <b>suspensi\u00f3n</b>."},{"n":"37","noShuffle":false,"img":null,"q":"Indica cu\u00e1l de las siguientes c\u00e9lulas no tiene capacidad fagoc\u00edtica:","o":["C\u00e9lula dendr\u00edtica.","Neutr\u00f3filo.","Macr\u00f3fago.","Bas\u00f3filo."],"c":4,"e":"Los <b>bas\u00f3filos</b> no tienen capacidad fagoc\u00edtica; su funci\u00f3n principal es la desgranulaci\u00f3n (histamina, etc.) en procesos al\u00e9rgicos."},{"n":"38","noShuffle":false,"img":null,"q":"En referencia a los linfocitos B, indica la frase CORRECTA:","o":["Las c\u00e9lulas B de memoria mueren por apoptosis al cabo de unos pocos d\u00edas si no contactan con el ant\u00edgeno.","Los linfocitos B maduros v\u00edrgenes mueren r\u00e1pidamente por apoptosis tras entrar en contacto con el ant\u00edgeno.","La selecci\u00f3n clonal se activa cuando un linfocito B reconoce a un ant\u00edgeno espec\u00edfico por su BCR.","Las c\u00e9lulas plasm\u00e1ticas son c\u00e9lulas B inmaduras."],"c":3,"e":"La <b>selecci\u00f3n clonal</b> ocurre cuando el BCR reconoce espec\u00edficamente su ant\u00edgeno, activando proliferaci\u00f3n y diferenciaci\u00f3n. Las c\u00e9lulas plasm\u00e1ticas son c\u00e9lulas maduras secretoras."},{"n":"39","noShuffle":false,"img":null,"q":"Con respecto a los clusters de diferenciaci\u00f3n, \u00bfqu\u00e9 combinaci\u00f3n identifica un linfocito T citot\u00f3xico?","o":["CD3+CD4+","CD3+CD8+","CD3-CD8+","CD3-CD4-"],"c":2,"e":"Un linfocito T <b>citot\u00f3xico</b> es <b>CD3+ CD8+</b>. El CD3 est\u00e1 en todos los linfocitos T; el CD8 lo distingue de los TCD4+ cooperadores."},{"n":"40","noShuffle":false,"img":null,"q":"Las c\u00e9lulas M:","o":["Captan ant\u00edgenos procedentes de la v\u00eda digestiva y lo transportan a las Placas de Peyer.","Se consideran c\u00e9lulas presentadoras de ant\u00edgenos capaces de activar linfocitos T y B.","Son caracter\u00edsticas de los ganglios linf\u00e1ticos.","Son las encargadas de mediar la selecci\u00f3n negativa de los linfocitos B."],"c":1,"e":"Las <b>c\u00e9lulas M</b> (microfold cells) recubren las Placas de Peyer y captan ant\u00edgenos luminales, transport\u00e1ndolos por transcitosis donde se inicia la respuesta inmune intestinal."},{"n":"41","noShuffle":false,"img":null,"q":"Indica cu\u00e1les de los siguientes \u00f3rganos se consideran \u00f3rganos linfoides primarios:","o":["Timo y bazo.","M\u00e9dula \u00f3sea y bazo.","Timo y m\u00e9dula \u00f3sea.","Bazo y ganglios linf\u00e1ticos."],"c":3,"e":"Los \u00f3rganos linfoides <b>primarios</b> son el <b>timo</b> y la <b>m\u00e9dula \u00f3sea</b>. El bazo y los ganglios son \u00f3rganos secundarios."},{"n":"42","noShuffle":false,"img":null,"q":"Indica cu\u00e1l es un mecanismo de tolerancia central en el linfocito B:","o":["Selecci\u00f3n positiva.","Apoptosis.","Anergia.","Apoptosis y anergia."],"c":4,"e":"La tolerancia central de linfocitos B incluye: <b>apoptosis</b> (delecci\u00f3n de autorreactivos de alta afinidad) y <b>anergia</b> (inactivaci\u00f3n de los de moderada afinidad)."},{"n":"43","noShuffle":false,"img":null,"q":"Con respecto del sistema del complemento:","o":["La C3 convertasa de la v\u00eda alternativa es C3b3b1b.","La v\u00eda cl\u00e1sica se inicia por lisis espont\u00e1nea de C3.","Los factores B y D son caracter\u00edsticos de la v\u00eda alternativa.","C5a inicia la formaci\u00f3n del complejo de ataque a la membrana (MAC)."],"c":3,"e":"Los <b>factores B y D</b> son exclusivos de la <b>v\u00eda alternativa</b>. La v\u00eda cl\u00e1sica se inicia por complejos Ag-Ac. Es C5b (no C5a) el que inicia el MAC."},{"n":"44","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1les de los siguientes componentes forma parte de la inmunidad adquirida?","o":["Linfocito NK.","PAMP.","Neutr\u00f3filo.","Linfocito T."],"c":4,"e":"Los <b>linfocitos T</b> son c\u00e9lulas de la inmunidad <b>adaptativa (adquirida)</b>, con especificidad y memoria inmunol\u00f3gica. Los NK, neutr\u00f3filos y PAMPs pertenecen a la inmunidad innata."},{"n":"45","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de la/s siguiente/s inmunoglobulina/s no tiene/n la capacidad de neutralizar al pat\u00f3geno?","o":["IgA.","IgG.","IgE.","IgA e IgE."],"c":3,"e":"La <b>IgE</b> no tiene funci\u00f3n neutralizante directa. Su funci\u00f3n es la desgranulaci\u00f3n de mastocitos y bas\u00f3filos. IgA neutraliza en mucosas; IgG es la principal neutralizante sist\u00e9mica."},{"n":"46","noShuffle":false,"img":null,"q":"Los receptores de los linfocitos T:","o":["Se producen en la m\u00e9dula \u00f3sea durante el desarrollo de los linfocitos.","Est\u00e1n formados por 2 cadenas pept\u00eddicas con dominios constantes y variables.","Est\u00e1n acoplados al CD79 que transmite la se\u00f1al intracelularmente.","Se generan por la actividad de la recombinasa y su afinidad mejora por hipermutaci\u00f3n som\u00e1tica."],"c":2,"e":"El <b>TCR</b> est\u00e1 formado por dos cadenas (\u03b1\u03b2 o \u03b3\u03b4) con dominios variables y constantes. Se genera en el timo, est\u00e1 acoplado a CD3 (no CD79), y NO experimenta hipermutaci\u00f3n som\u00e1tica."},{"n":"47","noShuffle":true,"img":null,"q":"Para que la comunicaci\u00f3n entre un linfocito T cooperador y una CPA sea efectiva, se debe producir la interacci\u00f3n entre:","o":["CD4 - MCHII.","CD80 - CD86.","CD8 - MHCI.","a y b."],"c":4,"e":"El linfocito T cooperador requiere: 1\u00aa se\u00f1al (<b>TCR+CD4 con p\u00e9ptido-MHC-II</b>) y 2\u00aa se\u00f1al (<b>CD28 con CD80/CD86</b> de la CPA)."},{"n":"48","noShuffle":false,"img":null,"q":"El aumento de IgE es caracter\u00edstico de las infecciones por:","o":["Hongos.","Par\u00e1sitos.","Virus.","Bacterias."],"c":2,"e":"La <b>IgE</b> aumenta especialmente en infecciones por <b>helm\u00edntos (par\u00e1sitos)</b> y en procesos al\u00e9rgicos. Las c\u00e9lulas Th2 producen IL-4 e IL-13 que promueven la conmutaci\u00f3n a IgE."},{"n":"49","noShuffle":false,"img":null,"q":"Mujer de 48 a\u00f1os con trasplante renal que desarrolla anuria y shock brusco a las 6 horas. Tuvo un primer trasplante previo. El donante actual comparte HLA-B35 con el anterior. \u00bfQu\u00e9 tipo de rechazo es?","o":["Rechazo hiperagudo, debido a la sensibilizaci\u00f3n en su primer trasplante.","Rechazo agudo, debido a la sensibilizaci\u00f3n en su primer trasplante.","Rechazo agudo acelerado, debido a la sensibilizaci\u00f3n en su segundo trasplante.","Rechazo hiperagudo debido a la existencia de anticuerpos frente a HLA-B35 en su segundo donante."],"c":4,"e":"El <b>rechazo hiperagudo</b> ocurre en minutos-horas por anticuerpos preformados. La paciente fue sensibilizada al HLA-B35 del primer trasplante; el donante actual tambi\u00e9n tiene B35."},{"n":"50","noShuffle":false,"img":null,"q":"Tras una infecci\u00f3n por virus:","o":["Hay una r\u00e1pida producci\u00f3n de IFN de tipo II.","La primera se\u00f1al de activaci\u00f3n inmunitaria detectada es el aumento de anticuerpos neutralizantes.","No participan los linfocitos NK.","Los linfocitos T disminuyen tras la eliminaci\u00f3n del virus y se establece linfocitos T de memoria."],"c":4,"e":"Tras la infecci\u00f3n viral, la mayor\u00eda de los linfocitos T efectores mueren por apoptosis (<b>contracci\u00f3n clonal</b>) y quedan <b>linfocitos T de memoria</b> de larga vida."},{"n":"51","noShuffle":true,"img":null,"q":"La activaci\u00f3n de la respuesta inmunitaria por una infecci\u00f3n bacteriana extracelular:","o":["Puede favorecer un efecto lesivo inflamatorio relacionado con la secreci\u00f3n de citocinas.","Ser\u00e1 siempre de tipo innata.","No implica la participaci\u00f3n de anticuerpos neutralizantes.","b y c."],"c":1,"e":"Las infecciones bacterianas extracelulares activan respuestas innata <b>y</b> adaptativa (anticuerpos neutralizantes y opsonizantes). La secreci\u00f3n masiva de citocinas puede provocar shock s\u00e9ptico."},{"n":"52","noShuffle":false,"img":null,"q":"En la fase de viremia estable de la infecci\u00f3n del VIH:","o":["Los linfocitos CD4+ se recuperan y aumentan su concentraci\u00f3n en sangre.","El virus se replica principalmente en los \u00f3rganos linfoides secundarios.","El paciente presenta sintomatolog\u00eda gripal.","El paciente presenta un recuento de linfocitos CD4+ por debajo de 200 c\u00e9lulas/\u03bcL."],"c":2,"e":"En la fase cr\u00f3nica, el VIH se replica activamente en <b>\u00f3rganos linfoides secundarios</b> (ganglios, bazo). Los CD4+ caen lentamente."},{"n":"53","noShuffle":false,"img":null,"q":"Lactante de 3 meses con todas las inmunoglobulinas descendidas y descenso de linfocitos B. \u00bfCu\u00e1l ser\u00eda el diagn\u00f3stico m\u00e1s probable?","o":["Enfermedad de Bruton.","Hemoglobinuria parox\u00edstica nocturna.","S\u00edndrome linfoproliferativo ligado al cromosoma X.","S\u00edndrome del linfocito desnudo."],"c":1,"e":"La <b>agammaglobulinemia de Bruton</b> (XLA) es un defecto en la BTK que bloquea el desarrollo de linfocitos B. Cursa con <b>ausencia de linfocitos B</b> y todas las inmunoglobulinas."},{"n":"54","noShuffle":false,"img":null,"q":"Indica la relaci\u00f3n \u201cenfermedad \u2013 alteraci\u00f3n\u201d CORRECTA:","o":["S\u00edndrome Di George \u2013 inhibici\u00f3n de la migraci\u00f3n celular.","Enfermedad granulosa cr\u00f3nica \u2013 defecto en la formaci\u00f3n del timo.","Deficiencia de adhesi\u00f3n leucocitaria \u2013 d\u00e9ficit en la fagocitosis.","Deficiencia de IRAK-4 \u2013 Inhibici\u00f3n de la producci\u00f3n de citocinas proinflamatorias."],"c":4,"e":"La <b>deficiencia de IRAK-4</b> bloquea la se\u00f1alizaci\u00f3n de TLRs e IL-1R, impidiendo la producci\u00f3n de citocinas proinflamatorias. Di George: aplasia t\u00edmica; granulomatosa cr\u00f3nica: defecto en NADPH oxidasa."},{"n":"55","noShuffle":false,"img":null,"q":"En relaci\u00f3n con la dermatitis at\u00f3pica, indique la afirmaci\u00f3n FALSA:","o":["Es una hipersensibilidad de tipo I.","Est\u00e1 mediada por linfocitos Th1.","La IgE juega un papel esencial en su desarrollo.","Es una reacci\u00f3n inmediata."],"c":2,"e":"La dermatitis at\u00f3pica es hipersensibilidad tipo I mediada por <b>linfocitos Th2</b> (no Th1). Las Th2 producen IL-4, IL-13 e IL-5, promoviendo la producci\u00f3n de IgE."},{"n":"56","noShuffle":false,"img":null,"q":"La infecci\u00f3n de un virus que genera anticuerpos que pueden reconocer prote\u00ednas del hospedador se relaciona con:","o":["Mimetismo molecular.","Hipermutaci\u00f3n som\u00e1tica.","Inmunoedici\u00f3n.","Inmunodeficiencia."],"c":1,"e":"El <b>mimetismo molecular</b>: los ant\u00edgenos virales tienen similitud estructural con prote\u00ednas propias. Los anticuerpos anti-virales pueden atacar tejidos propios, causando autoinmunidad."},{"n":"57","noShuffle":false,"img":null,"q":"Indica la relaci\u00f3n \u201cenfermedad \u2013 mecanismo\u201d CORRECTA:","o":["Enfermedad de Graves \u2013 autoanticuerpos frente a la desmogle\u00edna 3.","Miastenia gravis \u2013 activaci\u00f3n del receptor de la ACh por autoanticuerpos.","Lupus eritematoso sist\u00e9mico \u2013 inmunocomplejos.","Esclerosis m\u00faltiple \u2013 autoanticuerpos contra la regi\u00f3n Fc de la IgG."],"c":3,"e":"El <b>LES</b> est\u00e1 mediado por inmunocomplejos (tipo III). Graves: anti-receptor TSH; Miastenia: bloqueo del receptor AChR."},{"n":"58","noShuffle":false,"img":null,"q":"Indica el mecanismo de evasi\u00f3n tumoral CORRECTO:","o":["Aumento de la expresi\u00f3n del ant\u00edgeno tumoral.","Secreci\u00f3n de TGF-\u03b2.","Inhibici\u00f3n de la interacci\u00f3n Fas-FasL.","Inhibici\u00f3n de los puntos de control inmunitario."],"c":2,"e":"Las c\u00e9lulas tumorales secretan <b>TGF-\u03b2</b> para crear un microambiente inmunosupresor: inhibe la proliferaci\u00f3n de linfocitos T, favorece Treg y suprime c\u00e9lulas NK."},{"n":"59","noShuffle":false,"img":null,"q":"Los tumores susceptibles a la lisis por c\u00e9lulas NK son aquellos en que las c\u00e9lulas tumorales:","o":["Producen IFN gamma.","Disminuyen la expresi\u00f3n de MHC de clase I.","Expresan de forma aberrante CD99.","Expresan elevadas cantidades de factores angiog\u00e9nicos."],"c":2,"e":"Las c\u00e9lulas NK reconocen c\u00e9lulas que han <b>perdido o reducido MHC-I</b> (\u201cmissing self\u201d). Las c\u00e9lulas tumorales reducen MHC-I para evadir TCD8+, pero esto las hace vulnerables a las NK."},{"n":"60","noShuffle":false,"img":null,"q":"En relaci\u00f3n a los anticuerpos presentes en la sangre del reci\u00e9n nacido, se\u00f1ale la afirmaci\u00f3n VERDADERA:","o":["Predomina las IgGs transferidas por la madre.","Predominan las IgMs transferidas por la madre.","Son pr\u00e1cticamente indetectables.","Se han generado en el feto."],"c":1,"e":"La <b>IgG materna</b> atraviesa la placenta por transporte activo (receptor FcRn), protegiendo al neonato. La IgM no atraviesa la placenta por ser demasiado grande."},{"n":"61","noShuffle":false,"img":null,"q":"La cadena ligera L de un anticuerpo:","o":["Interviene en la uni\u00f3n al ant\u00edgeno.","Es bivalente.","Se une a receptores Fc.","S\u00f3lo tiene dominios V."],"c":1,"e":"La cadena ligera (L) contribuye al <b>sitio de uni\u00f3n al ant\u00edgeno</b> junto con la cadena pesada. Tiene un dominio variable (VL) y uno constante (CL)."},{"n":"62","noShuffle":false,"img":null,"q":"En relaci\u00f3n con las citocinas, indique la afirmaci\u00f3n FALSA:","o":["Una misma citocina puede tener diversas funciones.","Diversas citocinas pueden tener la misma funci\u00f3n.","Tienen una vida muy prolongada.","Pueden tener acci\u00f3n endocrina, autocrina o paracrina."],"c":3,"e":"Las citocinas tienen <b>vida media muy corta</b> (minutos a pocas horas), lo que permite control preciso de la respuesta inmune."},{"n":"63","noShuffle":false,"img":null,"q":"El lipopolisac\u00e1rido bacteriano es un:","o":["Hapteno.","PRR (receptor de reconocimiento de patr\u00f3n).","DAMP (patr\u00f3n molecular asociado al da\u00f1o).","PAMP (patr\u00f3n molecular asociado con pat\u00f3genos)."],"c":4,"e":"El <b>LPS</b> es el PAMP bacteriano paradigm\u00e1tico, reconocido por TLR-4. Los DAMPs son mol\u00e9culas end\u00f3genas del hu\u00e9sped liberadas en da\u00f1o tisular."},{"n":"64","noShuffle":false,"img":null,"q":"En relaci\u00f3n con los linfocitos, indique la afirmaci\u00f3n VERDADERA:","o":["Los linfocitos B reconocen tanto ant\u00edgenos solubles como ant\u00edgenos unidos a c\u00e9lulas.","Los linfocitos T CD4+ tienen capacidad de actuar como c\u00e9lulas presentadoras de ant\u00edgenos al presentar MHCII.","Las c\u00e9lulas de memoria no se dividen y mueren tras 1-2 semanas.","Los linfocitos NK son c\u00e9lulas que participan en la respuesta inmunitaria adaptativa."],"c":1,"e":"Los <b>linfocitos B</b> reconocen ant\u00edgenos solubles y ant\u00edgenos de superficie celular a trav\u00e9s del BCR, sin necesidad de procesamiento previo."},{"n":"65","noShuffle":false,"img":null,"q":"La secreci\u00f3n autocrina de IL-2 por los linfocitos T:","o":["Favorece que el linfocito entre en la fase G0.","Se activa tras el reconocimiento de ant\u00edgenos solubles.","Favorece la proliferaci\u00f3n del linfocito T.","Inhibe la formaci\u00f3n de linfocitos T efectores y de memoria."],"c":3,"e":"La <b>IL-2</b> producida por linfocitos TCD4+ activados act\u00faa autocrina y paracrinamente promoviendo la <b>proliferaci\u00f3n clonal</b>."},{"n":"66","noShuffle":false,"img":null,"q":"Indica la v\u00eda del complemento que necesita de componentes de la respuesta inmunitaria adaptativa para iniciarse.","o":["V\u00eda alternativa.","V\u00eda cl\u00e1sica.","V\u00eda de las lectinas.","b y c."],"c":2,"e":"La <b>v\u00eda cl\u00e1sica</b> se activa por complejos ant\u00edgeno-anticuerpo (IgG o IgM). Como los anticuerpos son producto de la inmunidad adaptativa, conecta la respuesta innata con la adaptativa."},{"n":"67","noShuffle":false,"img":null,"q":"En la respuesta inflamatoria aguda:","o":["Los neutr\u00f3filos tisulares son las primeras c\u00e9lulas innatas en activarse.","Los mastocitos activados liberan factores del complemento.","Aumenta la permeabilidad vascular y se favorece la extravasaci\u00f3n de neutr\u00f3filos al tejido da\u00f1ado.","Los macr\u00f3fagos producen la inhibici\u00f3n de las citocinas proinflamatorias TNF\u03b1 e IL1."],"c":3,"e":"En la inflamaci\u00f3n aguda, los mediadores de mastocitos aumentan la <b>permeabilidad vascular</b>, facilitando la extravasaci\u00f3n de neutr\u00f3filos. Los macr\u00f3fagos producen TNF e IL-1."},{"n":"68","noShuffle":false,"img":null,"q":"En relaci\u00f3n con respuesta inmune secundaria:","o":["La fase de crecimiento de la producci\u00f3n de anticuerpos es de menor magnitud que en la primaria.","La fase latente puede ser m\u00e1s prolongada que en la respuesta primaria.","Se generan cantidades similares de IgG que IgM, aunque la IgM se detecta antes.","La fase de meseta es m\u00e1s larga que la de la respuesta primaria."],"c":4,"e":"La respuesta secundaria es m\u00e1s r\u00e1pida, mayor y m\u00e1s prolongada que la primaria. La <b>fase de meseta es m\u00e1s larga</b>. Predomina la IgG; la fase latente es m\u00e1s corta."},{"n":"69","noShuffle":false,"img":null,"q":"En la selecci\u00f3n positiva que se produce durante el desarrollo de los linfocitos T:","o":["No est\u00e1 implicada la corteza del timo.","Se seleccionan los linfocitos que son funcionales.","Se seleccionan los linfocitos que no reconocen mol\u00e9culas propias.","Los linfocitos que s\u00ed reconocen mol\u00e9culas propias entran en apoptosis."],"c":2,"e":"La <b>selecci\u00f3n positiva</b> en la corteza t\u00edmica selecciona timocitos cuyo TCR reconoce con baja afinidad el MHC propio (son \u201cfuncionales\u201d)."},{"n":"70","noShuffle":true,"img":null,"q":"Indica el mecanismo por el que los neutr\u00f3filos son capaces de actuar sobre los pat\u00f3genos: (v2)","o":["Fagocitosis.","Liberaci\u00f3n de gr\u00e1nulos citot\u00f3xicos.","Liberaci\u00f3n de trampas extracelulares de neutr\u00f3filos.","Todos los anteriores son correctos."],"c":4,"e":"Los <b>neutr\u00f3filos</b> act\u00faan frente a pat\u00f3genos por: <b>fagocitosis</b>, <b>degranulaci\u00f3n</b> y <b>NETs</b>."},{"n":"71","noShuffle":false,"img":null,"q":"En relaci\u00f3n con \u00f3rganos linfoides:","o":["Los ant\u00edgenos transportados por la sangre llegan a los ganglios linf\u00e1ticos.","Los linfocitos se desarrollan tanto en \u00f3rganos linfoides secundarios como en ganglios linf\u00e1ticos.","La m\u00e9dula y el timo son \u00f3rganos linfoides primarios.","Las placas de Peyer son fol\u00edculos ricos en linfocitos T y B que forman parte del bazo."],"c":3,"e":"Los \u00f3rganos linfoides <b>primarios</b> son la <b>m\u00e9dula \u00f3sea</b> y el <b>timo</b>. Los ant\u00edgenos de la sangre llegan al bazo. Las placas de Peyer est\u00e1n en el intestino."},{"n":"72","noShuffle":false,"img":null,"q":"Que afirmaci\u00f3n es FALSA:","o":["Los anticuerpos policlonales son de elecci\u00f3n en el diagn\u00f3stico por su elevada especificidad.","La formaci\u00f3n de inmunocomplejos puede utilizarse para cuantificar IgG.","En una muestra de suero no se pueden cuantificar linfocitos.","Los anticuerpos monoclonales se pueden utilizar en el diagn\u00f3stico y como f\u00e1rmacos."],"c":1,"e":"Los <b>anticuerpos monoclonales</b> (no policlonales) son de elecci\u00f3n en el diagn\u00f3stico por su <b>alta especificidad</b>. Los policlonales tienen mezcla de especificidades."},{"n":"73","noShuffle":false,"img":null,"q":"Se\u00f1ale la afirmaci\u00f3n FALSA. La generaci\u00f3n de hibridomas:","o":["Se utiliza para producir anticuerpos policlonales.","Se consigue mediante la fusi\u00f3n de c\u00e9lulas tumorales de mieloma y linfocitos B activados.","Permite la s\u00edntesis de anticuerpos altamente espec\u00edficos.","Es un proceso largo y caro."],"c":1,"e":"Los <b>hibridomas</b> producen anticuerpos <b>monoclonales</b> (de una sola especificidad), no policlonales. Se obtienen fusionando linfocitos B inmunizados con c\u00e9lulas de mieloma inmortal."},{"n":"74","noShuffle":false,"img":null,"q":"La tecnolog\u00eda m\u00e1s eficiente para tipificar enfermedades como leucemias empleando anticuerpos monoclonales es la:","o":["Citometr\u00eda de flujo.","Inmunoprecipitaci\u00f3n en agarosa.","Inmunoprecipitaci\u00f3n en fase s\u00f3lida.","Estudio inmunohistoqu\u00edmico."],"c":1,"e":"La <b>citometr\u00eda de flujo</b> es la t\u00e9cnica de referencia para inmunofenotipar c\u00e9lulas mediante anticuerpos monoclonales fluorescentes. Fundamental en el diagn\u00f3stico de leucemias y linfomas."},{"n":"75","noShuffle":false,"img":null,"q":"Indique la afirmaci\u00f3n FALSA:","o":["La protecci\u00f3n adquirida por las vacunas se debe a la generaci\u00f3n de linfocitos de memoria.","Los adyuvantes son sustancias que potencian la respuesta inmunitaria de las vacunas.","La protecci\u00f3n frente a un pat\u00f3geno se ve aumentada con una segunda dosis de la vacuna.","La administraci\u00f3n de anticuerpos produce una protecci\u00f3n m\u00e1s prolongada en el tiempo que la inducci\u00f3n activa de la respuesta inmunitaria."],"c":4,"e":"La administraci\u00f3n pasiva de anticuerpos da protecci\u00f3n <b>inmediata pero transitoria</b> (semanas-meses). La vacunaci\u00f3n activa genera memoria inmunol\u00f3gica con protecci\u00f3n <b>mucho m\u00e1s duradera</b>."},{"n":"76","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes mol\u00e9culas es un patr\u00f3n molecular asociado a pat\u00f3genos?","o":["Ac\u0301ido u\u0301rico.","TLR-2.","LPS.","Prote\u00edna C reactiva."],"c":3,"e":"El <b>LPS (lipopolisac\u00e1rido)</b> es el PAMP bacteriano paradigm\u00e1tico, reconocido por TLR-4. El TLR-2 es un PRR (receptor). El \u00e1cido \u00farico y la PCR son mol\u00e9culas end\u00f3genas del hu\u00e9sped."},{"n":"77","noShuffle":false,"img":null,"q":"\u00bfC\u00f3mo se denominan las mol\u00e9culas de bajo peso molecular que por s\u00ed mismas no desencadenan respuesta inmune, pero gracias a una mol\u00e9cula portadora pueden comportarse como inmun\u00f3genas?","o":["Ant\u00edgenos.","Al\u00e9rgenos.","Ep\u00edtopos.","Haptenos."],"c":4,"e":"Los <b>haptenos</b> son mol\u00e9culas peque\u00f1as no inmun\u00f3g\u00e9nicas por s\u00ed solas pero que, unidas a una prote\u00edna portadora, desencadenan respuesta inmune. Ejemplos: penicilina, urushiol."},{"n":"78","noShuffle":false,"img":null,"q":"Indica la citocina que favorece la polarizaci\u00f3n de los linfocitos T hacia Th2:","o":["IL-1.","IL-2.","IL-4.","IL-6."],"c":3,"e":"La <b>IL-4</b> es la citocina clave para la polarizaci\u00f3n hacia <b>Th2</b>. Activa el factor de transcripci\u00f3n GATA-3 y promueve la producci\u00f3n de IgE y reclutamiento de eosin\u00f3filos."},{"n":"79","noShuffle":true,"img":null,"q":"\u00bfCu\u00e1l de las siguientes caracter\u00edsticas corresponde a la apoptosis?","o":["Es un proceso celular gen\u00e9ticamente controlado.","En su fase final se activa la inflamaci\u00f3n.","Se produce la destrucci\u00f3n de la membrana celular, con la liberaci\u00f3n del contenido intracelular.","A y B son correctas."],"c":1,"e":"La <b>apoptosis</b> es muerte celular programada, gen\u00e9ticamente controlada. A diferencia de la necrosis, no libera el contenido intracelular (no activa inflamaci\u00f3n)."},{"n":"80","noShuffle":false,"img":null,"q":"Indica qu\u00e9 mol\u00e9cula/s no se expresa/n en la superficie de un linfocito B:","o":["CD79.","HLA II.","CD3.","CD79 y CD3."],"c":3,"e":"El <b>CD3</b> es exclusivo de linfocitos T. Los linfocitos B expresan CD79 (BCR) y HLA-II, pero no CD3."},{"n":"81","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes c\u00e9lulas no tiene capacidad fagoc\u00edtica? (v2)","o":["Macr\u00f3fago.","Neutr\u00f3filo.","Eosin\u00f3filo.","C\u00e9lula dendr\u00edtica folicular."],"c":4,"e":"Las <b>c\u00e9lulas dendr\u00edticas foliculares</b> no son fagocitos: capturan y retienen ant\u00edgenos en su superficie para presentarlos a linfocitos B en centros germinales."},{"n":"82","noShuffle":false,"img":null,"q":"Los alotipos:","o":["Son los responsables de que los anticuerpos de un individuo puedan ser detectados como ant\u00edgenos por otro miembro de la misma especie.","Hacen referencia a las peque\u00f1as diferencias en regiones variables de los anticuerpos de dos individuos de la misma especie.","Hace referencia a las variaciones de anticuerpos intraindividuales.","Son los responsables de que un mismo isotipo de anticuerpo reconozca distintos ant\u00edgenos."],"c":1,"e":"Los <b>alotipos</b> son variaciones gen\u00e9ticas en las regiones <b>constantes</b> de las inmunoglobulinas que difieren entre individuos de la misma especie."},{"n":"83","noShuffle":false,"img":null,"q":"Una vacuna atenuada:","o":["Presenta con frecuencia una buena inmunogenicidad.","El pat\u00f3geno est\u00e1 muerto.","Es la vacuna m\u00e1s estable.","Requiere de un virus no pat\u00f3geno como portador."],"c":1,"e":"Las vacunas <b>atenuadas</b> contienen el microorganismo vivo con virulencia reducida. Son muy inmun\u00f3g\u00e9nicas. Son menos estables (requieren cadena de fr\u00edo) y contraindicadas en inmunodeprimidos."},{"n":"84","noShuffle":false,"img":null,"q":"Se\u00f1ale la afirmaci\u00f3n VERDADERA. La generaci\u00f3n de hibridomas:","o":["Se utiliza para producir anticuerpos policlonales.","Se consigue mediante la fusi\u00f3n de c\u00e9lulas tumorales de mieloma y linfocitos T activados.","Permite la s\u00edntesis de anticuerpos altamente espec\u00edficos.","Es un proceso caro, pero que requiere poco tiempo."],"c":3,"e":"Los <b>hibridomas</b> producen anticuerpos monoclonales altamente espec\u00edficos mediante la fusi\u00f3n de linfocitos B inmunizados con c\u00e9lulas de mieloma. Proceso largo y caro."},{"n":"85","noShuffle":false,"img":null,"q":"\u00bfC\u00f3mo se denomina el fen\u00f3meno por el cual cada c\u00e9lula B expresa s\u00f3lo uno de los dos genes de cada tipo de cadena de inmunoglobulina?","o":["Recombinaci\u00f3n som\u00e1tica.","Diversidad de uni\u00f3n.","Exclusi\u00f3n al\u00e9lica.","Hipermutaci\u00f3n som\u00e1tica."],"c":3,"e":"La <b>exclusi\u00f3n al\u00e9lica</b> garantiza que cada linfocito B exprese \u00fanicamente un alelo de cada cadena, resultando en un BCR de una sola especificidad por c\u00e9lula."},{"n":"86","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes caracter\u00edsticas NO corresponde a un ant\u00edgeno T-independiente?","o":["No genera una elevada memoria.","Necesita que el linfocito CD4+ interaccione con el linfocito B.","El linfocito B puede reconocerlo directamente.","Se relaciona con la producci\u00f3n de IgM."],"c":2,"e":"Los ant\u00edgenos <b>T-independientes</b> activan linfocitos B <b>sin necesitar linfocito TCD4+</b>. La caracter\u00edstica que NO corresponde es que necesiten TCD4+."},{"n":"87","noShuffle":false,"img":null,"q":"En la superficie del linfocito T encontramos:","o":["El TCR que reconoce de manera directa los ant\u00edgenos solubles.","El CD3 que participa en la transducci\u00f3n de se\u00f1ales al interior de la c\u00e9lula tras la interacci\u00f3n con el ant\u00edgeno.","Las HLA-II si es un linfocito T colaborador.","Las HLA-II si es un linfocito T citot\u00f3xico."],"c":2,"e":"El <b>CD3</b> forma complejo con el TCR y es responsable de la <b>transducci\u00f3n de se\u00f1ales</b> al interior celular. Los linfocitos T no expresan HLA-II de forma constitutiva."},{"n":"88","noShuffle":false,"img":null,"q":"En relaci\u00f3n con el sistema del complemento, indica la afirmaci\u00f3n FALSA:","o":["Las prote\u00ednas del complemento interaccionan entre s\u00ed de modo regulado formando una cascada enzim\u00e1tica.","La ruta cl\u00e1sica y la de las lectinas conectan con el sistema inmune adaptativo.","La ruta alternativa conecta con la respuesta inmunitaria inespec\u00edfica, interaccionando directamente con la superficie del microorganismo.","Las rutas cl\u00e1sica, alternativa y de las lectinas comparten los \u00faltimos pasos de la activaci\u00f3n."],"c":2,"e":"La ruta cl\u00e1sica conecta con la inmunidad <b>adaptativa</b>. La ruta de las lectinas es <b>innata</b> (reconoce manosa en pat\u00f3genos). Decir que \u201cambas\u201d conectan con el adaptativo es <b>falso</b> para la v\u00eda de las lectinas."},{"n":"89","noShuffle":false,"img":null,"q":"En referencia a las c\u00e9lulas NK, indica la afirmaci\u00f3n CORRECTA:","o":["Expresan en su superficie el CD16 que reconoce la Fc de la IgE.","Se consideran c\u00e9lulas esenciales de la respuesta inmunitaria adaptativa.","Liberan gr\u00e1nulos ricos en granzima y perforina favoreciendo el mecanismo de receptor de muerte.","Pueden eliminar la c\u00e9lula diana a trav\u00e9s de la citotoxicidad dependiente de anticuerpos."],"c":4,"e":"Las c\u00e9lulas NK pueden realizar <b>ADCC</b> mediante el receptor CD16 (Fc\u03b3RIII) que reconoce la IgG (no IgE) unida a c\u00e9lulas diana. Son innatas (no adaptativas)."},{"n":"90","noShuffle":false,"img":null,"q":"Durante la inflamaci\u00f3n, la migraci\u00f3n de leucocitos desde el torrente circulatorio a la zona de infecci\u00f3n se ve favorecida por:","o":["Disminuci\u00f3n de la permeabilidad capilar.","Reducci\u00f3n de la liberaci\u00f3n de mediadores qu\u00edmicos.","Vasoconstricci\u00f3n.","Aumento de la expresi\u00f3n de mol\u00e9culas de adhesi\u00f3n en las c\u00e9lulas endoteliales."],"c":4,"e":"La di\u00e1pedesis se facilita por el aumento de <b>mol\u00e9culas de adhesi\u00f3n</b> (selectinas, integrinas, ICAM) en c\u00e9lulas endoteliales."},{"n":"91","noShuffle":false,"img":null,"q":"En relaci\u00f3n con la inmunidad humoral, indica la afirmaci\u00f3n correcta:","o":["En la respuesta primaria se produce primero IgG, y luego IgM.","Las c\u00e9lulas plasm\u00e1ticas procedentes de c\u00e9lulas B activadas pueden quedar en reposo durante muchos a\u00f1os.","La respuesta secundaria tiene una fase de crecimiento m\u00e1s corta que la respuesta primaria.","La interacci\u00f3n entre el linfocito B y el linfocito T es esencial para la producci\u00f3n de los distintos isotipos de anticuerpos."],"c":4,"e":"La interacci\u00f3n <b>linfocito B-linfocito T cooperador</b> (CD40L-CD40 y citocinas) es imprescindible para la conmutaci\u00f3n de isotipo."},{"n":"92","noShuffle":false,"img":null,"q":"La fracci\u00f3n cristalizable de un anticuerpo:","o":["Es la zona que reconoce al ant\u00edgeno.","Est\u00e1 formada por una cadena ligera y por una cadena pesada.","Contiene zonas variables y constantes.","Es reconocida por otras mol\u00e9culas y c\u00e9lulas efectoras del sistema inmunitario."],"c":4,"e":"La regi\u00f3n <b>Fc</b> media las funciones efectoras: se une a receptores Fc en macr\u00f3fagos, NK y neutr\u00f3filos (opsonizaci\u00f3n, ADCC) y activa el complemento."},{"n":"93","noShuffle":false,"img":null,"q":"Paciente masculino de 26 a\u00f1os con hipertiroidismo, exoftalmos y bocio. \u00bfQu\u00e9 autoanticuerpo espera en la anal\u00edtica?","o":["Anticuerpo anti-receptor de la acetilcolina.","Anticuerpo anti-receptor de tirotropina.","Anticuerpo frente a la desmogle\u00edna 3.","Anticuerpo frente a la regi\u00f3n Fc de la IgG."],"c":2,"e":"El cuadro es caracter\u00edstico de la <b>enfermedad de Graves</b>. Los autoanticuerpos <b>anti-receptor TSH</b> (TRAb) estimulan continuamente el tiroides."},{"n":"94","noShuffle":false,"img":null,"q":"Paciente politransfundido con anticuerpos anti-HLA-I (B5, B7, B12...) sometido a trasplante renal. Donante tiene B39 y B40. Indique la afirmaci\u00f3n correcta:","o":["Hay una baja probabilidad de que la prueba cruzada tenga un resultado negativo.","Hay una elevada probabilidad de que el paciente sufra un rechazo hiperagudo.","Existe la posibilidad de que el paciente sufra un rechazo agudo.","Todas son correctas."],"c":2,"e":"El paciente tiene anticuerpos anti-HLA-B preformados. El donante tiene B39 y B40 (supert\u00edpos relacionados). La probabilidad de <b>rechazo hiperagudo</b> es elevada."},{"n":"95","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 manifestaciones cl\u00ednicas se asocian con el per\u00edodo de latencia cl\u00ednica del VIH?","o":["Fiebre y cefaleas.","Aparici\u00f3n de infecciones oportunistas.","Disminuci\u00f3n progresiva de los linfocitos CD4+ sangu\u00edneos.","Concentraci\u00f3n de los linfocitos CD4+ inferior a 200 c\u00e9lulas/\u03bcL."],"c":3,"e":"Durante la <b>latencia cl\u00ednica</b> del VIH el paciente est\u00e1 asintom\u00e1tico. La caracter\u00edstica principal es la <b>ca\u00edda progresiva de CD4+</b>."},{"n":"96","noShuffle":false,"img":null,"q":"\u00bfEn qu\u00e9 se diferencia la dermatitis at\u00f3pica de la dermatitis por contacto?","o":["La at\u00f3pica es una hipersensibilidad de tipo IV, mientras que la de contacto es de tipo I.","La at\u00f3pica est\u00e1 mediada por IgE, mientras que la de contacto est\u00e1 mediada por IgG.","La at\u00f3pica est\u00e1 mediada por linfocitos Th1, mientras que la de contacto est\u00e1 mediada por IgE.","La at\u00f3pica es una hipersensibilidad inmediata mientras que la de contacto es retardada."],"c":4,"e":"La <b>dermatitis at\u00f3pica</b> es hipersensibilidad tipo I (inmediata, mediada por IgE y Th2). La <b>dermatitis por contacto</b> es tipo IV (retardada, mediada por linfocitos T)."},{"n":"97","noShuffle":false,"img":null,"q":"En relaci\u00f3n con los mecanismos de tolerancia:","o":["Los linfocitos B sufren anergia en la m\u00e9dula \u00f3sea si reconocen mol\u00e9culas presentes en la superficie de c\u00e9lulas propias.","Los linfocitos T autorreactivos se eliminan por selecci\u00f3n negativa en la m\u00e9dula t\u00edmica.","Tras el proceso de selecci\u00f3n positiva, salen a circulaci\u00f3n los linfocitos CD4+CD8+ maduros.","En la corteza del timo se eliminan aquellos linfocitos T con TCRs que reconocen las HLA propias."],"c":2,"e":"Los linfocitos T autorreactivos son eliminados por <b>selecci\u00f3n negativa</b> en la <b>m\u00e9dula t\u00edmica</b>. Los que salen son simples positivos (CD4+ o CD8+). La corteza es donde ocurre la selecci\u00f3n positiva."},{"n":"98","noShuffle":false,"img":null,"q":"Indica la frase CORRECTA en relaci\u00f3n con los ganglios linf\u00e1ticos:","o":["Los ant\u00edgenos acceden a ellos a trav\u00e9s de las c\u00e9lulas M.","Son sitios inmunol\u00f3gicamente privilegiados.","Los linfocitos se concentran en la pulpa blanca, mientras que los macr\u00f3fagos se localizan en la pulpa roja.","La selecci\u00f3n clonal de linfocitos B se produce en el fol\u00edculo secundario."],"c":4,"e":"La <b>selecci\u00f3n clonal y la maduraci\u00f3n de afinidad</b> de los linfocitos B ocurre en los <b>centros germinales</b> de los fol\u00edculos secundarios."},{"n":"99","noShuffle":false,"img":null,"q":"Las bacterias Gram positivas:","o":["Son m\u00e1s sensibles a la lisozima que las Gram negativas","Se ti\u00f1en de color rosa en la tinci\u00f3n de Gram","Presentan endotoxina","Tienen forma de coco"],"c":1,"e":"Las <b>Gram positivas</b> tienen pared de peptidoglicano m\u00e1s gruesa y expuesta, haci\u00e9ndolas m\u00e1s sensibles a la <b>lisozima</b>. Se ti\u00f1en de violeta-azul. La endotoxina (LPS) es exclusiva de Gram negativas."},{"n":"100","noShuffle":false,"img":null,"q":"En una transfusi\u00f3n sangu\u00ednea, seg\u00fan el grupo ABO:","o":["El donante AB puede donar a todos los receptores.","El donante O solo puede donar al receptor O.","Si un paciente AB recibe sangre de un donante A, se producir\u00eda hem\u00f3lisis intravascular.","Si un paciente O recibe sangre de un donante B, se producir\u00eda hem\u00f3lisis intravascular."],"c":4,"e":"Un paciente de grupo O tiene anticuerpos anti-A y <b>anti-B</b>. Si recibe sangre B, los anticuerpos anti-B atacan los hemat\u00edas transfundidos causando <b>hem\u00f3lisis intravascular</b> grave."},{"n":"101","noShuffle":false,"img":null,"q":"En el centro germinal del fol\u00edculo de un ganglio linf\u00e1tico encontramos:","o":["C\u00e9lulas B maduras no estimuladas.","C\u00e9lulas B en proliferaci\u00f3n.","C\u00e9lulas B en reposo.","C\u00e9lulas T."],"c":2,"e":"El <b>centro germinal</b> es donde los linfocitos B activados <b>proliferan activamente</b>, sufren hipermutaci\u00f3n som\u00e1tica y selecci\u00f3n por afinidad."},{"n":"102","noShuffle":false,"img":null,"q":"Indica la afirmaci\u00f3n CORRECTA con respecto a los anticuerpos:","o":["La inmunoglobulina G es el primer anticuerpo que se genera en la respuesta primaria frente a un ant\u00edgeno.","La especificidad antig\u00e9nica se determina tras el reordenamiento som\u00e1tico VDJ de los genes que codifican las regiones variables durante el desarrollo de los linfocitos B.","La inmunoglobulina M soluble est\u00e1 en forma de d\u00edmero.","La conmutaci\u00f3n del isotipo afecta a la regi\u00f3n variable de la cadena pesada de la Ig."],"c":2,"e":"La <b>especificidad antig\u00e9nica</b> queda determinada durante el reordenamiento <b>V(D)J</b>. La IgM (no IgG) es la primera en respuesta primaria; la IgM soluble es pent\u00e1mero, no d\u00edmero."},{"n":"103","noShuffle":false,"img":null,"q":"La inmunidad innata se caracteriza por:","o":["El reconocimiento de estructuras microbianas altamente conservadas y compartidas por diferentes tipos de especies microbianas.","La actividad de linfocitos T y B.","El desarrollo de c\u00e9lulas de memoria.","La especificidad de los anticuerpos."],"c":1,"e":"La inmunidad <b>innata</b> reconoce PAMPs: estructuras <b>altamente conservadas</b> entre microbios mediante PRRs (TLRs, NLRs). No genera memoria ni anticuerpos espec\u00edficos."},{"n":"104","noShuffle":false,"img":null,"q":"Indica la citocina producida por los linfocitos T que promueve la activaci\u00f3n y proliferaci\u00f3n de estas c\u00e9lulas:","o":["TNF-alfa","TGF-beta","IL-2","IL-4"],"c":3,"e":"La <b>IL-2</b> es la principal citocina producida por los linfocitos TCD4+ activados que promueve su propia proliferaci\u00f3n (autocrina) y la de otros linfocitos T."},{"n":"105","noShuffle":false,"img":null,"q":"Indica la afirmaci\u00f3n CORRECTA con respecto a las quimiocinas:","o":["Favorecen la migraci\u00f3n de diferentes c\u00e9lulas al sitio de infecci\u00f3n.","Diferenciamos 6 grandes grupos dependiendo de la posici\u00f3n de 1 ciste\u00edna cerca del extremo amino-terminal.","Favorecen la diferenciaci\u00f3n de progenitores mieloides.","Son mol\u00e9culas reconocidas por un anticuerpo o por un receptor de un linfocito T o B."],"c":1,"e":"Las <b>quimiocinas</b> son citocinas quimioatractantes que dirigen la migraci\u00f3n de c\u00e9lulas inmunitarias al foco de infecci\u00f3n. Se clasifican en 4 familias (CC, CXC, C, CX3C)."},{"n":"106","noShuffle":false,"img":null,"q":"En un ep\u00edtopo secuencial:","o":["Los amino\u00e1cidos reconocidos por el anticuerpo est\u00e1n separados en la secuencia prote\u00edca.","Los amino\u00e1cidos reconocidos por el anticuerpo est\u00e1n contiguos en la secuencia prote\u00edca.","Los amino\u00e1cidos reconocidos solo ser\u00e1n accesibles si no se encuentran en la superficie de la prote\u00edna.","Los amino\u00e1cidos de la prote\u00edna que no son reconocidos por el anticuerpo se denominan inmun\u00f3genos."],"c":2,"e":"Un <b>ep\u00edtopo secuencial (lineal)</b> est\u00e1 formado por amino\u00e1cidos <b>contiguos</b> en la secuencia primaria. El ep\u00edtopo conformacional depende de la estructura terciaria."},{"n":"107","noShuffle":false,"img":null,"q":"Selecciona la frase FALSA, en referencia a la activaci\u00f3n de las distintas v\u00edas del complemento:","o":["En la v\u00eda alternativa, a diferencia de lo que ocurre en la cl\u00e1sica y la de la lectina, no se produce el complejo de ataque a membrana.","El inicio de la v\u00eda alternativa se produce cuando se crea un ambiente local en la superficie del pat\u00f3geno.","Las v\u00edas cl\u00e1sica y de lectina activan los componentes C2 y C4.","La v\u00eda cl\u00e1sica est\u00e1 mediada por la creaci\u00f3n del complejo ant\u00edgeno-anticuerpo."],"c":1,"e":"La v\u00eda alternativa <b>s\u00ed produce el MAC</b> (complejo de ataque a membrana C5b-9), igual que la cl\u00e1sica y la de lectinas. Todas las v\u00edas convergen en C5b para formar el MAC."},{"n":"108","noShuffle":false,"img":null,"q":"En relaci\u00f3n con las HLA-I, indica la afirmaci\u00f3n correcta:","o":["Se expresan en la membrana de todas las c\u00e9lulas, aunque no tengan asociado un p\u00e9ptido antig\u00e9nico.","Presentan una cadena invariante unida al surco de uni\u00f3n al p\u00e9ptido cuando est\u00e1n en el ret\u00edculo endopl\u00e1smico.","Est\u00e1 constituida por una cadena polipept\u00eddica polim\u00f3rfica unida no covalentemente a la beta2 microglobulina.","Los ep\u00edtopos que presenta son de mayor tama\u00f1o que aquellos presentados por la HLA-II."],"c":3,"e":"Las <b>HLA-I</b> est\u00e1n formadas por una cadena \u03b1 polim\u00f3rfica unida no covalentemente a la <b>beta-2 microglobulina</b>. Se expresan en todas las c\u00e9lulas nucleadas. Presentan p\u00e9ptidos cortos (8-11 aa)."},{"n":"109","noShuffle":false,"img":null,"q":"\u00bfQu\u00e9 funci\u00f3n ejerce el IFN\u03b3 en la respuesta inmune frente a pat\u00f3genos?","o":["Activa a los macr\u00f3fagos y favorece la eliminaci\u00f3n de las bacterias que sobreviven en el interior del fagocito.","Bloquea de la replicaci\u00f3n v\u00edrica.","Promueve la apoptosis de las c\u00e9lulas infectadas por virus.","Favorece la activaci\u00f3n del complemento."],"c":1,"e":"El <b>IFN-\u03b3</b> activa a los <b>macr\u00f3fagos</b>, potenciando su capacidad bactericida. Es esencial en la defensa frente a pat\u00f3genos intracelulares como micobacterias."},{"n":"110","noShuffle":false,"img":null,"q":"Las c\u00e9lulas tumorales pueden evadir la respuesta inmunitaria mediante:","o":["Bloqueo de la actividad de los linfocitos T mediante la interacci\u00f3n PD-1/PD-L1.","Inhibici\u00f3n de la apoptosis de los linfocitos T mediante la interacci\u00f3n Fas/Fas-L.","Aumento de la expresi\u00f3n de HLA-I.","Inhibici\u00f3n de la s\u00edntesis de TGF-beta."],"c":1,"e":"Las c\u00e9lulas tumorales expresan <b>PD-L1</b>, que al unirse al PD-1 de los linfocitos T, los inhibe y bloquea la respuesta antitumoral. Es la base de los <b>inhibidores de checkpoint</b>."},{"n":"111","noShuffle":false,"img":null,"q":"Durante la fase de escape de la teor\u00eda de inmunoedici\u00f3n tumoral:","o":["El paciente consigue no desarrollar un tumor gracias a la vigilancia inmunol\u00f3gica.","El sistema inmunol\u00f3gico elimina las c\u00e9lulas tumorales altamente inmunol\u00f3gicas.","Proliferan las c\u00e9lulas tumorales menos inmun\u00f3g\u00e9nicas.","Hay un equilibrio entre la respuesta inmunitaria y la proliferaci\u00f3n de c\u00e9lulas tumorales."],"c":3,"e":"En la fase de <b>escape</b>, las c\u00e9lulas tumorales menos inmun\u00f3g\u00e9nicas <b>proliferan sin control</b> porque el sistema inmune ya no puede eliminarlas eficazmente."},{"n":"112","noShuffle":false,"img":null,"q":"Paciente con infecciones recurrentes desde los 9 meses, test NBT incoloro/amarillo p\u00e1lido. \u00bfDiagn\u00f3stico m\u00e1s probable?","o":["Enfermedad granulomatosa cr\u00f3nica.","Hemoglobinuria parox\u00edstica nocturna.","Agammaglobulinemia ligada al X.","Inmunodeficiencia combinada grave."],"c":1,"e":"El test del NBT incoloro indica que los neutr\u00f3filos no producen explosi\u00f3n oxidativa. Es caracter\u00edstico de la <b>enfermedad granulomatosa cr\u00f3nica</b> (defecto en NADPH oxidasa)."}]};
+var IMGS=/*__IMGS_JSON__*/{};
+
+/* ── Estado ── */
+var canSave=typeof localStorage!=='undefined';
+var saved={};try{saved=JSON.parse(localStorage.getItem(KEY)||'null')||{};}catch(e){}
+var state   =saved.state   ||{};
+var qOrd    =saved.qOrd    ||{};
+var oOrd    =saved.oOrd    ||{};
+var starred =saved.starred ||{};
+var failHist=saved.failHist||{};  // {qid: count} entre sesiones
+var darkMode=saved.dark    ||false;
+var timerSec=saved.timerSec||0;   // segundos configurados
+var SECS=Object.keys(META.secciones||{});
+var fFailed={};
+var qIdx={};           // {sec: {n: q}}
+var qNums={};          // {sec: {n: numero_correlativo}}
+var allOrder=null;     // orden mezclado inter-secciones para pestaña Todos
+var activeCid=null;
+var currentTab='all';
+var currentMode='test';
+var saveTimer=null;
+var starsFilter=false;
+var statsVisible=false;
+var timerRunning=false;
+var timerRemaining=timerSec;
+var timerInterval=null;
+
+/* ── INIT ── */
+(function init(){
+  SECS.forEach(function(s){fFailed[s]=false;});
+  injectSecCSS();
+  buildHeader();
+  buildTabs();
+  buildPanels();
+  buildIdx();
+  buildNums();
+  buildAllOrder();
+  SECS.forEach(render);
+  renderAll();
+  updateScores();
+  updateProg();
+  applyTheme();
+  initTimer();
+  setBadge(canSave?'Guardado':'Sin guardado',canSave?'ok':'warn');
+  document.addEventListener('keydown',handleKey);
+  var si=document.getElementById('search-input');
+  if(si)si.addEventListener('keydown',function(e){if(e.key==='Escape'){clearSearch();}});
+})();
+
+/* ── CSS dinámico ── */
+function injectSecCSS(){
+  var css='';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{};
+    var c=m.color||'#1a56db',cd=m.colorDim||'#e8f0fe';
+    css+='.tab.t-'+s+'.on{background:'+cd+';color:'+c+';border-color:'+c+'}\n';
+    css+='.ph.s-'+s+'{border-left:4px solid '+c+'}\n';
+    // Variables CSS por sección para el badge coloreado
+    css+='#panel-'+s+' .qnum.sec-colored{background:'+cd+';color:'+c+'}\n';
+  });
+  var st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+}
+
+/* ── Header ── */
+function buildHeader(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var t=document.getElementById('h-tit');if(t)t.textContent=META.titulo||'Banco MIR';
+  var pt=document.getElementById('page-title');if(pt)pt.textContent=META.titulo||'Banco MIR';
+  var m=document.getElementById('h-meta');
+  if(m){var p=[];if(total)p.push(total+' preguntas');if(META.examen)p.push(META.examen);m.textContent=p.join(' · ');}
+  var d=document.getElementById('ph-gdesc');if(d)d.textContent=META.subtitulo||'';
+  var r=document.getElementById('sc-rem-all');if(r)r.textContent='○ '+total;
+}
+
+/* ── Tabs ── */
+function buildTabs(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var h='<button class="tab t-all on" onclick="showTab(\'all\')">📋 Todos ('+total+')</button>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<button class="tab t-'+s+'" onclick="showTab(\''+s+'\')">'+(m.emoji?m.emoji+' ':'')+escH(m.label||s)+' ('+cnt+')</button>';
+  });
+  var w=document.getElementById('tabs-wrap');if(w)w.innerHTML=h;
+}
+
+/* ── Paneles ── */
+function buildPanels(){
+  var h='<div id="panel-all" class="sec-panel visible"><div id="qs-all"></div><div class="no-results" id="nr-all">No se encontraron preguntas</div></div>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<div id="panel-'+s+'" class="sec-panel">';
+    h+='<div class="ph s-'+s+'">';
+    h+='<div class="ph-left">';
+    h+='<span class="ph-label">'+(m.emoji?m.emoji+'&nbsp;':'')+escH(m.label||s)+'</span>';
+    if(m.desc)h+='<span class="ph-desc">'+escH(m.desc)+'</span>';
+    h+='<div class="score-row">';
+    h+='<span class="sc ok" id="sc-ok-'+s+'">✓ 0</span>';
+    h+='<span class="sc ko" id="sc-ko-'+s+'">✗ 0</span>';
+    h+='<span class="sc rem" id="sc-rem-'+s+'">○ '+cnt+'</span>';
+    h+='</div></div>';
+    h+='<button class="fbtn" id="fb-'+s+'" onclick="toggleFail(\''+s+'\')">Solo falladas</button>';
+    h+='</div>';
+    h+='<div id="qs-'+s+'"></div>';
+    h+='<div class="no-failed" id="nf-'+s+'">Aún no has fallado ninguna 🎉</div>';
+    h+='<div class="no-results" id="nr-'+s+'">No se encontraron preguntas</div>';
+    h+='<div class="sec-actions">';
+    h+='<button class="reset-btn" onclick="resetSec(\''+s+'\')">↺ Reiniciar</button>';
+    h+='<button class="nota-btn" onclick="calcNota(\''+s+'\')">✎ Calcular nota</button>';
+    h+='</div>';
+    h+='<div class="nota-box" id="nota-'+s+'"></div>';
+    h+='</div>';
+  });
+  var pw=document.getElementById('panels-wrap');if(pw)pw.innerHTML=h;
+}
+
+/* ── Índice O(1) + numeración fija ── */
+function buildIdx(){
+  SECS.forEach(function(s){
+    qIdx[s]={};
+    if(D[s])D[s].forEach(function(q){qIdx[s][q.n]=q;});
+  });
+}
+function buildNums(){
+  // Numeración correlativa fija: 1, 2, 3... por sección
+  SECS.forEach(function(s){
+    qNums[s]={};
+    if(D[s])D[s].forEach(function(q,i){qNums[s][q.n]=i+1;});
+  });
+}
+function getNum(sec,n){return qNums[sec]?qNums[sec][n]||n:n;}
+function findQ(qid){
+  var d=qid.indexOf('-'),s=qid.substring(0,d),n=qid.substring(d+1);
+  return(qIdx[s]&&qIdx[s][n])||null;
+}
+function getSecFromQid(qid){return qid.substring(0,qid.indexOf('-'));}
+function getNFromQid(qid){return qid.substring(qid.indexOf('-')+1);}
+
+/* ── Orden inter-secciones para Todos ── */
+function buildAllOrder(){
+  var all=[];
+  SECS.forEach(function(s){if(D[s])D[s].forEach(function(q){all.push({sec:s,n:q.n});});});
+  if(!qOrd['__all__'])qOrd['__all__']=shuffle(all.map(function(x){return x.sec+'|'+x.n;}));
+  allOrder=qOrd['__all__'].map(function(key){
+    var p=key.indexOf('|'),sec=key.substring(0,p),n=key.substring(p+1);
+    return{sec:sec,n:n,q:qIdx[sec]&&qIdx[sec][n]};
+  }).filter(function(x){return x.q;});
+}
+
+/* ── Utilidades ── */
+function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function shuffle(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=b[i];b[i]=b[j];b[j]=t;}return b;}
+function getQOrd(s,qs){if(!qOrd[s])qOrd[s]=shuffle(qs.map(function(q){return q.n;}));return qOrd[s];}
+function getOOrd(qid){
+  var q=findQ(qid);var n=q&&q.o?q.o.length:4;
+  if(q&&q.noShuffle){var a=[];for(var i=0;i<n;i++)a.push(i);return a;}
+  if(!oOrd[qid]){var a=[];for(var i=0;i<n;i++)a.push(i);oOrd[qid]=shuffle(a);}
+  return oOrd[qid];
+}
+function imgHtml(key){
+  if(!IMGS[key]){console.warn('IMGS: clave no encontrada →',key);return'';}
+  return'<div class="clinimg-wrap"><img src="'+IMGS[key]+'" class="clinimg" alt="Imagen clínica" loading="lazy"><div class="clinimg-cap">Imagen clínica</div></div>';
+}
+
+/* ── localStorage debounce ── */
+function saveLocal(){
+  if(!canSave)return;
+  if(saveTimer)clearTimeout(saveTimer);
+  saveTimer=setTimeout(function(){
+    try{
+      localStorage.setItem(KEY,JSON.stringify({state:state,qOrd:qOrd,oOrd:oOrd,starred:starred,failHist:failHist,dark:darkMode,timerSec:timerSec}));
+      setBadge('Guardado','ok');
+    }catch(e){setBadge('Sin guardado','warn');}
+  },300);
+}
+function setBadge(t,c){var b=document.getElementById('save-badge');if(b){b.textContent=t;b.className='sbadge '+c;}}
+
+/* ── Construcción de tarjeta ── */
+function buildCard(q,sec,inAll,allPos){
+  var qid=sec+'-'+q.n;
+  var cid=(inAll?'A-':'S-')+qid;
+  var num=inAll?(allPos+1):getNum(sec,q.n);
+  var oo=getOOrd(qid);
+  var sOpts=oo.map(function(i){return q.o[i];});
+  var nc=oo.indexOf(q.c-1)+1;
+  var ans=state[qid];
+  var cc=ans?(ans.r?' answered-ok':' answered-wrong'):'';
+  var badgeCls='qnum'+(inAll?'':' sec-colored');
+  var h='<div class="qcard s-'+sec+cc+'" id="card-'+cid+'">';
+  h+='<div class="qhead" id="h-'+cid+'" data-cid="'+cid+'" data-qid="'+qid+'" data-sec="'+sec+'" onclick="tog(this.dataset.cid)">';
+  h+='<span class="'+badgeCls+'">'+num+'</span>';
+  h+='<span class="qtxt">'+q.q+(ans?'<span class="atag '+(ans.r?'ok':'ko')+'">'+(ans.r?'✓ acertada':'✗ fallada')+'</span>':'')+'</span>';
+  h+='<button class="star-btn'+(starred[qid]?' on':'')+'\" id="star-'+cid+'" onclick="event.stopPropagation();toggleStar(\''+qid+'\')" title="Marcar (S)"><span class="si">\u2606</span><span class="sf">\u2605</span></button>';
+  h+='<span class="chev">▾</span>';
+  h+='</div>';
+  h+='<div class="qbody" id="b-'+cid+'">';
+  if(q.img)h+=imgHtml(q.img);
+  if(currentMode==='quick'){
+    h+='<div class="quick-card"><div class="quick-rc">✓ Respuesta correcta: opción '+nc+' — '+escH(q.o[q.c-1])+'</div><div class="expbox">'+q.e+'</div></div>';
+  } else {
+    h+='<ul class="opts" id="opts-'+cid+'">';
+    h+=sOpts.map(function(o,i){
+      var p=i+1,oc='opt';
+      if(ans){oc+=' done';if(p===nc)oc+=' correct';else if(p===ans.c&&!ans.r)oc+=' wrong';}
+      return'<li class="'+oc+'" data-qid="'+qid+'" data-pos="'+p+'" data-sec="'+sec+'" onclick="answer(this.dataset.qid,+this.dataset.pos,this.dataset.sec)"><span class="onum">'+p+'.</span><span>'+o+'</span></li>';
+    }).join('');
+    h+='</ul>';
+    if(ans){h+='<div class="expbox"><span class="et">'+(ans.r?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e+'</div>';}
+  }
+  h+='</div></div>';
+  return h;
+}
+
+/* ── Render sección ── */
+function render(sec){
+  var qs=D[sec];if(!qs)return;
+  var ord=getQOrd(sec,qs);
+  var sorted=ord.map(function(n){return qIdx[sec]&&qIdx[sec][n];}).filter(Boolean);
+  var el=document.getElementById('qs-'+sec);
+  if(el)el.innerHTML=sorted.map(function(q){return buildCard(q,sec,false,0);}).join('');
+}
+
+/* ── Render Todos (mezcla inter-secciones) ── */
+function renderAll(){
+  if(!allOrder)buildAllOrder();
+  var el=document.getElementById('qs-all');
+  if(el)el.innerHTML=allOrder.map(function(x,i){return buildCard(x.q,x.sec,true,i);}).join('');
+}
+
+/* ── Toggle open/close ── */
+function tog(cid){
+  var b=document.getElementById('b-'+cid),h=document.getElementById('h-'+cid);
+  if(!b||!h)return;
+  var opening=!b.classList.contains('open');
+  b.classList.toggle('open');h.classList.toggle('open');
+  if(opening){
+    if(activeCid&&activeCid!==cid){var pc=document.getElementById('card-'+activeCid);if(pc)pc.classList.remove('kb-focus');}
+    activeCid=cid;
+    var card=document.getElementById('card-'+cid);if(card)card.classList.add('kb-focus');
+  }else{
+    if(activeCid===cid){activeCid=null;var card=document.getElementById('card-'+cid);if(card)card.classList.remove('kb-focus');}
+  }
+}
+
+/* ── Responder ── */
+function answer(qid,pos,sec){
+  if(state[qid])return;
+  var q=findQ(qid);if(!q)return;
+  var oo=getOOrd(qid);
+  var nc=oo.indexOf(q.c-1)+1;
+  var isRight=pos===nc;
+  state[qid]={c:pos,r:isRight};
+  // Registro de errores
+  if(!isRight){failHist[qid]=(failHist[qid]||0)+1;}
+  saveLocal();
+  // Actualizar todas las instancias del card (panel sección + panel all)
+  // Actualizar opciones en todas las instancias del card
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var optsEl=document.querySelectorAll('#opts-'+cid+' .opt');
+    optsEl.forEach(function(el,i){
+      el.classList.add('done');
+      if(i+1===nc)el.classList.add('correct');
+      else if(i+1===pos&&!isRight)el.classList.add('wrong');
+    });
+    var bdy=document.getElementById('b-'+cid);
+    if(bdy){
+      var eb=bdy.querySelector('.expbox');
+      if(!eb){eb=document.createElement('div');eb.className='expbox';bdy.appendChild(eb);}
+      eb.innerHTML='<span class="et">'+(isRight?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e;
+    }
+    var hd=document.getElementById('h-'+cid);
+    if(hd){var qt=hd.querySelector('.qtxt');if(qt&&!qt.querySelector('.atag')){var at=document.createElement('span');at.className='atag '+(isRight?'ok':'ko');at.innerHTML=isRight?'✓ acertada':'✗ fallada';qt.appendChild(at);}}
+    var card=document.getElementById('card-'+cid);
+    if(card)card.classList.add(isRight?'answered-ok':'answered-wrong');
+  });
+  updateScores();updateProg();
+  if(fFailed[sec]&&isRight){
+    var fcard=document.getElementById('card-S-'+qid);
+    if(fcard)fcard.style.display='none';
+    refreshNF(sec);
+  }
+}
+
+/* ── Estrella ── */
+function toggleStar(qid){
+  starred[qid]=!starred[qid];
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var btn=document.getElementById('star-'+cid);
+    if(btn)btn.classList.toggle('on',starred[qid]);
+  });
+  saveLocal();
+}
+function filterStarred(){
+  starsFilter=!starsFilter;
+  var btn=document.getElementById('btn-stars');
+  if(btn){btn.style.background=starsFilter?'#fef3c7':'';btn.style.fontWeight=starsFilter?'700':'';}
+  document.querySelectorAll('.qcard').forEach(function(card){
+    if(starsFilter){
+      var hd=card.querySelector('.qhead');
+      var qid=hd?hd.dataset.qid:'';
+      card.style.display=starred[qid]?'':'none';
+    }else{card.style.display='';}
+  });
+}
+
+/* ── Filtro falladas ── */
+function refreshNF(sec){
+  var c=document.getElementById('qs-'+sec);if(!c||!fFailed[sec])return;
+  var n=c.querySelectorAll('.qcard.answered-wrong').length;
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',n===0);
+}
+function toggleFail(sec){
+  fFailed[sec]=!fFailed[sec];
+  var btn=document.getElementById('fb-'+sec);
+  if(btn){btn.classList.toggle('on',fFailed[sec]);btn.textContent=fFailed[sec]?'← Ver todas':'Solo falladas';}
+  var c=document.getElementById('qs-'+sec);if(!c)return;
+  var nf=0;
+  c.querySelectorAll('.qcard').forEach(function(card){
+    if(fFailed[sec]){var show=card.classList.contains('answered-wrong');card.style.display=show?'':'none';if(show)nf++;}
+    else{card.style.display='';}
+  });
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',fFailed[sec]&&nf===0);
+}
+
+/* ── Scores y progreso ── */
+function updateScores(){
+  var tok=0,tok2=0,tok3=0;
+  SECS.forEach(function(sec){
+    var ok=0,ko=0;
+    if(D[sec])D[sec].forEach(function(q){var a=state[sec+'-'+q.n];if(a){if(a.r)ok++;else ko++;}});
+    var tot=D[sec]?D[sec].length:0,rem=tot-ok-ko;
+    tok+=ok;tok2+=ko;tok3+=rem;
+    var eok=document.getElementById('sc-ok-'+sec),eko=document.getElementById('sc-ko-'+sec),erm=document.getElementById('sc-rem-'+sec);
+    if(eok)eok.textContent='✓ '+ok;if(eko)eko.textContent='✗ '+ko;if(erm)erm.textContent='○ '+rem;
+  });
+  var eok=document.getElementById('sc-ok-all'),eko=document.getElementById('sc-ko-all'),erm=document.getElementById('sc-rem-all');
+  if(eok)eok.textContent='✓ '+tok;if(eko)eko.textContent='✗ '+tok2;if(erm)erm.textContent='○ '+tok3;
+}
+function updateProg(){
+  var total=0,done=Object.keys(state).length;
+  SECS.forEach(function(s){if(D[s])total+=D[s].length;});
+  var pct=total>0?Math.round(done/total*100):0;
+  var bar=document.getElementById('prog-bar');if(bar)bar.style.width=pct+'%';
+}
+
+/* ── Tabs ── */
+function showTab(t){
+  currentTab=t;
+  document.querySelectorAll('.tab').forEach(function(b){b.classList.remove('on');});
+  var tb=document.querySelector('.tab.t-'+t);if(tb)tb.classList.add('on');
+  var mc=document.getElementById('main-cont');if(mc)mc.setAttribute('data-tab',t);
+  var panelAll=document.getElementById('panel-all');
+  if(panelAll)panelAll.classList.toggle('visible',t==='all');
+  SECS.forEach(function(s){
+    var p=document.getElementById('panel-'+s);
+    if(p)p.classList.toggle('visible',t===s);
+  });
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  clearSearch();
+}
+
+/* ── Reset ── */
+function resetSec(sec){
+  if(D[sec])D[sec].forEach(function(q){var qid=sec+'-'+q.n;delete state[qid];delete oOrd[qid];});
+  delete qOrd[sec];fFailed[sec]=false;activeCid=null;
+  var btn=document.getElementById('fb-'+sec);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+  var nb=document.getElementById('nota-'+sec);if(nb){nb.style.display='none';nb.className='nota-box';}
+  saveLocal();render(sec);
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.remove('show');
+  updateScores();updateProg();
+  // Reconstruir panel all para reflejar cambios
+  buildAllOrder();renderAll();
+}
+function resetAll(){
+  Object.keys(state).forEach(function(k){delete state[k];});
+  Object.keys(oOrd).forEach(function(k){delete oOrd[k];});
+  Object.keys(qOrd).forEach(function(k){delete qOrd[k];});
+  activeCid=null;starsFilter=false;allOrder=null;
+  var bs=document.getElementById('btn-stars');if(bs){bs.style.background='';bs.style.fontWeight='';}
+  SECS.forEach(function(s){
+    fFailed[s]=false;
+    var btn=document.getElementById('fb-'+s);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+    var nb=document.getElementById('nota-'+s);if(nb){nb.style.display='none';nb.className='nota-box';}
+  });
+  saveLocal();
+  SECS.forEach(render);
+  buildAllOrder();renderAll();
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  updateScores();updateProg();
+}
+
+/* ── Nota y revisión ── */
+function buildRevList(sec){
+  var qs=D[sec];if(!qs)return'';
+  var failed=qs.filter(function(q){var a=state[sec+'-'+q.n];return a&&!a.r;});
+  if(!failed.length)return'';
+  var html='<div class="review-list"><div class="review-title">📋 '+failed.length+' pregunta'+(failed.length>1?'s':'')+' fallada'+(failed.length>1?'s':'')+' — repasa aquí:</div>';
+  failed.forEach(function(q){
+    var qid=sec+'-'+q.n;var oo=getOOrd(qid);var nc=oo.indexOf(q.c-1)+1;
+    html+='<details class="review-item"><summary><span><b>'+getNum(sec,q.n)+'.</b> '+q.q+'</span></summary>';
+    html+='<div class="review-body"><div class="review-ans">✓ Opción '+nc+': '+escH(q.o[q.c-1]||'')+'</div>';
+    html+='<div class="expbox">'+q.e+'</div></div></details>';
+  });
+  return html+'</div>';
+}
+function calcNota(sec){
+  var qs=D[sec];if(!qs)return;
+  var total=qs.length,ok=0,ko=0,skip=0;
+  qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-'+sec);if(!box)return;
+  box.className='nota-box '+(pass?'pass':'fail');
+  box.innerHTML='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>'
+    +buildRevList(sec);
+  box.style.display='block';
+}
+function calcNotaAll(){
+  var total=0,ok=0,ko=0,skip=0;
+  SECS.forEach(function(sec){
+    var qs=D[sec];if(!qs)return;
+    total+=qs.length;
+    qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  });
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-all');if(!box)return;
+  box.className='global-nota-box '+(pass?'pass':'fail');
+  var html='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10 (global)</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>';
+  SECS.forEach(function(sec){
+    var rv=buildRevList(sec);
+    if(rv){var m=META.secciones[sec]||{};html+='<div class="review-sec-label">'+(m.emoji?m.emoji+' ':'')+escH(m.label||sec)+'</div>'+rv;}
+  });
+  box.innerHTML=html;box.style.display='block';
+}
+
+/* ── Estadísticas de errores ── */
+function toggleStats(){
+  statsVisible=!statsVisible;
+  var btn=document.getElementById('btn-stats');
+  if(btn){btn.style.background=statsVisible?'var(--ko-bg)':'';btn.style.color=statsVisible?'var(--ko-t)':'';}
+  var box=document.getElementById('stats-global');
+  if(!box)return;
+  if(!statsVisible){box.classList.remove('show');return;}
+  var entries=Object.entries(failHist).filter(function(e){return e[1]>0;});
+  if(!entries.length){box.innerHTML='<div class="stats-title">📊 Sin errores registrados todavía</div>';box.classList.add('show');return;}
+  entries.sort(function(a,b){return b[1]-a[1];});
+  var top=entries.slice(0,10);
+  var maxV=top[0][1];
+  var html='<div class="stats-title">📊 Preguntas más falladas (acumulado entre sesiones)</div>';
+  top.forEach(function(e,i){
+    var qid=e[0],count=e[1];
+    var q=findQ(qid);if(!q)return;
+    var sec=getSecFromQid(qid),n=getNFromQid(qid);
+    var m=META.secciones[sec]||{};
+    var pct=Math.round(count/maxV*100);
+    html+='<div class="stats-item">';
+    html+='<span class="stats-n" style="min-width:18px;color:var(--ko-t);font-weight:700">'+(i+1)+'.</span>';
+    html+='<span class="stats-q">'+(m.emoji?m.emoji+' ':'')+getNum(sec,n)+'. '+q.q.substring(0,60)+(q.q.length>60?'…':'')+'</span>';
+    html+='<div class="stats-bar-wrap"><div class="stats-bar" style="width:'+pct+'%"></div></div>';
+    html+='<span class="stats-n">'+count+'✗</span>';
+    html+='</div>';
+  });
+  box.innerHTML=html;box.classList.add('show');
+}
+
+/* ── Buscador ── */
+function onSearch(val){
+  var v=val.trim().toLowerCase();
+  var clr=document.getElementById('search-clear');
+  var cnt=document.getElementById('search-count');
+  if(clr)clr.style.display=v?'block':'none';
+  var found=0,total=0;
+  document.querySelectorAll('.qcard').forEach(function(card){
+    total++;
+    if(!v){card.classList.remove('search-hidden');found++;}
+    else{
+      var qtxt=card.querySelector('.qtxt');
+      var match=qtxt&&qtxt.textContent.toLowerCase().indexOf(v)!==-1;
+      card.classList.toggle('search-hidden',!match);
+      if(match)found++;
+    }
+  });
+  if(cnt){
+    if(v){cnt.textContent=found+' de '+total+' preguntas';cnt.style.display='block';}
+    else{cnt.style.display='none';}
+  }
+  // Mostrar "sin resultados" por panel
+  ['all'].concat(SECS).forEach(function(s){
+    var panel=document.getElementById('panel-'+s);if(!panel||!panel.classList.contains('visible'))return;
+    var cards=panel.querySelectorAll('.qcard:not(.search-hidden)');
+    var nr=document.getElementById('nr-'+s);if(nr)nr.style.display=cards.length===0&&v?'block':'none';
+  });
+}
+function clearSearch(){
+  var si=document.getElementById('search-input');if(si)si.value='';
+  onSearch('');
+}
+
+/* ── Modo ── */
+function setMode(mode){
+  currentMode=mode;
+  document.getElementById('mode-test').classList.toggle('on',mode==='test');
+  document.getElementById('mode-quick').classList.toggle('on',mode==='quick');
+  // Rerenderizar todo
+  SECS.forEach(render);renderAll();
+}
+
+/* ── Modo oscuro ── */
+function applyTheme(){
+  document.documentElement.setAttribute('data-theme',darkMode?'dark':'light');
+  var btn=document.getElementById('btn-dark');if(btn)btn.textContent=darkMode?'☀️':'🌙';
+}
+function toggleDark(){darkMode=!darkMode;applyTheme();saveLocal();}
+
+/* ── Temporizador ── */
+function initTimer(){
+  timerRemaining=timerSec;
+  renderTimer();
+  var disp=document.getElementById('timer-display');
+  if(disp){
+    disp.addEventListener('click',function(){startEditTimer();});
+  }
+}
+function fmtTime(s){
+  var h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60;
+  return h+':'+(m<10?'0':'')+m+':'+(ss<10?'0':'')+ss;
+}
+function renderTimer(){
+  var disp=document.getElementById('timer-display');
+  if(!disp)return;
+  disp.textContent=fmtTime(timerRemaining);
+  disp.classList.toggle('danger',timerSec>0&&timerRemaining===0);
+}
+function timerToggle(){
+  if(timerRunning){
+    clearInterval(timerInterval);timerRunning=false;
+    document.getElementById('btn-tplay').textContent='▶';
+  }else{
+    if(timerRemaining<=0&&timerSec>0)timerRemaining=timerSec;
+    timerRunning=true;
+    document.getElementById('btn-tplay').textContent='⏸';
+    timerInterval=setInterval(function(){
+      if(timerRemaining>0){timerRemaining--;renderTimer();}
+      else{clearInterval(timerInterval);timerRunning=false;document.getElementById('btn-tplay').textContent='▶';renderTimer();}
+    },1000);
+  }
+}
+function timerReset(){
+  clearInterval(timerInterval);timerRunning=false;
+  timerRemaining=timerSec;
+  document.getElementById('btn-tplay').textContent='▶';
+  renderTimer();
+}
+function startEditTimer(){
+  var disp=document.getElementById('timer-display');if(!disp)return;
+  if(timerRunning){timerToggle();}
+  var old=fmtTime(timerRemaining);
+  disp.contentEditable='true';disp.classList.add('editing');
+  disp.textContent=old;
+  disp.focus();
+  var range=document.createRange();range.selectNodeContents(disp);
+  var sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
+  function commit(){
+    disp.contentEditable='false';disp.classList.remove('editing');
+    var txt=disp.textContent.trim();
+    var parts=txt.split(':').map(Number);
+    var secs=0;
+    if(parts.length===3)secs=parts[0]*3600+parts[1]*60+parts[2];
+    else if(parts.length===2)secs=parts[0]*60+parts[1];
+    else if(parts.length===1)secs=parts[0]*60;
+    if(!isNaN(secs)&&secs>=0){timerSec=secs;timerRemaining=secs;saveLocal();}
+    renderTimer();
+  }
+  disp.addEventListener('blur',commit,{once:true});
+  disp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();disp.blur();}});
+}
+
+/* ── Helpers cid ── */
+function cidToQid(cid){return cid.replace(/^[AS]-/,'');}
+
+/* ── Teclado ── */
+function handleKey(e){
+  var tg=e.target.tagName;
+  if(tg==='INPUT'||tg==='TEXTAREA'||e.target.contentEditable==='true')return;
+  var k=e.key;
+  if(k>='1'&&k<='5'){
+    if(activeCid&&!state[cidToQid(activeCid)]){
+      var aqid=cidToQid(activeCid);
+      var pos=parseInt(k),q=findQ(aqid);
+      if(q&&pos<=q.o.length){e.preventDefault();answer(aqid,pos,getSecFromQid(aqid));}
+    }
+  }else if(k==='ArrowDown'||k==='ArrowUp'){
+    e.preventDefault();navigateQ(k==='ArrowDown'?1:-1);
+  }else if(k==='s'||k==='S'){
+    if(activeCid)toggleStar(cidToQid(activeCid));
+  }
+}
+function navigateQ(dir){
+  var cards=Array.from(document.querySelectorAll('.sec-panel.visible .qcard')).filter(function(c){return c.style.display!=='none'&&!c.classList.contains('search-hidden');});
+  var cids=cards.map(function(c){return c.id.replace('card-','');});
+  if(!cids.length)return;
+  var idx=activeCid?cids.indexOf(activeCid):-1;
+  var nidx=Math.max(0,Math.min(cids.length-1,idx+dir));
+  var ncid=cids[nidx];if(!ncid||ncid===activeCid)return;
+  if(activeCid){var ob=document.getElementById('b-'+activeCid);var oh=document.getElementById('h-'+activeCid);if(ob)ob.classList.remove('open');if(oh)oh.classList.remove('open');var oc=document.getElementById('card-'+activeCid);if(oc)oc.classList.remove('kb-focus');}
+  activeCid=ncid;
+  var nb=document.getElementById('b-'+ncid);var nh=document.getElementById('h-'+ncid);
+  if(nb)nb.classList.add('open');if(nh)nh.classList.add('open');
+  var nc2=document.getElementById('card-'+ncid);if(nc2){nc2.classList.add('kb-focus');nc2.scrollIntoView({behavior:'smooth',block:'nearest'});}
+}
+</script>
+</body>
+</html>
