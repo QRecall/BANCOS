@@ -894,5 +894,59 @@ function navigateQ(dir){
   var nc2=document.getElementById('card-'+ncid);if(nc2){nc2.classList.add('kb-focus');nc2.scrollIntoView({behavior:'smooth',block:'nearest'});}
 }
 </script>
+<!-- QRecall · medición anónima del sprint (sin nombre, sin email, sin IP guardada) -->
+<script>
+(function(){
+  var ENDPOINT='https://script.google.com/macros/s/AKfycbzDOUNVlK0wD1y0Xc4V0efc2asUI2-x0OlNbDzd6stsaLNz5avSIn1o1whusnkNC5I/exec'; // URL del Web App de Google Apps Script
+  if(!ENDPOINT||ENDPOINT.indexOf('http')!==0)return;
+  var ls;try{ls=window.localStorage;if(!ls)return;}catch(e){return;}
+  var banco=(typeof KEY==='string'&&KEY)||location.pathname.split('/').pop()||'desconocido';
+  var today=new Date().toISOString().slice(0,10);
+  function get(k){try{return ls.getItem(k);}catch(e){return null;}}
+  function set(k,v){try{ls.setItem(k,v);}catch(e){}}
+  var uid=get('qr_uid');
+  if(!uid){uid=Math.random().toString(36).slice(2,10)+Date.now().toString(36);set('qr_uid',uid);}
+  var first=get('qr_first');
+  if(!first){first=today;set('qr_first',first);}
+  var sentKey='qr_sent_'+banco;
+  var sent={};try{sent=JSON.parse(get(sentKey)||'{}')||{};}catch(e){}
+  function send(ev){
+    var body=JSON.stringify({uid:uid,banco:banco,ev:ev,d:today,t:new Date().toISOString(),p:location.pathname});
+    try{
+      if(navigator.sendBeacon){
+        var ok=navigator.sendBeacon(ENDPOINT,new Blob([body],{type:'text/plain;charset=utf-8'}));
+        if(ok)return;
+      }
+      fetch(ENDPOINT,{method:'POST',mode:'no-cors',keepalive:true,headers:{'Content-Type':'text/plain;charset=utf-8'},body:body});
+    }catch(e){}
+  }
+  function once(ev){if(sent[ev])return;sent[ev]=today;set(sentKey,JSON.stringify(sent));send(ev);}
+  // 1) abre: cada carga
+  send('abre');
+  // 2) vuelve: carga en un día distinto al de la primera visita (una vez)
+  if(first!==today)once('vuelve');
+  // 3) respuestas: se cuentan tarjetas contestadas en el DOM (dedupe por pregunta)
+  function answered(){
+    var seen={},n=0;
+    var cards=document.querySelectorAll('[id^="card-"].answered-ok,[id^="card-"].answered-wrong');
+    for(var i=0;i<cards.length;i++){
+      var qid=cards[i].id.replace(/^card-[AS]-/,'');
+      if(!seen[qid]){seen[qid]=1;n++;}
+    }
+    return n;
+  }
+  function check(){
+    var n=answered();
+    if(n>=1)once('primera_respuesta');
+    if(n>=10)once('10_respuestas');
+  }
+  document.addEventListener('click',function(e){
+    var t=e.target;
+    while(t&&t!==document){if(t.classList&&t.classList.contains('opt')){setTimeout(check,50);break;}t=t.parentNode;}
+  },true);
+  document.addEventListener('keydown',function(e){if(/^[1-5]$/.test(e.key))setTimeout(check,50);},true);
+  setTimeout(check,1500); // por si ya había respuestas guardadas de otra sesión
+})();
+</script>
 </body>
 </html>

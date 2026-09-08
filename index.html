@@ -43,16 +43,37 @@ h1 span{background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-b
 footer{text-align:center;padding:24px 0 40px;color:var(--muted);font-size:13px;border-top:1px solid var(--border);}
 .asig-emoji{font-size:36px;width:64px;height:64px;display:flex;align-items:center;justify-content:center;background:var(--surface);border-radius:16px;flex-shrink:0;}
 .asig-count{font-size:12px;color:var(--muted);margin-top:2px;}
+
+.hero{margin:0 0 28px;padding:22px 24px;background:linear-gradient(135deg,rgba(79,140,255,0.10),rgba(167,139,250,0.08));border:1px solid rgba(79,140,255,0.25);border-radius:16px;}
+.hero p{font-size:15px;line-height:1.5;color:var(--text);margin-bottom:14px;}
+.hero p b{color:#fff;}
+.btn{display:inline-block;padding:12px 20px;border-radius:12px;background:linear-gradient(90deg,var(--accent),var(--accent2));color:#fff;font-weight:700;text-decoration:none;font-size:15px;}
+.btn:hover{filter:brightness(1.08);}
+.btn-sec{display:inline-block;padding:12px 18px;border-radius:12px;border:1px solid var(--border);color:var(--text);text-decoration:none;font-size:14px;margin-left:8px;}
+.pide{margin:8px 0 40px;padding:22px 24px;background:var(--surface);border:1px solid var(--border);border-radius:16px;}
+.pide h2{font-size:18px;font-weight:800;margin-bottom:6px;}
+.pide p{color:var(--muted);font-size:14px;margin-bottom:14px;line-height:1.5;}
+.pide form{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.pide input,.pide select{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:14px;}
+.pide input::placeholder{color:var(--muted);}
+.pide .full{grid-column:1/-1;}
+.pide button{grid-column:1/-1;padding:12px;border:0;border-radius:12px;background:linear-gradient(90deg,var(--accent),var(--accent2));color:#fff;font-weight:700;font-size:15px;cursor:pointer;}
+.pide .ok{grid-column:1/-1;color:#7dd3a0;font-size:14px;display:none;}
+@media(max-width:520px){.pide form{grid-template-columns:1fr;}.btn-sec{margin-left:0;margin-top:8px;}}
 </style>
 </head>
 <body>
 <div class="wrapper">
 <header><a class="logo" href="index.html"><div class="logo-icon">Q</div><span class="logo-text">Recall</span></a></header>
-<h1>Estudia con<br><span>preguntas reales</span></h1>
-<p class="subtitle">Bancos de preguntas interactivos para medicina. Elige tu asignatura.</p>
+<h1>Preguntas de examen<br><span>de tu asignatura</span></h1>
+<p class="subtitle">Bancos tipo test por asignatura, con explicación en cada pregunta y modo "solo falladas". Gratis, en el móvil, sin registro.</p>
+<div class="hero">
+  <p><b>Micro e Inmuno, 3.º:</b> 320 preguntas estilo examen del temario completo, por temas, con corrección inmediata. Hecho por quien se examinó de eso.</p>
+  <a class="btn" href="banco_MicroInmuno_temario.html">Pruébalo ahora →</a><a class="btn-sec" href="#pide">¿No está tu asignatura?</a>
+</div>
 <div class="stats">
-  <div class="stat"><div class="stat-num">18</div><div class="stat-label">Bancos</div></div>
-  <div class="stat"><div class="stat-num">+1.5K</div><div class="stat-label">Preguntas</div></div>
+  <div class="stat"><div class="stat-num">23</div><div class="stat-label">Bancos</div></div>
+  <div class="stat"><div class="stat-num">+2.200</div><div class="stat-label">Preguntas</div></div>
   <div class="stat"><div class="stat-num">8</div><div class="stat-label">Asignaturas</div></div>
 </div>
 <div class="cards">
@@ -84,7 +105,7 @@ footer{text-align:center;padding:24px 0 40px;color:var(--muted);font-size:13px;b
       <div class="asig-emoji">🔬</div>
       <div class="card-info">
         <div class="card-title">Anatomía Patológica</div>
-        <div class="card-meta">3 bancos · Banco de imágenes + exámenes 2020 y 2023</div>
+        <div class="card-meta">5 bancos · Teoría · Banco de imágenes · Exámenes 2020 y 2023</div>
       </div>
       <span class="arrow">→</span>
     </a>
@@ -92,7 +113,7 @@ footer{text-align:center;padding:24px 0 40px;color:var(--muted);font-size:13px;b
       <div class="asig-emoji">💊</div>
       <div class="card-info">
         <div class="card-title">Farmacología</div>
-        <div class="card-meta">1 banco · Final 2024</div>
+        <div class="card-meta">2 bancos · Final 2024</div>
       </div>
       <span class="arrow">→</span>
     </a>
@@ -100,7 +121,7 @@ footer{text-align:center;padding:24px 0 40px;color:var(--muted);font-size:13px;b
       <div class="asig-emoji">🧫</div>
       <div class="card-info">
         <div class="card-title">Microbiología e Inmunología</div>
-        <div class="card-meta">3 bancos · Examen, parciales 2024 y banco completo 2025</div>
+        <div class="card-meta">4 bancos · Temario completo · Examen · Parciales 2024 · Banco 2025</div>
       </div>
       <span class="arrow">→</span>
     </a>
@@ -113,7 +134,26 @@ footer{text-align:center;padding:24px 0 40px;color:var(--muted);font-size:13px;b
       <span class="arrow">→</span>
     </a>
 </div>
-<footer>QRecall · Castellón · 2025</footer>
+<div class="pide" id="pide">
+  <h2>¿No está tu asignatura? Pídela</h2>
+  <p>Dinos la asignatura y, si puedes, de qué universidad y qué examen preparas. Si nos mandas el temario o un examen de otros años, lo montamos antes. Sin registro; el contacto es opcional y solo para avisarte cuando esté.</p>
+  <form id="pideForm" onsubmit="return qrPedir(event)">
+    <input name="asignatura" placeholder="Asignatura (ej. Hematología)" required>
+    <input name="curso" placeholder="Curso (ej. 4.º)">
+    <input name="universidad" placeholder="Universidad / facultad">
+    <input name="examen" placeholder="Examen (ej. parcial octubre)">
+    <input class="full" name="contacto" placeholder="Contacto para avisarte (opcional: email, Instagram, Telegram)">
+    <button type="submit">Pedir este banco</button>
+    <div class="ok" id="pideOk">Recibido. Si dejaste contacto, te avisamos cuando esté.</div>
+  </form>
+</div>
+<script>
+function qrPedir(e){e.preventDefault();var f=e.target;var d={ev:'peticion',uid:(function(){try{return localStorage.getItem('qr_uid')||''}catch(x){return ''}})(),d:new Date().toISOString().slice(0,10),t:new Date().toISOString(),p:location.pathname};
+['asignatura','curso','universidad','examen','contacto'].forEach(function(k){d[k]=(f[k].value||'').slice(0,200);});
+try{fetch('https://script.google.com/macros/s/AKfycbzDOUNVlK0wD1y0Xc4V0efc2asUI2-x0OlNbDzd6stsaLNz5avSIn1o1whusnkNC5I/exec',{method:'POST',mode:'no-cors',keepalive:true,headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(d)});}catch(x){}
+document.getElementById('pideOk').style.display='block';f.querySelector('button').disabled=true;return false;}
+</script>
+<footer>QRecall · bancos de preguntas para estudiantes de Medicina · 2026</footer>
 </div>
 </body>
 </html>
