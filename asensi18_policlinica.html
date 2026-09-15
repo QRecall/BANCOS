@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="color-scheme" content="light dark">
+<style>html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>Policlínica Asensi 18</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&display=swap">
+<style>
+:root{
+  --bg:#F6F7F5; --surface:#FFFFFF; --ink:#16231F; --muted:#5E6A66; --line:#DCE1DE; --soft:#EEF2EF;
+  --accent:#0F8A66; --accent-ink:#0B6B4F; --warn:#B8720C; --warn-bg:#FBF3E4; --ok-bg:#E6F4EE; --pend-bg:#EEF0F2; --pend:#5E6A66;
+  --chart-a:#0F8A66; --chart-b:#B8720C; --grid:#E4E8E5;
+  --display:"Sora",system-ui,sans-serif; --body:"Source Sans 3","Segoe UI",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#141816; --surface:#1C2220; --ink:#E8ECE9; --muted:#9AA59F; --line:#2C3531; --soft:#232B28;
+  --accent:#2E9E7E; --accent-ink:#5FC3A5; --warn:#D09A3A; --warn-bg:#2E2718; --ok-bg:#1B2E27; --pend-bg:#242A28; --pend:#9AA59F;
+  --chart-a:#2E9E7E; --chart-b:#B97C1E; --grid:#2A322E;
+}}
+:root[data-theme="dark"]{
+  --bg:#141816; --surface:#1C2220; --ink:#E8ECE9; --muted:#9AA59F; --line:#2C3531; --soft:#232B28;
+  --accent:#2E9E7E; --accent-ink:#5FC3A5; --warn:#D09A3A; --warn-bg:#2E2718; --ok-bg:#1B2E27; --pend-bg:#242A28; --pend:#9AA59F;
+  --chart-a:#2E9E7E; --chart-b:#B97C1E; --grid:#2A322E;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:17px;line-height:1.5;padding-inline:20px;padding-block:32px 64px}
+.wrap{max-width:980px;margin:0 auto;display:grid;gap:40px}
+.wrap > *,.calc-grid > *,.grid3 > *,.kpis > *,.results > *{min-width:0}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;line-height:1.15}
+h1{font-size:clamp(28px,4.5vw,42px);font-weight:700;letter-spacing:-.01em}
+h2{font-size:22px;font-weight:600;margin-bottom:14px}
+h3{font-size:17px;font-weight:600}
+p{margin:0 0 12px;max-width:68ch}
+.eyebrow{font-family:var(--display);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-ink);font-weight:600;margin-bottom:10px}
+.lede{font-size:19px;max-width:62ch;margin-top:14px}
+.meta{color:var(--muted);font-size:14px}
+a{color:var(--accent-ink)}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 20px}
+.card h3{margin-bottom:8px}
+.card ul{margin:0;padding-left:18px}
+.card li{margin-bottom:6px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.kpi .n{font-family:var(--display);font-size:28px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1}
+.kpi .l{font-size:14px;color:var(--muted);margin-top:4px}
+.kpi .s{font-size:12px;color:var(--muted);margin-top:6px}
+table{border-collapse:collapse;width:100%;font-size:15px}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--display);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.tablewrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:6px 8px}
+.badge{display:inline-block;font-family:var(--display);font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:999px;font-weight:600;white-space:nowrap}
+.b-ok{background:var(--ok-bg);color:var(--accent-ink)}
+.b-warn{background:var(--warn-bg);color:var(--warn)}
+.b-pend{background:var(--pend-bg);color:var(--pend)}
+/* calculadora */
+.calc{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:22px}
+.calc-grid{display:grid;grid-template-columns:minmax(260px,1fr) minmax(280px,1.3fr);gap:26px}
+@media (max-width:760px){.calc-grid{grid-template-columns:1fr}}
+.ctrl{display:grid;gap:4px;margin-bottom:14px}
+.ctrl label{display:flex;justify-content:space-between;font-size:15px}
+.ctrl label output{font-variant-numeric:tabular-nums;font-weight:600}
+.ctrl input[type=range]{width:100%;accent-color:var(--accent)}
+.ctrl input[type=number]{width:100%;font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+.presets{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 18px}
+button{font:inherit;font-size:14px;padding:7px 12px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
+button:hover{border-color:var(--accent)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.results{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px}
+.res{background:var(--soft);border-radius:8px;padding:10px 12px}
+.res .n{font-family:var(--display);font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.res .l{font-size:13px;color:var(--muted)}
+.bars{display:grid;gap:8px;margin:10px 0 18px}
+.bar{display:grid;grid-template-columns:90px 1fr 90px;align-items:center;gap:10px;font-size:14px}
+.bar .track{height:14px;background:var(--grid);border-radius:4px;overflow:hidden}
+.bar .fill{height:100%;border-radius:4px;transition:width .25s}
+.bar .v{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.slots{display:grid;gap:3px;margin-top:6px}
+.slot-row{display:grid;grid-auto-flow:column;gap:3px}
+.slot{aspect-ratio:1;border-radius:3px;background:var(--grid);min-width:0}
+.slot.on{background:var(--chart-a)}
+.legend{display:flex;gap:16px;font-size:13px;color:var(--muted);margin-top:8px;flex-wrap:wrap}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px;background:var(--grid)}
+.legend span.on::before{background:var(--chart-a)}
+.legend span.a::before{background:var(--chart-a)}
+.legend span.b::before{background:var(--chart-b)}
+.note{font-size:14px;color:var(--muted)}
+/* plan */
+.steps{display:grid;gap:10px;counter-reset:s}
+.step{display:grid;grid-template-columns:34px 1fr;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.step::before{counter-increment:s;content:counter(s);font-family:var(--display);font-weight:700;color:var(--accent-ink);font-size:20px;line-height:1}
+/* registro */
+.reg-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:12px}
+.reg-form input,.reg-form select{font:inherit;font-size:15px;padding:7px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);width:100%}
+.reg-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.reg-summary{display:flex;gap:18px;flex-wrap:wrap;font-size:15px;margin-bottom:10px}
+.reg-summary b{font-variant-numeric:tabular-nums}
+.del{font-size:13px;padding:3px 8px}
+.sources li{margin-bottom:4px;font-size:14px}
+.pill-row{display:flex;gap:6px;flex-wrap:wrap}
+@media (prefers-reduced-motion: reduce){.bar .fill{transition:none}}
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">Calle Asensi 18 · Castellón · sótano de 193 m² construidos</div>
+  <h1>¿Hay demanda para ocho consultas en alquiler?</h1>
+  <p class="lede">Con datos públicos no se puede afirmar que haya dieciséis facultativos interesados, ni descartarlo. Lo que sí se puede decir: el mercado es lo bastante grande para que merezca una prueba real de demanda antes de reformar el sótano, y en Castellón nadie ofrece hoy consultas por franjas.</p>
+  <p class="meta">Análisis del 15 de septiembre de 2026. Cada cifra lleva su fuente al final; lo que no se ha podido comprobar en fuente oficial va marcado como <span class="badge b-warn">no verificado</span>.</p>
+</header>
+
+<section>
+  <h2>El veredicto, en tres columnas</h2>
+  <div class="grid3">
+    <div class="card">
+      <h3>A favor</h3>
+      <ul>
+        <li>Unos <b>400 profesionales</b> con consulta privada listados en Doctoralia para Castellón en once especialidades. Dieciséis es el 4 %.</li>
+        <li><b>Nadie ofrece consultas por franjas en Castellón.</b> Ni un anuncio con precio. En Valencia y Alicante hay al menos cinco centros.</li>
+        <li>La provincia crece (+12.432 habitantes en un año, un 2 %, la mayor subida relativa de España junto a Alicante y Guadalajara) y el 21 % de los valencianos tiene seguro privado.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>En contra</h3>
+      <ul>
+        <li>Un coworking médico no se llena por existir: en Barcelona hay "edificios llenos de coworkings que siguen vacíos" (Crónica Global, 2024).</li>
+        <li>Los médicos con más demanda ya tienen consulta, muchos en Vithas (26 consultas externas).</li>
+        <li>El sótano arrastra incógnitas legales reales: evacuación, ventilación, accesibilidad y la recepción compartida.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Lo que decide</h3>
+      <ul>
+        <li>No es "cuántos interesados" sino <b>cuántos turnos semanales fijos se comprometen</b>.</li>
+        <li>Dieciséis médicos con un turno cada uno no pagan una recepcionista. Ocho con tres turnos, sí.</li>
+        <li>Se responde en dos semanas llamando a 25 médicos con una oferta concreta. Abajo está el método.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Calculadora del sótano</h2>
+  <div class="calc">
+    <div class="calc-grid">
+      <div>
+        <div class="presets">
+          <button type="button" data-preset="16,1">16 médicos × 1 turno</button>
+          <button type="button" data-preset="12,2">12 × 2 turnos</button>
+          <button type="button" data-preset="8,3">8 × 3 turnos</button>
+          <button type="button" data-preset="16,5">16 × 5 turnos (lleno)</button>
+        </div>
+        <div class="ctrl"><label for="c-consultas">Consultas <output id="o-consultas">8</output></label><input id="c-consultas" type="range" min="4" max="10" value="8"></div>
+        <div class="ctrl"><label for="c-dias">Días de apertura por semana <output id="o-dias">5</output></label><input id="c-dias" type="range" min="5" max="6" value="5"></div>
+        <div class="ctrl"><label for="c-turnos">Turnos semanales comprometidos <output id="o-turnos">16</output></label><input id="c-turnos" type="range" min="0" max="96" value="16"></div>
+        <div class="ctrl"><label for="c-precio">Precio por turno semanal fijo (€/mes) <output id="o-precio">180</output></label><input id="c-precio" type="range" min="100" max="350" step="10" value="180"></div>
+        <div class="ctrl"><label for="c-recep">Recepción, coste mensual (€) <output id="o-recep">2.000</output></label><input id="c-recep" type="range" min="0" max="4000" step="100" value="2000"></div>
+        <div class="ctrl"><label for="c-otros">Suministros, limpieza, software, seguros (€/mes) <output id="o-otros">900</output></label><input id="c-otros" type="range" min="0" max="3000" step="50" value="900"></div>
+        <div class="ctrl"><label for="c-reforma">Reforma del sótano (€, para el plazo de recuperación)</label><input id="c-reforma" type="number" min="0" step="5000" value="120000"></div>
+        <p class="note">Un turno = una mañana o una tarde fija a la semana, todo el mes (unas 20 h). Precio de mercado en España: 130–280 €/mes; para Castellón la horquilla a contrastar es 150–220 €. La reforma y los costes son supuestos editables, no cifras verificadas.</p>
+      </div>
+      <div>
+        <div class="results">
+          <div class="res"><div class="n" id="r-capacidad">80</div><div class="l">turnos disponibles / semana</div></div>
+          <div class="res"><div class="n" id="r-ocup">20 %</div><div class="l">ocupación</div></div>
+          <div class="res"><div class="n" id="r-ing">2.880 €</div><div class="l">ingresos / mes</div></div>
+          <div class="res"><div class="n" id="r-cost">2.900 €</div><div class="l">costes fijos / mes</div></div>
+          <div class="res"><div class="n" id="r-margen">−20 €</div><div class="l">margen / mes</div></div>
+          <div class="res"><div class="n" id="r-be">17</div><div class="l">turnos para cubrir costes</div></div>
+          <div class="res"><div class="n" id="r-payback">—</div><div class="l">años para recuperar la reforma</div></div>
+        </div>
+        <div class="bars" aria-label="Ingresos frente a costes">
+          <div class="bar"><span>Ingresos</span><div class="track"><div class="fill" id="f-ing" style="width:50%;background:var(--chart-a)"></div></div><span class="v" id="v-ing">2.880 €</span></div>
+          <div class="bar"><span>Costes</span><div class="track"><div class="fill" id="f-cost" style="width:50%;background:var(--chart-b)"></div></div><span class="v" id="v-cost">2.900 €</span></div>
+        </div>
+        <h3>Ocupación de las franjas</h3>
+        <p class="note">Cada fila es una consulta; cada celda, una mañana o una tarde de la semana.</p>
+        <div class="slots" id="slots" role="img" aria-label="Rejilla de franjas ocupadas"></div>
+        <div class="legend"><span class="on">turno comprometido</span><span>libre</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>El mercado en cifras</h2>
+  <div class="kpis">
+    <div class="kpi"><div class="n">183.711</div><div class="l">habitantes, Castellón ciudad</div><div class="s">padrón 2025 · INE</div></div>
+    <div class="kpi"><div class="n">≈319.000</div><div class="l">con Vila-real, Almassora, Benicàssim, Borriol y Onda</div><div class="s">suma de padrones 2025</div></div>
+    <div class="kpi"><div class="n">2.846</div><div class="l">médicos colegiados en la provincia</div><div class="s">INE, 31-12-2021 (último desglose provincial)</div></div>
+    <div class="kpi"><div class="n">21,3 %</div><div class="l">valencianos con seguro de salud privado</div><div class="s">UNESPA, 2023</div></div>
+    <div class="kpi"><div class="n">≈400</div><div class="l">perfiles con consulta privada en Doctoralia, Castellón</div><div class="s">recuento manual, 11 especialidades</div></div>
+    <div class="kpi"><div class="n">0</div><div class="l">ofertas de consulta por franjas con precio en Castellón</div><div class="s">idealista, milanuncios, compartirespacios</div></div>
+  </div>
+  <h3 style="margin:22px 0 10px">Médicos privados por especialidad en Castellón (Doctoralia)</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Especialidad</th><th class="num">Perfiles</th><th>Especialidad</th><th class="num">Perfiles</th></tr>
+    <tr><td>Psicología</td><td class="num">≈164</td><td>Psiquiatría</td><td class="num">≈22</td></tr>
+    <tr><td>Ginecología</td><td class="num">≈45</td><td>Endocrinología</td><td class="num">≈20</td></tr>
+    <tr><td>Traumatología</td><td class="num">≈35</td><td>Nutrición</td><td class="num">≈23</td></tr>
+    <tr><td>Dermatología</td><td class="num">≈34</td><td>Urología</td><td class="num">≈10 + clínicas</td></tr>
+    <tr><td>Cardiología</td><td class="num">≈24</td><td>Aparato digestivo</td><td class="num">7</td></tr>
+    <tr><td>Pediatría</td><td class="num">≈23</td><td></td><td></td></tr>
+  </table></div>
+  <p class="note" style="margin-top:8px">Incluye clínicas listadas como entidad y algún perfil de fuera de la ciudad: es un orden de magnitud, no un censo. No se ha encontrado el número actual de colegiados del COMCAS ni el desglose entre ejercicio público y privado.</p>
+</section>
+
+<section>
+  <h2>Quién está ya en Castellón</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Centro</th><th>Dirección</th><th>Qué ofrece</th></tr>
+    <tr><td>Hospital Vithas Castellón</td><td>Santa María Rosa Molas, 25</td><td>Unas 40 especialidades en su web · 26 consultas externas · 80 camas</td></tr>
+    <tr><td>Centro Médico Adeslas</td><td>Av. Barcelona, 19</td><td>Ginecología, nefrología, neumología, radiología</td></tr>
+    <tr><td>Policlínica Castalia</td><td>Av. Cardenal Costa, 41</td><td>Psicología, logopedia, medicina general, peritajes</td></tr>
+    <tr><td>IVU Castellón</td><td>C/ Alicante, 25</td><td>Urología</td></tr>
+    <tr><td>Centro Médico Medicas</td><td>C/ Museros, 12</td><td>Sin especialidades publicadas</td></tr>
+  </table></div>
+  <p class="note" style="margin-top:8px">Quirónsalud e IMED no tienen centro en Castellón ciudad. No se ha encontrado ninguna policlínica independiente que alquile consultas por franjas.</p>
+</section>
+
+<section>
+  <h2>Qué se cobra por una consulta por franjas</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Centro</th><th>Ciudad</th><th>Precio publicado</th></tr>
+    <tr><td>Clínica Madrid Zentro</td><td>Madrid</td><td>30 €/h · 93 € el turno de 5 h · 280 €/mes por turno semanal fijo</td></tr>
+    <tr><td>Sculpture Clinic</td><td>Madrid</td><td>100 € la mañana · 150 € la tarde</td></tr>
+    <tr><td>CoCo Clinics</td><td>Reus</td><td>690 €/mes todas las mañanas · 790 €/mes todas las tardes · 1.149,50 €/mes completo</td></tr>
+    <tr><td>Clínica Maternum</td><td>Alicante</td><td>134 – 670 €/mes según la franja</td></tr>
+    <tr><td>MeetMedix (marketplace)</td><td>España</td><td>80 – 600 € por turno · 135 – 1.400 €/mes</td></tr>
+    <tr><td>Despachos Amado · Premium Medical</td><td>Valencia</td><td>No publican precio: presupuesto a medida</td></tr>
+    <tr><td>Doctor y Doctor · Loaces 30 Salud</td><td>Alicante</td><td>No publican precio</td></tr>
+  </table></div>
+  <p class="note" style="margin-top:8px">Lo que suelen incluir: recepción, agenda y cobro, limpieza diaria, camilla y mobiliario, wifi, y a veces software de historia clínica.</p>
+</section>
+
+<section>
+  <h2>Lo legal: qué está comprobado y qué no</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Cuestión</th><th>Estado</th><th>Qué dice</th></tr>
+    <tr><td>IVA del alquiler a los facultativos</td><td><span class="badge b-ok">Verificado</span></td><td>La cesión de despachos de una clínica a otro profesional está sujeta y <b>no exenta</b> de IVA (tipo general), aunque la asistencia médica sí esté exenta. Además, el facultativo que paga el alquiler debe practicar retención del 19 % sobre la renta. DGT, consulta vinculante V0167-26 (29-01-2026); LIVA art. 20.Uno.3.º y 23.º; LIRPF art. 101.8.</td></tr>
+    <tr><td>Efecto en la clínica</td><td><span class="badge b-warn">No revisado</span></td><td>Mezclar actividad exenta (medicina) y sujeta (alquiler) mete a la clínica en prorrata de IVA (LIVA arts. 102 y ss.). Ya constaba en el proyecto de la clínica.</td></tr>
+    <tr><td>Tipo de centro</td><td><span class="badge b-ok">Verificado</span></td><td>Encaja en <b>C.2.4 Centro polivalente</b> del RD 1277/2003, anexo II: "centros sanitarios donde profesionales sanitarios de diferentes especialidades ejercen su actividad atendiendo a pacientes con patologías diversas" (texto oficial del BOE).</td></tr>
+    <tr><td>Autorización sanitaria autonómica</td><td><span class="badge b-warn">No verificado</span></td><td>Decreto 157/2014 del Consell y Orden 7/2017 (tipología y requisitos, arts. 19-20). No se ha podido leer el texto: superficies mínimas, aseos y sala de espera quedan sin comprobar.</td></tr>
+    <tr><td>Recepción y puerta compartidas con la clínica de estética</td><td><span class="badge b-pend">Consultar</span></td><td>Ninguna norma localizada lo prohíbe ni lo permite de forma expresa. La autorización se concede al titular del centro. Hay que preguntar al Servicio de Ordenación Sanitaria.</td></tr>
+    <tr><td>Uso sanitario en sótano</td><td><span class="badge b-pend">Arquitecto</span></td><td>CTE DB-SI (evacuación bajo rasante), RITE (ventilación), DB-SUA y accesibilidad valenciana (Decreto 65/2019, Ley 8/2024). Los límites concretos no se han verificado.</td></tr>
+    <tr><td>Licencia municipal</td><td><span class="badge b-warn">No verificado</span></td><td>Por tamaño, previsiblemente declaración responsable ambiental (Ley 6/2014, anexo III), no licencia ambiental. El PGOU de Castellón sobre uso sanitario en sótano no se ha podido consultar.</td></tr>
+  </table></div>
+</section>
+
+<section>
+  <h2>Cómo saber si hay demanda en dos semanas</h2>
+  <div class="steps">
+    <div class="step"><div><h3>Ficha de oferta de una página</h3><p>Qué consulta, qué incluye (recepción, agenda, limpieza, camilla, software), precio por turno semanal fijo y por turno suelto, foto o plano. Sin ficha no hay respuesta útil.</p></div></div>
+    <div class="step"><div><h3>Lista de 25-30 facultativos objetivo</h3><p>De Doctoralia y de los cuadros médicos de las aseguradoras. Prioridad: quien pasa consulta en Vithas o en un despacho caro, quien viene de Valencia uno o dos días, y quien es joven y no tiene consulta propia. Especialidades que casan con estética y longevidad: dermatología, endocrinología, cardiología, ginecología, nutrición, psicología, medicina interna.</p></div></div>
+    <div class="step"><div><h3>Contacto directo, pregunta cerrada</h3><p>Llamada o mensaje personal, no encuesta anónima: "¿Reservarías un turno fijo semanal a X €? ¿Cuál?". Cada respuesta se apunta en el registro de abajo.</p></div></div>
+    <div class="step"><div><h3>Umbral fijado antes de llamar</h3><p>Por ejemplo: al menos 24 turnos semanales comprometidos de palabra (30 % de ocupación) por al menos 8 facultativos. Si no se llega, el sótano no se reforma para esto.</p></div></div>
+    <div class="step"><div><h3>En paralelo, las tres consultas que solo responden terceros</h3><p>Ordenación Sanitaria (recepción compartida y requisitos de consulta), un arquitecto (sótano: evacuación, ventilación, accesibilidad, altura libre) y el Ayuntamiento (uso sanitario en sótano en el casco histórico).</p></div></div>
+  </div>
+</section>
+
+<section id="registro" hidden>
+  <h2>Registro de llamadas</h2>
+  <p class="note">Se guarda solo en este navegador. Para compartirlo, pulsa "Copiar resumen" y pégalo donde quieras.</p>
+  <div class="card">
+    <div class="reg-summary">
+      <span>Contactados <b id="s-n">0</b></span>
+      <span>Dicen sí <b id="s-si">0</b></span>
+      <span>Turnos comprometidos <b id="s-turnos">0</b></span>
+      <span>Dicen depende <b id="s-med">0</b></span>
+      <span>Precio medio aceptado <b id="s-precio">—</b></span>
+    </div>
+    <form id="reg-form" class="reg-form" autocomplete="off">
+      <input id="f-nombre" placeholder="Nombre" required>
+      <input id="f-esp" placeholder="Especialidad">
+      <select id="f-resp"><option value="si">Sí</option><option value="depende">Depende</option><option value="no">No</option></select>
+      <input id="f-turnos" type="number" min="0" max="10" placeholder="Turnos/semana" value="1">
+      <input id="f-precio" type="number" min="0" step="10" placeholder="€/turno-mes que pagaría">
+      <input id="f-obj" placeholder="Objeción o comentario">
+      <button type="submit" class="primary">Añadir</button>
+    </form>
+    <div class="reg-actions">
+      <button type="button" id="btn-copy">Copiar resumen</button>
+      <button type="button" id="btn-clear">Borrar todo</button>
+      <span class="note" id="reg-msg"></span>
+    </div>
+    <div class="tablewrap"><table id="reg-table">
+      <thead><tr><th>Nombre</th><th>Especialidad</th><th>Respuesta</th><th class="num">Turnos</th><th class="num">€/turno</th><th>Comentario</th><th></th></tr></thead>
+      <tbody id="reg-body"><tr><td colspan="7" class="note">Todavía no hay llamadas registradas.</td></tr></tbody>
+    </table></div>
+  </div>
+</section>
+
+<section>
+  <h2>Fuentes</h2>
+  <ul class="sources">
+    <li>INE — <a href="https://www.ine.es/dyngs/Prensa/EPSC2025.htm">Estadística de Profesionales Sanitarios Colegiados 2025</a> y <a href="https://ine.es/jaxiT3/Datos.htm?tpx=53274">médicos por provincia (2021)</a></li>
+    <li>Padrón 2025 — <a href="https://castellonplaza.com/castellonplaza/castellon9/castellon-gana-12432-habitantes-en-el-ultimo-ano-y-se-situa-a-la-cabeza-del-crecimiento-nacional">Castellón Plaza</a>, <a href="https://hogarfax.com/poblacion/castellon-castello/">Hogarfax</a></li>
+    <li>Seguro privado — <a href="https://valenciaplaza.com/valenciaplaza/el-21-3-de-los-valencianos-cuentan-con-seguro-de-salud-un-4-5-menos-que-la-media-nacional">UNESPA vía Valencia Plaza</a>; <a href="https://www.consalud.es/autonomias/c-valenciana/858000-personas-seguro-sanitario-privado-comunidad-valenciana_98969_102.html">IDIS vía ConSalud</a></li>
+    <li>Doctoralia Castellón — <a href="https://www.doctoralia.es/dermatologo/castellon-de-la-plana">dermatología</a>, <a href="https://www.doctoralia.es/ginecologo/castellon-de-la-plana">ginecología</a>, <a href="https://www.doctoralia.es/cardiologo/castellon-de-la-plana">cardiología</a>, <a href="https://www.doctoralia.es/traumatologo/castellon-de-la-plana">traumatología</a>, <a href="https://www.doctoralia.es/endocrino/castellon-de-la-plana">endocrinología</a>, <a href="https://www.doctoralia.es/psiquiatra/castellon-de-la-plana">psiquiatría</a>, <a href="https://www.doctoralia.es/psicologo/castellon-de-la-plana">psicología</a>, <a href="https://www.doctoralia.es/pediatra/castellon-de-la-plana">pediatría</a>, <a href="https://www.doctoralia.es/urologo/castellon-de-la-plana">urología</a>, <a href="https://www.doctoralia.es/aparato-digestivo/castellon-de-la-plana">digestivo</a>, <a href="https://www.doctoralia.es/dietista-nutricionista/castellon-de-la-plana">nutrición</a></li>
+    <li>Competencia — <a href="https://vithas.es/centro/vithas-hospital-castellon/">Vithas</a>, <a href="https://www.policlinicacastalia.es/">Policlínica Castalia</a>, <a href="https://www.centros-medicos.es/castellon-de-la-plana-centro-medico-adeslas-castellon-9067/">Adeslas</a>, <a href="https://www.centros-medicos.es/castellon-de-la-plana-ivu-instituto-valenciano-urologia-20433/">IVU</a></li>
+    <li>Alquiler por franjas — <a href="https://clinicamadridzentro.es/alquiler-de-despachos-medicos-en-madrid/">Madrid Zentro</a>, <a href="https://sculptureclinic.es/en/alquiler-consulta-medica-madrid/">Sculpture</a>, <a href="https://comt.cat/es/venda-venta-alquiler-consulta-mdica/">CoCo Clinics (COMT)</a>, <a href="https://www.maternum.com/mod/page/view.php?id=1906">Maternum</a>, <a href="https://meetmedix.com/alquiler-medico">MeetMedix</a>, <a href="https://despachosamado.com/">Despachos Amado</a>, <a href="https://premiummedical.es/alquiler-de-consultas-medicas/">Premium Medical</a>, <a href="https://doctorydoctor.com/alquileres-consultorios/">Doctor y Doctor</a>, <a href="https://www.compartirespacios.com/espacios/castello-de-la-plana/alquiler-consulta-medica/alquiler-consulta-castellon">único anuncio en Castellón</a></li>
+    <li>Sector — <a href="https://cronicaglobal.elespanol.com/business/20240216/la-fiebre-los-coworkings-llega-sector-sanitario/832916833_0.html">Crónica Global, "La fiebre de los coworkings llega al sector sanitario" (2024)</a></li>
+    <li>Normativa — <a href="https://www.boe.es/buscar/act.php?id=BOE-A-1992-28740">LIVA (BOE consolidado)</a>; DGT V0167-26; <a href="https://www.boe.es/buscar/doc.php?id=BOE-A-2003-19572">RD 1277/2003</a>; <a href="https://dogv.gva.es/portal/ficha_disposicion.jsp?sig=008836/2014&L=1">Decreto 157/2014 (DOGV)</a>; <a href="https://www.boe.es/buscar/doc.php?id=BOE-A-2014-9626">Ley 6/2014</a>; <a href="https://sede.gva.es/es/detall-tramit?id_proc=303">trámite de autorización sanitaria (GVA)</a></li>
+  </ul>
+</section>
+
+</div>
+
+<script>
+(function(){
+  const $=id=>document.getElementById(id);
+  const fmt=n=>new Intl.NumberFormat('es-ES',{maximumFractionDigits:0}).format(n);
+  const eur=n=>fmt(n)+' €';
+  const ids=['consultas','dias','turnos','precio','recep','otros'];
+  function read(){
+    const v={};
+    ids.forEach(k=>v[k]=+$('c-'+k).value);
+    v.reforma=+$('c-reforma').value||0;
+    return v;
+  }
+  function paint(){
+    const v=read();
+    const cap=v.consultas*v.dias*2;
+    $('c-turnos').max=cap;
+    if(v.turnos>cap){v.turnos=cap;$('c-turnos').value=cap;}
+    ids.forEach(k=>$('o-'+k).textContent=fmt(+$('c-'+k).value));
+    const ing=v.turnos*v.precio, cost=v.recep+v.otros, margen=ing-cost;
+    const be=v.precio>0?Math.ceil(cost/v.precio):0;
+    $('r-capacidad').textContent=fmt(cap);
+    $('r-ocup').textContent=cap?Math.round(100*v.turnos/cap)+' %':'—';
+    $('r-ing').textContent=eur(ing); $('r-cost').textContent=eur(cost);
+    $('r-margen').textContent=(margen<0?'−':'')+eur(Math.abs(margen));
+    $('r-be').textContent=be>cap?fmt(be)+' (no cabe)':fmt(be);
+    $('r-payback').textContent=(margen>0&&v.reforma>0)?(v.reforma/(margen*12)).toFixed(1):'—';
+    const mx=Math.max(ing,cost,1);
+    $('f-ing').style.width=(100*ing/mx)+'%'; $('f-cost').style.width=(100*cost/mx)+'%';
+    $('v-ing').textContent=eur(ing); $('v-cost').textContent=eur(cost);
+    const cols=v.dias*2, rows=v.consultas, root=$('slots'); root.innerHTML='';
+    let left=v.turnos;
+    for(let r=0;r<rows;r++){const row=document.createElement('div');row.className='slot-row';
+      for(let c=0;c<cols;c++){const s=document.createElement('div');s.className='slot'+(left>0?' on':'');if(left>0)left--;row.appendChild(s);}
+      root.appendChild(row);}
+  }
+  ids.forEach(k=>$('c-'+k).addEventListener('input',paint));
+  $('c-reforma').addEventListener('input',paint);
+  document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click',()=>{
+    const [m,t]=b.dataset.preset.split(',').map(Number); $('c-turnos').value=m*t; paint();
+  }));
+  paint();
+
+  // registro (solo en este navegador)
+  const KEY='asensi18_registro';
+  let rows=[];
+  try{rows=JSON.parse(localStorage.getItem(KEY)||'[]');if(!Array.isArray(rows))rows=[];}catch(e){rows=[];}
+  function save(){try{localStorage.setItem(KEY,JSON.stringify(rows));}catch(e){}}
+  function render(){
+    const tb=$('reg-body'); tb.innerHTML='';
+    if(!rows.length){tb.innerHTML='<tr><td colspan="7" class="note">Todavía no hay llamadas registradas.</td></tr>';}
+    rows.forEach((r,i)=>{const tr=document.createElement('tr');
+      const lab={si:'Sí',depende:'Depende',no:'No'}[r.resp]||r.resp;
+      tr.innerHTML=`<td>${esc(r.nombre)}</td><td>${esc(r.esp)}</td><td><span class="badge ${r.resp==='si'?'b-ok':r.resp==='no'?'b-pend':'b-warn'}">${lab}</span></td><td class="num">${r.turnos||0}</td><td class="num">${r.precio?fmt(r.precio):'—'}</td><td>${esc(r.obj)}</td><td><button type="button" class="del" data-i="${i}">Quitar</button></td>`;
+      tb.appendChild(tr);});
+    const si=rows.filter(r=>r.resp==='si');
+    $('s-n').textContent=rows.length; $('s-si').textContent=si.length;
+    $('s-turnos').textContent=si.reduce((a,r)=>a+(+r.turnos||0),0); $('s-med').textContent=rows.filter(r=>r.resp==='depende').length;
+    const pr=si.filter(r=>r.precio>0); $('s-precio').textContent=pr.length?fmt(pr.reduce((a,r)=>a+r.precio,0)/pr.length)+' €':'—';
+  }
+  function esc(s){return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+  $('reg-form').addEventListener('submit',e=>{e.preventDefault();
+    rows.push({nombre:$('f-nombre').value.trim(),esp:$('f-esp').value.trim(),resp:$('f-resp').value,turnos:+$('f-turnos').value||0,precio:+$('f-precio').value||0,obj:$('f-obj').value.trim(),fecha:new Date().toISOString().slice(0,10)});
+    save(); render(); e.target.reset(); $('f-turnos').value=1; $('f-nombre').focus();});
+  $('reg-body').addEventListener('click',e=>{const b=e.target.closest('[data-i]');if(!b)return;rows.splice(+b.dataset.i,1);save();render();});
+  $('btn-clear').addEventListener('click',()=>{if(!rows.length)return;rows=[];save();render();$('reg-msg').textContent='Registro borrado.';});
+  $('btn-copy').addEventListener('click',async()=>{
+    const si=rows.filter(r=>r.resp==='si');
+    const txt=['Policlínica Asensi 18 · registro de llamadas ('+new Date().toLocaleDateString('es-ES')+')',
+      `Contactados: ${rows.length} · Sí: ${si.length} · Turnos comprometidos: ${si.reduce((a,r)=>a+(+r.turnos||0),0)}`,'',
+      ...rows.map(r=>`${r.fecha} · ${r.nombre} (${r.esp||'—'}) · ${r.resp.toUpperCase()} · ${r.turnos||0} turnos · ${r.precio?r.precio+' €':'—'} · ${r.obj||''}`)].join('\n');
+    try{await navigator.clipboard.writeText(txt);$('reg-msg').textContent='Copiado.';}catch(e){$('reg-msg').textContent='No se ha podido copiar; selecciona la tabla y cópiala a mano.';}
+  });
+  render();
+})();
+</script>
+
+</body>
+</html>
