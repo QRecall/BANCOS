@@ -913,6 +913,7 @@ if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",
   var today=new Date().toISOString().slice(0,10);
   function get(k){try{return ls.getItem(k);}catch(e){return null;}}
   function set(k,v){try{ls.setItem(k,v);}catch(e){}}
+  var SRC=(function(){var m=location.search.match(/[?&]src=([A-Za-z0-9_-]+)/);if(m){set('qr_src',m[1]);return m[1];}return get('qr_src')||'';})();
   var uid=get('qr_uid');
   if(!uid){uid=Math.random().toString(36).slice(2,10)+Date.now().toString(36);set('qr_uid',uid);}
   var first=get('qr_first');
@@ -920,7 +921,7 @@ if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",
   var sentKey='qr_sent_'+banco;
   var sent={};try{sent=JSON.parse(get(sentKey)||'{}')||{};}catch(e){}
   function send(ev){
-    var q='uid='+encodeURIComponent(uid)+'&banco='+encodeURIComponent(banco)+'&ev='+encodeURIComponent(ev)+'&d='+today+'&t='+encodeURIComponent(new Date().toISOString())+'&p='+encodeURIComponent(location.pathname)+'&_='+Date.now();
+    var q='uid='+encodeURIComponent(uid)+'&banco='+encodeURIComponent(banco)+'&ev='+encodeURIComponent(ev)+'&d='+today+'&t='+encodeURIComponent(new Date().toISOString())+'&p='+encodeURIComponent(location.pathname+(SRC?'?src='+SRC:''))+'&_='+Date.now();
     var url=ENDPOINT+'?'+q;
     try{fetch(url,{method:'GET',mode:'no-cors',keepalive:true,cache:'no-store'}).catch(function(){});}
     catch(e){try{var im=new Image();im.src=url;}catch(e2){}}
