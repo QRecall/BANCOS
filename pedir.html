@@ -117,9 +117,11 @@ footer{text-align:center;padding:24px 0 40px;color:var(--muted);font-size:13px;b
   function send(d){d.uid=uid;d.d=new Date().toISOString().slice(0,10);d.t=new Date().toISOString();d.banco='pedir';d.p='/pedir.html'+(src?'?src='+src:'');
     var q=Object.keys(d).map(function(k){return k+'='+encodeURIComponent(String(d[k]).slice(0,300));}).join('&')+'&_='+Date.now();
     try{fetch(EP+'?'+q,{method:'GET',mode:'no-cors',keepalive:true,cache:'no-store'}).catch(function(){});}catch(e){try{var im=new Image();im.src=EP+'?'+q;}catch(e2){}}}
-  send({ev:'pedir_abre'});
-  window.enviar=function(e){e.preventDefault();var f=e.target;var d={ev:'pedido_15'};
-    ['asignatura','curso','universidad','examen','material','contacto','nota'].forEach(function(k){d[k]=(f[k].value||'').trim();});
+  send({ev:'abre'});
+  window.enviar=function(e){e.preventDefault();var f=e.target;var v={};
+    ['asignatura','curso','universidad','examen','material','contacto','nota'].forEach(function(k){v[k]=(f[k].value||'').trim();});
+    var d={ev:'peticion',asignatura:'[15 €] '+v.asignatura,curso:v.curso,universidad:v.universidad,
+      examen:(v.examen+' · material: '+v.material+(v.nota?' · nota: '+v.nota:'')).slice(0,200),contacto:v.contacto};
     send(d);document.getElementById('ok').style.display='block';document.getElementById('btn').disabled=true;document.getElementById('btn').textContent='Pedido enviado';return false;};
 })();
 </script>
