@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tu progreso — QRecall</title>
+<style>
+:root{--bg:#0a0a0f;--surface:#12121a;--border:#1e1e2e;--accent:#4f8cff;--accent2:#a78bfa;--text:#e8e8f0;--muted:#8a8aa0;--card:#14141f;--ok:#34d399;--ko:#f87171}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.wrapper{max-width:720px;margin:0 auto;padding:0 16px 40px}
+header{padding:32px 0 24px;display:flex;align-items:center;gap:16px}
+.back{color:var(--muted);text-decoration:none;font-size:14px}
+.logo{display:inline-flex;align-items:center;gap:10px;text-decoration:none}
+.logo-icon{width:36px;height:36px;background:#1a2744;border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:Georgia,serif;font-weight:900;font-size:22px;color:#fff}
+.logo-text{font-size:20px;font-weight:800;background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+h1{font-size:clamp(26px,7vw,38px);font-weight:800;letter-spacing:-1px;margin-bottom:8px}
+.sub{color:var(--muted);font-size:15px;margin-bottom:28px;line-height:1.5}
+.box{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px}
+.box h2{font-size:16px;margin-bottom:6px}
+.box p{color:var(--muted);font-size:13.5px;line-height:1.5;margin-bottom:12px}
+button{font:inherit;font-weight:600;font-size:14px;padding:10px 16px;border-radius:10px;border:none;background:var(--accent);color:#fff;cursor:pointer}
+button.sec{background:var(--surface);border:1px solid var(--border);color:var(--text)}
+button:disabled{opacity:.5;cursor:default}
+textarea{width:100%;min-height:90px;background:var(--surface);border:1px solid var(--border);border-radius:10px;color:var(--text);font:12px ui-monospace,monospace;padding:10px;margin:10px 0;word-break:break-all}
+.msg{font-size:13.5px;margin-top:8px;color:var(--muted);min-height:1em}
+.msg.ok{color:var(--ok)}.msg.ko{color:var(--ko)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+td,th{padding:7px 4px;border-bottom:1px solid var(--border);text-align:left}
+th{color:var(--muted);font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+td.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.bar{height:6px;background:var(--surface);border-radius:3px;overflow:hidden;margin-top:4px;display:flex}
+.bar i{display:block;height:100%}
+footer{text-align:center;padding:24px 0;color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrapper">
+<header><a class="back" href="index.html">← Inicio</a><a class="logo" href="index.html"><div class="logo-icon">Q</div><span class="logo-text">Recall</span></a></header>
+<h1>Tu progreso</h1>
+<p class="sub">Lo que has contestado en los bancos se guarda solo en este navegador. Aquí puedes verlo, sacar una copia en forma de código y llevarla a otro móvil u ordenador. Nada sale de tu dispositivo salvo que tú copies el código.</p>
+
+<div class="box"><h2>Resumen en este navegador</h2><div id="sum"><p>Leyendo…</p></div></div>
+
+<div class="box"><h2>Sacar tu código</h2>
+<p>Incluye tus respuestas y el texto de las preguntas que tienes falladas (para repasarlas donde lo pegues).</p>
+<button id="exp">Generar y copiar código</button>
+<textarea id="out" readonly hidden aria-label="Tu código"></textarea>
+<div class="msg" id="expMsg"></div></div>
+
+<div class="box"><h2>Pegar un código en este navegador</h2>
+<p>Suma el progreso del código al de este navegador. No borra nada: si una pregunta ya está contestada aquí, se queda como está.</p>
+<textarea id="inp" placeholder="Pega aquí el código (empieza por QRP1.)" aria-label="Código para importar"></textarea>
+<button id="imp" class="sec">Importar aquí</button>
+<div class="msg" id="impMsg"></div></div>
+<footer>QRecall · bancos de preguntas para estudiantes de Medicina · 2026</footer>
+</div>
+<script>
+var IDX={"ap_final_2023_v1": {"p": "AP_Final_2023_v10.html", "t": "Anatomía Patológica — Final Enero 2023", "a": "AP", "n": 60}, "mir_endocrino_pdt_v10": {"p": "ENDOCRINO_PDT5.html", "t": "Cirugía Endocrina PDT", "a": "PDT", "n": 23}, "infecciosas2025_v10": {"p": "Infecciosas_2025_Examen.html", "t": "Infecciosas 2025 — Examen", "a": "Infecciosas", "n": 49}, "infecciosas_apuntes_v10": {"p": "Infecciosas_Apuntes.html", "t": "Infecciosas — Preguntas de Apuntes", "a": "Infecciosas", "n": 129}, "mir_2026_oficial_v1": {"p": "MIR2026_ExamenInteractivo.html", "t": "MIR 2026 — 203 preguntas (enunciados resumidos)", "a": "MIR", "n": 203}, "mir_pdt_final2025_v1": {"p": "PDT4_Final_2025.html", "t": "PDT Final 2025 — Radiología, Digestivo y Cirugía", "a": "PDT", "n": 85}, "pdt2025_ceu_v10": {"p": "PDT5_2025_vlc.html", "t": "PDT 2025 — Examen Final", "a": "PDT", "n": 29}, "pdt_ceu_v10": {"p": "PDT_5_preguntas_apuntes.html", "t": "PDT — Banco de Preguntas", "a": "PDT", "n": 136}, "mir_pdt_parcial2026_v1": {"p": "PDT_Parcial_2026.html", "t": "PDT Parcial 2026 — 5º Medicina", "a": "PDT", "n": 32}, "mir_saludpub_2025_v1": {"p": "SaludPublica_Final_2025.html", "t": "Salud Pública — Final 2025", "a": "Salud Pública", "n": 25}, "mir_saludpub_parcial2526_v1": {"p": "SaludPublica_Parcial_2026.html", "t": "Salud Pública — Parcial 2025-26", "a": "Salud Pública", "n": 44}, "mir_spub_t11t12t17t19_v1": {"p": "SaludPublica_T11T12T17T19.html", "t": "Salud Pública — Material Complementario T11-T19", "a": "Salud Pública", "n": 60}, "seminario_geria_pdt_v10": {"p": "Seminario_Geriatria.html", "t": "Seminario Geriatría", "a": "PDT", "n": 28}, "anatpat_final_2020_v1": {"p": "banco_AP_2020.html", "t": "Banco de Anatomía Patológica", "a": "AP", "n": 60}, "mir_ap_imagenes_v1": {"p": "banco_AP_imagenes_MIR.html", "t": "Banco MIR — Anatomía Patológica (imágenes)", "a": "AP", "n": 174}, "mir_ap_teoria_set2": {"p": "banco_AP_teoria_SET2.html", "t": "Banco AP — Teoría · Set 2 (preguntas nuevas)", "a": "AP", "n": 52}, "mir_ap_teoria_v1": {"p": "banco_AP_todos_los_temas.html", "t": "Banco AP — Teoría (estilo examen)", "a": "AP", "n": 294}, "mir_farmacologia_jul2024_v1": {"p": "banco_FARMACOLOGIA_final_2024.html", "t": "Farmacología — Julio 2024", "a": "Farma", "n": 79}, "microinmuno_banco_2025_v1": {"p": "banco_MicroInmuno_2025.html", "t": "MicroInmuno — Banco Completo", "a": "Micro", "n": 218}, "mir_microinmuno_v1": {"p": "banco_MicroInmuno_temario.html", "t": "Banco Micro e Inmuno — Teoría (estilo profe)", "a": "Micro", "n": 320}, "farma_T01_introduccion_v1": {"p": "banco_farma_T01.html", "t": "Farmacología · T1 Introducción", "a": "Farma", "n": 23}, "farma_T02_farmacocinetica_v1": {"p": "banco_farma_T02.html", "t": "Farmacología · T2 Farmacocinética", "a": "Farma", "n": 30}, "farma_T03_farmacodinamia_v1": {"p": "banco_farma_T03.html", "t": "Farmacología · T3 Farmacodinamia", "a": "Farma", "n": 27}, "mir_farma_final_2024_v1": {"p": "banco_farma_final_2024.html", "t": "Farmacología Final Enero 2024", "a": "Farma", "n": 79}, "hemato_T01_nmp_cronicas_v1": {"p": "banco_hemato_T01.html", "t": "Hemato-Onco · Neoplasias mieloproliferativas crónicas", "a": "Hemato", "n": 43}, "hemato_T02_transfusion_v1": {"p": "banco_hemato_T02.html", "t": "Hemato-Onco · Medicina transfusional", "a": "Hemato", "n": 35}, "mir_micro_inm_2024_v1": {"p": "banco_micro_inm_2024.html", "t": "Microbiología e Inmunología 2024", "a": "Micro", "n": 61}, "qrecall_onco_t27_t29_v1": {"p": "banco_onco_T27_T29.html", "t": "Oncología — Temas 27 a 29", "a": "Hemato", "n": 34}, "mir_parciales_micro_inm_v1": {"p": "banco_parciales_micro_inm.html", "t": "Parciales Microbiología e Inmunología", "a": "Micro", "n": 55}, "gine_T01_aparato_genital_v1": {"p": "gine/temas/banco_gine_T01.html", "t": "Ginecología · T1 Aparato genital femenino", "a": "Gine", "n": 34}, "gine_T02_ciclo_sexual_v1": {"p": "gine/temas/banco_gine_T02.html", "t": "Ginecología · T2 Ciclo sexual femenino", "a": "Gine", "n": 28}, "gine_T03_dismenorrea_v1": {"p": "gine/temas/banco_gine_T03.html", "t": "Ginecología · T3 Dismenorrea, dispareunia, tensión premenstrual y vaginismo", "a": "Gine", "n": 40}, "gine_T05_hua_v1": {"p": "gine/temas/banco_gine_T05.html", "t": "Ginecología · T5 Hemorragia uterina anormal", "a": "Gine", "n": 28}, "gine_T14_exploracion_hpv_v1": {"p": "gine/temas/banco_gine_T14.html", "t": "Ginecología · T14 Exploración ginecológica y VPH", "a": "Gine", "n": 31}, "gine_T15_eco_histeroscopia_v1": {"p": "gine/temas/banco_gine_T15.html", "t": "Ginecología · T15 Ecografía, histeroscopia y legrado", "a": "Gine", "n": 35}, "gine_T16_laparoscopia_hsg_v1": {"p": "gine/temas/banco_gine_T16.html", "t": "Ginecología · T16 Laparoscopia e histerosalpingografía", "a": "Gine", "n": 31}, "obste_T25_control_gestacional_v1": {"p": "gine/temas/banco_obste_T25.html", "t": "Obstetricia · T25 Fisiopatología del embarazo y control gestacional", "a": "Gine", "n": 39}, "hemato_M10_trombosis_v1": {"p": "hemato/temas/banco_hemato_M10.html", "t": "Hematología · M10 Trombosis y tratamiento anticoagulante", "a": "Hemato", "n": 40}, "inmuno_T01_introduccion_v1": {"p": "micro/temas/banco_inmuno_T01.html", "t": "Inmunología · T1 Introducción al sistema inmunitario. Propiedades generales", "a": "Micro", "n": 24}, "inmuno_T02_innato_componentes_v1": {"p": "micro/temas/banco_inmuno_T02.html", "t": "Inmunología · T2 Sistema inmunitario innato: objetivos y componentes", "a": "Micro", "n": 29}, "inmuno_T03_mecanismos_innato_v1": {"p": "micro/temas/banco_inmuno_T03.html", "t": "Inmunología · T3 Mecanismos del sistema inmunitario innato", "a": "Micro", "n": 29}, "inmuno_T04_adaptativo_v1": {"p": "micro/temas/banco_inmuno_T04.html", "t": "Inmunología · T4 Sistema inmune adaptativo: objetivos y componentes", "a": "Micro", "n": 27}, "micro_T01_introduccion_v1": {"p": "micro/temas/banco_micro_T01.html", "t": "Microbiología · T1 Introducción a la microbiología y diversidad microbiana", "a": "Micro", "n": 29}, "micro_T02_patogeno_hospedador_v1": {"p": "micro/temas/banco_micro_T02.html", "t": "Microbiología · T2 Relaciones patógeno-hospedador", "a": "Micro", "n": 28}, "micro_T03_desinfeccion_esterilizacion_v1": {"p": "micro/temas/banco_micro_T03.html", "t": "Microbiología · T3 Control de microorganismos: desinfección y esterilización", "a": "Micro", "n": 30}, "micro_T04_diagnostico_v1": {"p": "micro/temas/banco_micro_T04.html", "t": "Microbiología · T4 Diagnóstico de las infecciones", "a": "Micro", "n": 30}, "micro_T05_estructuras_bacterianas_v1": {"p": "micro/temas/banco_micro_T05.html", "t": "Microbiología · T5 Clasificación, morfología y estructuras bacterianas", "a": "Micro", "n": 29}, "trauma_T01_semiologia_v1": {"p": "trauma/temas/banco_trauma_T01.html", "t": "Traumatología · T01 Semiología y generalidades de la COT", "a": "Trauma", "n": 40}, "trauma_T02_tendones_nervios_v1": {"p": "trauma/temas/banco_trauma_T02.html", "t": "Traumatología · Tema 2 (2.ª parte): tendones, bursas y nervios periféricos", "a": "Trauma", "n": 40}, "trauma_T04_estructura_osea_v1": {"p": "trauma/temas/banco_trauma_T04.html", "t": "Traumatología · T04 Estructura ósea y articular. Esguinces y luxaciones", "a": "Trauma", "n": 40}, "trauma_T05_traumatismos_musculares_v1": {"p": "trauma/temas/banco_trauma_T05.html", "t": "Traumatología · T05 Traumatismos musculares", "a": "Trauma", "n": 30}, "trauma_T09_fracturas_v1": {"p": "trauma/temas/banco_trauma_T09.html", "t": "Traumatología · T09 Fracturas: generalidades, consolidación y complicaciones", "a": "Trauma", "n": 40}, "trauma_T11_fracturas_ninos_v1": {"p": "trauma/temas/banco_trauma_T11.html", "t": "Traumatología · T11 Fracturas en los niños", "a": "Trauma", "n": 40}, "trauma_examen_T02_v1": {"p": "trauma/temas/banco_trauma_examen_T02.html", "t": "Traumatología · Examen del tema 2", "a": "Trauma", "n": 50}, "trauma_examen_hombro_v1": {"p": "trauma/temas/banco_trauma_examen_hombro.html", "t": "Traumatología · Examen del tema 9: hombro", "a": "Trauma", "n": 50}, "trauma_hombro_v1": {"p": "trauma/temas/banco_trauma_hombro.html", "t": "Traumatología · Tema 9: patología del hombro", "a": "Trauma", "n": 40}, "trauma_simulacro_A_v1": {"p": "trauma/temas/banco_trauma_simulacro_A.html", "t": "Traumatología · Simulacro del parcial (A)", "a": "Trauma", "n": 50}, "trauma_simulacro_B_v1": {"p": "trauma/temas/banco_trauma_simulacro_B.html", "t": "Traumatología · Simulacro del parcial (B)", "a": "Trauma", "n": 50}};
+var SUBJN={"Trauma": 290, "Micro": 904, "Farma": 237, "Gine": 266, "Hemato": 152};
+var SIMS={trauma:'trauma/temas/banco_trauma_simulacro_nuevo.html',micro:'micro/temas/banco_micro_simulacro_nuevo.html',farma:'farma/temas/banco_farma_simulacro_nuevo.html',gine:'gine/temas/banco_gine_simulacro_nuevo.html',hemato:'hemato/temas/banco_hemato_simulacro_nuevo.html'};
+function $(i){return document.getElementById(i)}
+function lsGet(k){try{return JSON.parse(localStorage.getItem(k)||'null')}catch(e){return null}}
+function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}}
+function lsKeys(){var a=[];try{for(var i=0;i<localStorage.length;i++)a.push(localStorage.key(i))}catch(e){}return a}
+function strip(s){var d=document.createElement('div');d.innerHTML=String(s||'');return (d.textContent||'').replace(/\s+/g,' ').trim()}
+/* lee el JSON que sigue a una marca, contando llaves y corchetes */
+function grab(src,mark){var i=src.indexOf(mark);if(i<0)return null;i+=mark.length;var d=0,k=i,s=false,e=false;
+  for(;k<src.length;k++){var c=src[k];if(s){if(e)e=false;else if(c==='\\')e=true;else if(c==='"')s=false}else if(c==='"')s=true;else if(c==='{'||c==='['){d++}else if(c==='}'||c===']'){d--;if(d===0){k++;break}}}
+  try{return JSON.parse(src.slice(i,k))}catch(x){return null}}
+async function fetchText(p){var r=await fetch(p,{cache:'no-store'});if(!r.ok)throw new Error(p);return r.text()}
+/* estado unificado: ref "KEY|qid" → true/false (última respuesta) */
+async function collect(){
+  var R={},F={},keys=lsKeys();
+  Object.keys(IDX).forEach(function(k){var d=lsGet(k);if(!d)return;var st=d.state||{},fh=d.failHist||{};
+    Object.keys(st).forEach(function(q){if(st[q]&&typeof st[q].r==='boolean')R[k+'|'+q]=st[q].r});
+    Object.keys(fh).forEach(function(q){if(fh[q]>0&&!((k+'|'+q) in R))R[k+'|'+q]=false})});
+  for(var slug in SIMS){var g=lsGet(slug+'_simnuevo_v1');if(!g)continue;var pool=null;
+    try{pool=grab(await fetchText(SIMS[slug]),'var POOL=')}catch(e){}
+    if(!pool)continue;var hist=g.hist||{};
+    Object.keys(hist).forEach(function(i){var p=pool[i];if(!p||hist[i]==='vista')return;var ref=p.src[0];if(!(ref in R))R[ref]=hist[i]==='ok'});
+    if(g.cur){var d=lsGet(slug+'_simnuevo_'+g.cur.id)||{},st=d.state||{};g.cur.ids.forEach(function(ix,j){var a=st['sim-'+(j+1)],p=pool[ix];if(a&&p){var ref=p.src[0];if(!(ref in R))R[ref]=!!a.r}})}}
+  return R}
+function resumen(R){var by={};Object.keys(R).forEach(function(ref){var k=ref.split('|')[0],m=IDX[k];if(!m)return;var b=by[k]=by[k]||{ok:0,ko:0};R[ref]?b.ok++:b.ko++});return by}
+function pintar(R){var by=resumen(R),subj={};Object.keys(by).forEach(function(k){var a=IDX[k].a,s=subj[a]=subj[a]||{ok:0,ko:0,n:0};s.ok+=by[k].ok;s.ko+=by[k].ko});
+  Object.keys(IDX).forEach(function(k){var a=IDX[k].a;if(subj[a]&&!SUBJN[a])subj[a].n+=IDX[k].n});Object.keys(subj).forEach(function(a){if(SUBJN[a])subj[a].n=SUBJN[a]});
+  var ks=Object.keys(subj).sort(function(a,b){return (subj[b].ok+subj[b].ko)-(subj[a].ok+subj[a].ko)});
+  if(!ks.length){$('sum').innerHTML='<p>Aún no has contestado nada en este navegador.</p>';return}
+  var h='<table><tr><th>Asignatura</th><th class="n">Hechas</th><th class="n">Aciertos</th><th class="n">Falladas</th></tr>';
+  ks.forEach(function(a){var s=subj[a],t=s.ok+s.ko,pc=Math.round(s.ok/t*100),w1=s.n?Math.min(100,s.ok/s.n*100):0,w2=s.n?Math.min(100-w1,s.ko/s.n*100):0;
+    h+='<tr><td>'+a+'<div class="bar"><i style="width:'+w1+'%;background:var(--ok)"></i><i style="width:'+w2+'%;background:var(--ko)"></i></div></td><td class="n">'+t+' / '+s.n+'</td><td class="n">'+pc+' %</td><td class="n">'+s.ko+'</td></tr>'});
+  $('sum').innerHTML=h+'</table>'}
+function b64u(buf){var s='',b=new Uint8Array(buf);for(var i=0;i<b.length;i+=0x8000)s+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
+function unb64u(s){s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';var bin=atob(s),b=new Uint8Array(bin.length);for(var i=0;i<bin.length;i++)b[i]=bin.charCodeAt(i);return b}
+async function pack(obj){var data=new TextEncoder().encode(JSON.stringify(obj));
+  if(window.CompressionStream){var cs=new Response(new Blob([data]).stream().pipeThrough(new CompressionStream('deflate-raw')));return 'QRP1.'+b64u(await cs.arrayBuffer())}
+  return 'QRP0.'+b64u(data.buffer)}
+async function unpack(code){code=code.trim().replace(/\s+/g,'');var m=code.match(/^QRP([01])\.([A-Za-z0-9_-]+)$/);if(!m)throw new Error('formato');var b=unb64u(m[2]);
+  if(m[1]==='1'){var ds=new Response(new Blob([b]).stream().pipeThrough(new DecompressionStream('deflate-raw')));return JSON.parse(await ds.text())}
+  return JSON.parse(new TextDecoder().decode(b))}
+async function exportar(){var btn=$('exp');btn.disabled=true;$('expMsg').className='msg';$('expMsg').textContent='Preparando… (lee los bancos con preguntas falladas)';
+  try{var R=await collect(),by=resumen(R);
+    var raw={};lsKeys().forEach(function(k){if(IDX[k]||/_simnuevo_v1$/.test(k)){var v=lsGet(k);if(v){if(IDX[k])raw[k]={state:v.state||{},failHist:v.failHist||{}};else{var h=JSON.parse(JSON.stringify(v.hist||{}));if(v.cur){var d=lsGet(k.replace(/_v1$/,'_')+v.cur.id)||{},st=d.state||{};v.cur.ids.forEach(function(ix,j){var a=st['sim-'+(j+1)];if(a)h[ix]=a.r?'ok':'ko'})}raw[k]={hist:h}}}}});
+    var fails=Object.keys(R).filter(function(r){return R[r]===false}),porK={};fails.forEach(function(r){var k=r.split('|')[0];(porK[k]=porK[k]||[]).push(r.slice(k.length+1))});
+    var X=[],fhOf={};Object.keys(porK).forEach(function(k){var d=lsGet(k);fhOf[k]=(d&&d.failHist)||{}});
+    for(var k in porK){var m=IDX[k];if(!m)continue;var D=null;try{var src=await fetchText(m.p);D=grab(src,'var D=/*__D_JSON__*/')||grab(src,'var D=')}catch(e){}
+      if(!D)continue;porK[k].forEach(function(qid){var j=qid.indexOf('-'),sec=qid.slice(0,j),n=qid.slice(j+1),q=(D[sec]||[]).filter(function(x){return String(x.n)===n})[0];
+        if(q&&Array.isArray(q.o)&&!q.img)X.push([k+'|'+qid,m.a,m.t,strip(q.q),q.o.map(strip),q.c,strip(q.e),Math.max(1,+(fhOf[k]&&fhOf[k][qid])||0)])})}
+    X=X.slice(0,1500);
+    var M={};Object.keys(by).forEach(function(k){M[k]=[IDX[k].a,IDX[k].t,IDX[k].n,by[k].ok,by[k].ko]});
+    var code=await pack({v:1,d:new Date().toISOString().slice(0,10),m:M,u:SUBJN,x:X,raw:raw});
+    var ta=$('out');ta.hidden=false;ta.value=code;
+    var copied=false;try{await navigator.clipboard.writeText(code);copied=true}catch(e){}
+    if(!copied){ta.focus();ta.select()}
+    $('expMsg').className='msg ok';$('expMsg').textContent=(copied?'Copiado. ':'Cópialo del recuadro. ')+Object.keys(R).length+' preguntas contestadas, '+X.length+' falladas incluidas para repasar · '+Math.round(code.length/1024)+' KB.';
+  }catch(e){$('expMsg').className='msg ko';$('expMsg').textContent='No se pudo generar el código.'}
+  btn.disabled=false}
+async function importar(){var msg=$('impMsg');msg.className='msg';
+  try{var o=await unpack($('inp').value);if(!o||o.v!==1||typeof o.raw!=='object')throw 0;var nb=0,nq=0;
+    Object.keys(o.raw).forEach(function(k){var src=o.raw[k];if(!src||typeof src!=='object')return;
+      if(IDX[k]){var d=lsGet(k)||{};d.state=d.state||{};d.failHist=d.failHist||{};var add=0;
+        Object.keys(src.state||{}).forEach(function(q){var a=src.state[q];if(!d.state[q]&&a&&typeof a.r==='boolean'&&typeof a.c==='number'){d.state[q]={c:a.c,r:a.r};add++}});
+        Object.keys(src.failHist||{}).forEach(function(q){var n=+src.failHist[q]||0;if(n>(d.failHist[q]||0))d.failHist[q]=n});
+        if(lsSet(k,d)&&add){nb++;nq+=add}}
+      else if(/^(trauma|micro|farma|gine|hemato)_simnuevo_v1$/.test(k)){var g=lsGet(k)||{};g.hist=g.hist||{};Object.keys(src.hist||{}).forEach(function(i){var v=src.hist[i];if(!g.hist[i]&&/^(ok|ko|vista)$/.test(v))g.hist[i]=v});lsSet(k,g)}});
+    msg.className='msg ok';msg.textContent='Hecho: '+nq+' respuestas nuevas en '+nb+' bancos.';$('inp').value='';pintar(await collect());
+  }catch(e){msg.className='msg ko';msg.textContent='Ese código no es válido o está incompleto.'}}
+$('exp').addEventListener('click',exportar);$('imp').addEventListener('click',importar);
+collect().then(pintar).catch(function(){$('sum').innerHTML='<p>No se pudo leer el progreso.</p>'});
+</script>
+</body>
+</html>
