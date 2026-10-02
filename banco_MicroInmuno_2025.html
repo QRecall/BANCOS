@@ -195,6 +195,13 @@ details[open] summary::before{transform:rotate(90deg)}
 .onum{font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px;min-width:15px}
 
 /* ── Modo repaso rápido ── */
+.quick-card.qz{background:var(--surf);border-color:var(--bd2)}
+.qz-hint{font-size:12.5px;color:var(--txt3);margin-bottom:8px}
+.qz-btn,.qz-rate button{font:inherit;font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px;cursor:pointer;border:1.5px solid var(--bd2);background:var(--surf);color:var(--txt)}
+.qz-ans .quick-rc{margin-top:2px}
+.qz-rate{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.qz-rate .qz-ok{border-color:#16a34a;color:#16a34a}.qz-rate .qz-ko{border-color:#dc2626;color:#dc2626}
+.qz-done{font-size:12.5px;font-weight:600}.qz-done.ok{color:#16a34a}.qz-done.ko{color:#dc2626}
 .quick-card{padding:9px 12px;border-radius:8px;border:1.5px solid var(--ok-bd);background:var(--ok-bg);margin-top:8px}
 .quick-rc{font-size:12.5px;font-weight:600;color:var(--ok-t);margin-bottom:6px}
 
@@ -243,7 +250,7 @@ details[open] summary::before{transform:rotate(90deg)}
   <div class="mode-bar">
     <span style="font-size:11.5px;color:var(--txt3);font-weight:600">MODO:</span>
     <button class="mode-btn on" id="mode-test" onclick="setMode('test')">📝 Test</button>
-    <button class="mode-btn" id="mode-quick" onclick="setMode('quick')">⚡ Repaso rápido</button>
+    <button class="mode-btn" id="mode-quick" onclick="setMode('quick')" title="Ves la pregunta, piensas la respuesta y la destapas">🧠 Repaso rápido</button>
     <button class="mode-btn" id="btn-stars" onclick="filterStarred()" style="margin-left:auto;border-color:#f59e0b;color:#b45309">⭐ Marcadas</button>
     <button class="mode-btn" id="btn-stats" onclick="toggleStats()">📊 Errores</button>
   </div>
@@ -270,7 +277,7 @@ details[open] summary::before{transform:rotate(90deg)}
     <button class="nota-btn" onclick="calcNotaAll()">✎ Calcular nota global</button>
   </div>
   <div class="global-nota-box" id="nota-all"></div>
-  <p class="hint">💡 <b>1–5</b> responde · <b>↑↓</b> navega · <b>S</b> marca ⭐ · Progreso guardado automáticamente</p>
+  <p class="hint">💡 <b>1–5</b> responde · <b>↑↓</b> navega · <b>S</b> marca ⭐ · en Repaso rápido: <b>espacio</b> destapa, <b>1</b> la sabía, <b>2</b> no · Progreso guardado automáticamente</p>
 
   <div id="panels-wrap"></div>
 </div>
@@ -478,7 +485,10 @@ function buildCard(q,sec,inAll,allPos){
   h+='<div class="qbody" id="b-'+cid+'">';
   if(q.img)h+=imgHtml(q.img);
   if(currentMode==='quick'){
-    h+='<div class="quick-card"><div class="quick-rc">✓ Respuesta correcta: opción '+nc+' — '+escH(q.o[q.c-1])+'</div><div class="expbox">'+q.e+'</div></div>';
+    /*QZ1*/var qd=qzDone[qid];
+    h+='<div class="quick-card qz" id="qz-'+cid+'"><div class="qz-hint"'+(qd?' hidden':'')+'>Piensa la respuesta antes de mirarla.</div><button class="qz-btn" onclick="event.stopPropagation();qzShow(\''+cid+'\')"'+(qd?' hidden':'')+'>Ver respuesta</button>'
+      +'<div class="qz-ans"'+(qd?'':' hidden')+'><div class="quick-rc">✓ '+escH(q.o[q.c-1])+'</div><div class="expbox">'+q.e+'</div>'
+      +'<div class="qz-rate">'+(qd?qzMsg(qd==='ok'):'<button class="qz-ok" onclick="event.stopPropagation();qzRate(\''+qid+'\',1)">La sabía</button><button class="qz-ko" onclick="event.stopPropagation();qzRate(\''+qid+'\',0)">No la sabía</button>')+'</div></div></div>';
   } else {
     h+='<ul class="opts" id="opts-'+cid+'">';
     h+=sOpts.map(function(o,i){
@@ -782,6 +792,13 @@ function clearSearch(){
 }
 
 /* ── Modo ── */
+/* ── Repaso rápido activo (QZ1) ── */
+var qzDone={},qzSes={ok:0,ko:0};
+function qzMsg(ok){return '<span class="qz-done '+(ok?'ok':'ko')+'">'+(ok?'✓ La sabías':'✗ Apuntada en tus errores para repasarla')+' · hoy: '+qzSes.ok+' sabidas, '+qzSes.ko+' no</span>';}
+function qzShow(cid){var b=document.getElementById('qz-'+cid);if(!b)return;var a=b.querySelector('.qz-ans');if(a)a.hidden=false;var x=b.querySelector('.qz-btn');if(x)x.hidden=true;var t=b.querySelector('.qz-hint');if(t)t.hidden=true;}
+function qzRate(qid,ok){if(qzDone[qid])return;qzDone[qid]=ok?'ok':'ko';if(ok)qzSes.ok++;else{qzSes.ko++;failHist[qid]=(failHist[qid]||0)+1;saveLocal();}
+  ['A-'+qid,'S-'+qid].forEach(function(cid){qzShow(cid);var b=document.getElementById('qz-'+cid);var r=b&&b.querySelector('.qz-rate');if(r)r.innerHTML=qzMsg(!!ok);});
+  if(activeCid&&cidToQid(activeCid)===qid)setTimeout(function(){navigateQ(1);},450);}
 function setMode(mode){
   currentMode=mode;
   document.getElementById('mode-test').classList.toggle('on',mode==='test');
@@ -868,6 +885,12 @@ function handleKey(e){
   var tg=e.target.tagName;
   if(tg==='INPUT'||tg==='TEXTAREA'||e.target.contentEditable==='true')return;
   var k=e.key;
+  if(currentMode==='quick'&&activeCid&&(k===' '||k==='Enter'||k==='1'||k==='2')){
+    e.preventDefault();var qq=cidToQid(activeCid);
+    if(k==='1'||k==='2'){if(!qzDone[qq])qzRate(qq,k==='1'?1:0);}else qzShow(activeCid);
+    return;
+  }
+  if(currentMode==='quick'&&k>='1'&&k<='5')return;
   if(k>='1'&&k<='5'){
     if(activeCid&&!state[cidToQid(activeCid)]){
       var aqid=cidToQid(activeCid);
