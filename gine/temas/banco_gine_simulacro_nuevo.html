@@ -1,0 +1,1063 @@
+<!--
+=============================================================
+  MOTOR BANCO MIR — v10
+  Novedades respecto a v9:
+  - Numeración correlativa fija por sección (no se mezcla)
+  - Badge neutro en pestaña "Todos" + mezcla real inter-secciones
+  - Temporizador sticky editable en header (play/pausa/reset)
+  - Buscador de texto en tiempo real
+  - Modo repaso rápido (muestra RC + explicación directamente)
+  - Estadísticas de errores recurrentes entre sesiones
+=============================================================
+-->
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title id="page-title">Banco MIR</title>
+<style>
+:root{
+  --bg:#f4f3ef;--surf:#fff;--bd:#e5e5e5;--bd2:#ddd;
+  --txt:#1a1a1a;--txt2:#555;--txt3:#999;--txt4:#666;
+  --hdr:#1a1a1a;--hdr-t:#fff;
+  --ok-bg:#e6f9ef;--ok-t:#0b6e52;--ok-bd:#2da060;
+  --ko-bg:#fdecea;--ko-t:#b91c1c;--ko-bd:#d94f45;
+  --sc-ok:#dcf5ed;--sc-ko:#fdecea;--sc-rem:#f0f0f0;--sc-rem-t:#666;
+  --exp:#fffbe6;--exp-bd:#f0c04a;--exp-t:#5a4500;
+  --prog:#e5e5e5;--prog-fill:#1a56db;
+  --star:#ccc;--star-on:#f59e0b;
+  --hint:#fafafa;--hint-bd:#eee;
+  --tab-bd:#ddd;--tab-t:#555;
+  --all-bg:#e8f0fe;--all-t:#1a56db;--all-bd:#1a56db;
+  --fab:#1a1a1a;--fab-t:#fff;
+  --nota-btn-t:#1a56db;--nota-btn-bd:#1a56db;--nota-btn-bg:var(--surf);
+  --timer-bg:#222;--timer-t:#fff;--timer-danger:#ef4444;
+}
+[data-theme="dark"]{
+  --bg:#0f0f1a;--surf:#1e1e30;--bd:#2a2a45;--bd2:#333355;
+  --txt:#e8e8f0;--txt2:#aaa;--txt3:#555;--txt4:#888;
+  --hdr:#0a0a14;--hdr-t:#e8e8f0;
+  --ok-bg:#0b3020;--ok-t:#4ade80;--ok-bd:#166534;
+  --ko-bg:#2d0a0a;--ko-t:#f87171;--ko-bd:#7f1d1d;
+  --sc-ok:#0b3020;--sc-ko:#2d0a0a;--sc-rem:#252540;--sc-rem-t:#aaa;
+  --exp:#1a1500;--exp-bd:#a37f10;--exp-t:#d4b84a;
+  --prog:#2a2a45;--prog-fill:#60a5fa;
+  --star:#444;--star-on:#f59e0b;
+  --hint:#1a1a2e;--hint-bd:#2a2a45;
+  --tab-bd:#2a2a45;--tab-t:#aaa;
+  --all-bg:#1a2a4a;--all-t:#60a5fa;--all-bd:#3b82f6;
+  --fab:#2a2a50;--fab-t:#e8e8f0;
+  --nota-btn-t:#60a5fa;--nota-btn-bd:#3b82f6;--nota-btn-bg:var(--surf);
+  --timer-bg:#1a1a2e;--timer-t:#e8e8f0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;transition:background .25s,color .25s}
+
+/* ── Header ── */
+header{background:var(--hdr);color:var(--hdr-t);padding:9px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;position:sticky;top:0;z-index:100}
+header h1{font-size:13.5px;font-weight:600;white-space:nowrap}
+.hright{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.hmeta{font-size:11px;color:#888}
+.hbtn{background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:3px 5px;border-radius:5px;transition:background .15s;color:var(--hdr-t)}
+.hbtn:hover{background:rgba(255,255,255,.12)}
+.sbadge{font-size:11px;padding:3px 9px;border-radius:5px;font-weight:500}
+.sbadge.ok{background:#15803d;color:#dcfce7}.sbadge.warn{background:#92400e;color:#fef3c7}
+
+/* ── Temporizador ── */
+#timer-wrap{display:flex;align-items:center;gap:4px;background:var(--timer-bg);border-radius:7px;padding:3px 8px;border:1px solid rgba(255,255,255,.1)}
+#timer-display{font-size:13px;font-weight:700;font-family:monospace;color:var(--timer-t);min-width:58px;text-align:center;cursor:pointer;border-radius:3px;padding:1px 3px}
+#timer-display:hover{background:rgba(255,255,255,.08)}
+#timer-display.editing{background:rgba(255,255,255,.15);outline:none;color:var(--timer-t)}
+#timer-display.danger{color:var(--timer-danger)}
+#timer-wrap button{background:none;border:none;cursor:pointer;color:rgba(255,255,255,.7);font-size:12px;padding:1px 3px;border-radius:3px;line-height:1}
+#timer-wrap button:hover{background:rgba(255,255,255,.12);color:#fff}
+
+/* ── Barra de progreso ── */
+#prog-wrap{height:3px;background:var(--prog);position:sticky;top:40px;z-index:99}
+#prog-bar{height:100%;background:var(--prog-fill);width:0%;transition:width .4s}
+
+/* ── Contenedor ── */
+.container{max-width:820px;margin:0 auto;padding:16px 12px}
+
+/* ── Buscador ── */
+.search-wrap{position:relative;margin-bottom:13px}
+.search-wrap input{width:100%;padding:8px 34px 8px 12px;border:1.5px solid var(--bd2);border-radius:8px;font-size:13px;background:var(--surf);color:var(--txt);outline:none;transition:border-color .15s}
+.search-wrap input:focus{border-color:var(--prog-fill)}
+.search-clear{position:absolute;right:9px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--txt3);font-size:16px;display:none;line-height:1}
+#search-count{font-size:11px;color:var(--txt3);margin-top:4px;display:none}
+
+/* ── Modo repaso ── */
+.mode-bar{display:flex;gap:6px;margin-bottom:12px;align-items:center}
+.mode-btn{padding:5px 12px;border:1.5px solid var(--bd2);border-radius:7px;cursor:pointer;font-size:12px;font-weight:500;background:var(--surf);color:var(--txt2);transition:all .15s}
+.mode-btn:hover{border-color:#999}
+.mode-btn.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Tabs ── */
+.tabs{display:flex;gap:7px;margin-bottom:13px;flex-wrap:wrap}
+.tab{padding:7px 14px;border:1.5px solid var(--tab-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;background:var(--surf);color:var(--tab-t);transition:all .15s}
+.tab:hover{border-color:#999;color:var(--txt)}
+.tab.t-all.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Score global ── */
+.ph-global{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 15px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-left:4px solid var(--prog-fill)}
+.score-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.sc{font-size:12px;font-weight:600;padding:3px 9px;border-radius:6px}
+.sc.ok{background:var(--sc-ok);color:var(--ok-t)}.sc.ko{background:var(--sc-ko);color:var(--ko-t)}.sc.rem{background:var(--sc-rem);color:var(--sc-rem-t)}
+
+/* ── Acciones ── */
+.global-actions{display:none;margin-bottom:10px;gap:7px;flex-wrap:wrap;align-items:center}
+.container[data-tab="all"] .global-actions{display:flex}
+.sec-actions{margin:6px 0 15px;display:flex;gap:7px;flex-wrap:wrap}
+.reset-btn{padding:7px 14px;background:var(--fab);color:var(--fab-t);border:none;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:opacity .15s}
+.reset-btn:hover{opacity:.82}
+.nota-btn{padding:7px 14px;background:var(--nota-btn-bg);color:var(--nota-btn-t);border:1.5px solid var(--nota-btn-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:background .15s}
+.nota-btn:hover{background:var(--all-bg)}
+
+/* ── Nota box ── */
+.nota-box,.global-nota-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:2px solid var(--bd2);font-size:13px;line-height:1.7;display:none}
+.nota-box.pass,.global-nota-box.pass{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t)}
+.nota-box.fail,.global-nota-box.fail{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t)}
+.nota-score{font-size:26px;font-weight:700;display:block;margin-bottom:4px}
+.nota-detail{font-size:12px;opacity:.85;font-family:monospace}
+
+/* ── Vista revisión ── */
+.review-list{margin-top:12px;border-top:1px solid var(--bd2);padding-top:10px}
+.review-title{font-size:12px;font-weight:700;margin-bottom:9px;color:var(--txt)}
+.review-sec-label{font-size:11.5px;font-weight:700;color:var(--txt3);margin:8px 0 5px;padding-top:6px;border-top:1px solid var(--bd)}
+.review-item{background:var(--surf);border-radius:8px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden}
+.review-item summary{padding:9px 12px;cursor:pointer;font-size:12.5px;color:var(--txt);list-style:none;display:flex;gap:8px;align-items:flex-start}
+.review-item summary::-webkit-details-marker{display:none}
+.review-item summary::before{content:'▶';font-size:9px;color:var(--txt3);flex-shrink:0;margin-top:4px;transition:transform .18s}
+details[open] summary::before{transform:rotate(90deg)}
+.review-body{padding:0 12px 11px}
+.review-ans{font-size:12px;color:var(--ok-t);margin-bottom:7px;font-weight:500}
+
+/* ── Estadísticas ── */
+.stats-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:1.5px solid var(--bd2);background:var(--surf);display:none}
+.stats-box.show{display:block}
+.stats-title{font-size:12px;font-weight:700;margin-bottom:10px;color:var(--txt)}
+.stats-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:12.5px}
+.stats-item:last-child{border-bottom:none}
+.stats-bar-wrap{flex:1;background:var(--sc-rem);border-radius:4px;height:6px;overflow:hidden}
+.stats-bar{height:100%;background:var(--ko-bd);border-radius:4px;transition:width .4s}
+.stats-n{font-size:11px;color:var(--txt3);white-space:nowrap}
+.stats-q{flex:2;color:var(--txt);font-size:12px;line-height:1.3}
+
+/* ── Panel secciones ── */
+.sec-panel{display:none}.sec-panel.visible{display:block}
+.ph{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ph-left{flex:1;display:flex;flex-direction:column;gap:5px}
+.ph-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt3);margin-bottom:1px}
+.ph-desc{font-size:12px;color:var(--txt4)}
+.fbtn{padding:6px 12px;font-size:12px;font-weight:500;border:1.5px solid var(--bd2);border-radius:8px;cursor:pointer;background:var(--surf);color:var(--txt2);transition:all .15s;white-space:nowrap}
+.fbtn:hover{border-color:#999;color:var(--txt)}.fbtn.on{background:var(--ko-bg);color:#b91c1c;border-color:#f87171}
+.no-failed{display:none;text-align:center;padding:16px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin-top:4px}
+.no-failed.show{display:block}
+.no-results{display:none;text-align:center;padding:20px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin:8px 0}
+
+/* ── Hint ── */
+.hint{font-size:11px;color:var(--txt3);margin-bottom:15px;padding:7px 11px;background:var(--hint);border-radius:6px;border:1px solid var(--hint-bd)}
+
+/* ── Tarjeta ── */
+.qcard{background:var(--surf);border-radius:10px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden;transition:box-shadow .15s}
+.qcard:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.qcard.kb-focus{outline:2px solid var(--prog-fill);outline-offset:-2px}
+.qcard.search-hidden{display:none}
+.qhead{padding:11px 13px;cursor:pointer;display:flex;align-items:flex-start;gap:9px}
+
+/* ── Badge numérico ── */
+.qnum{font-size:11px;font-weight:700;padding:3px 7px;border-radius:5px;white-space:nowrap;flex-shrink:0;margin-top:2px;background:var(--sc-rem);color:var(--sc-rem-t)}
+/* En pestaña "Todos" siempre neutro; en sección aplica color de sección */
+.qnum.sec-colored{background:var(--sec-dim);color:var(--sec-col)}
+
+.qtxt{font-size:13px;line-height:1.5;flex:1}
+.star-btn{background:none;border:none;cursor:pointer;font-size:15px;color:var(--star);padding:0 2px;flex-shrink:0;margin-top:2px;line-height:1;transition:color .15s,transform .15s}
+.star-btn:hover{transform:scale(1.2)}
+.star-btn .si{display:inline}.star-btn .sf{display:none}
+.star-btn.on .si{display:none}.star-btn.on .sf{display:inline;color:var(--star-on)}
+.chev{font-size:15px;color:var(--bd2);flex-shrink:0;margin-top:2px;transition:transform .2s}
+.qhead.open .chev{transform:rotate(180deg)}
+.qbody{display:none;padding:0 13px 13px}.qbody.open{display:block}
+
+/* ── Imagen ── */
+.clinimg-wrap{margin:9px 0 7px;background:#111;border-radius:8px;overflow:hidden;border:1px solid var(--bd2);text-align:center}
+.clinimg{max-width:100%;max-height:340px;object-fit:contain;display:block;margin:0 auto}
+.clinimg-cap{font-size:11px;color:var(--txt3);padding:4px 0 5px;background:var(--hint);border-top:1px solid var(--bd)}
+
+/* ── Opciones ── */
+.opts{list-style:none;margin-top:9px;display:flex;flex-direction:column;gap:5px}
+.opt{padding:9px 12px;border-radius:8px;border:1.5px solid var(--bd2);cursor:pointer;display:flex;align-items:flex-start;gap:9px;color:var(--txt);font-size:13px;line-height:1.45;transition:border-color .12s,background .12s;user-select:none}
+.opt:hover:not(.done){border-color:#999;background:var(--hint)}
+.opt.correct{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t);font-weight:500;cursor:default}
+.opt.wrong{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t);cursor:default}
+.opt.done:not(.correct):not(.wrong){cursor:default;opacity:.7}
+.onum{font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px;min-width:15px}
+
+/* ── Modo repaso rápido ── */
+.quick-card{padding:9px 12px;border-radius:8px;border:1.5px solid var(--ok-bd);background:var(--ok-bg);margin-top:8px}
+.quick-rc{font-size:12.5px;font-weight:600;color:var(--ok-t);margin-bottom:6px}
+
+/* ── Explicación ── */
+.expbox{margin-top:10px;padding:10px 12px;background:var(--exp);border-left:4px solid var(--exp-bd);border-radius:0 8px 8px 0;font-size:12.5px;color:var(--exp-t);line-height:1.65}
+.expbox b,.expbox strong{font-weight:600}
+.et{display:block;margin-bottom:4px;font-weight:600;font-size:13px}
+.atag{font-size:10px;padding:2px 6px;border-radius:4px;margin-left:5px;vertical-align:middle}
+.atag.ok{background:var(--sc-ok);color:var(--ok-t)}.atag.ko{background:var(--sc-ko);color:#c0392b}
+
+/* ── All-tab CSS ── */
+.container[data-tab="all"] .ph{display:none!important}
+.container[data-tab="all"] .sec-actions{display:none!important}
+.container[data-tab="all"] .no-failed{display:none!important}
+.container[data-tab="all"] .nota-box{display:none!important}
+.container:not([data-tab="all"]) .global-nota-box{display:none!important}
+.container:not([data-tab="all"]) #stats-global{display:none!important}
+</style>
+</head>
+<body>
+<script>var POOL=[{"t": "T1 Aparato genital", "q": "¿Cuál de las siguientes estructuras NO deriva del conducto mesonéfrico de Wolff?", "o": ["Epidídimo", "Conducto deferente", "Vesículas seminales", "Trompas de Falopio"], "c": 4, "e": "Las <b>trompas, el útero, el cérvix y el tercio superior de la vagina<\/b> derivan del conducto paramesonéfrico de <b>Müller<\/b>. De Wolff salen epidídimo, deferente, próstata y vesículas seminales.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-1"]}, {"t": "T1 Aparato genital", "q": "¿Cuál de las siguientes estructuras deriva del conducto paramesonéfrico de Müller?", "o": ["La uretra femenina y las glándulas de Skene", "El tercio superior de la vagina", "Los labios mayores y el monte de Venus", "El conducto deferente"], "c": 2, "e": "Müller origina trompas, útero, cérvix y <b>tercio superior de la vagina<\/b>. La uretra viene de las eminencias uretrales, los labios de las eminencias labioescrotales y el deferente de Wolff.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-2"]}, {"t": "T1 Aparato genital", "q": "Respecto a la regresión de los conductos genitales, señale la afirmación CORRECTA:", "o": ["Wolff regresa en el feto XY por acción de la AMH", "Müller regresa en el feto XY por acción de la AMH", "Müller regresa en el feto XX por falta de andrógenos", "Wolff regresa en el feto XY por falta de andrógenos"], "c": 2, "e": "La frase literal: <b>Müller regresa en el XY por la AMH<\/b> (regresión activa); <b>Wolff degenera en el XX por falta de andrógenos<\/b> (regresión pasiva). Uno muere por abandono, el otro es asesinado.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-3"]}, {"t": "T1 Aparato genital", "q": "Sobre las células germinales primordiales (CGP) es CIERTO que:", "o": ["Se originan en el epitelio germinativo del ovario", "Migran desde el saco vitelino por el mesenterio dorsal", "Proceden del mesodermo intermedio de la cresta genital", "Se forman en la médula de la gónada indiferenciada"], "c": 2, "e": "Las CGP nacen en el epiblasto, pasan a la <b>pared del saco vitelino<\/b> (3-4ª sem) y migran por el <b>mesenterio dorsal<\/b> hasta la cresta genital (5ª sem). El «epitelio germinativo» no las origina.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-4"]}, {"t": "T1 Aparato genital", "q": "¿Qué genes inducen la formación de la gónada indiferenciada a partir del mesodermo intermedio?", "o": ["SRY y SF1", "WT1 y SF1", "DAX1 y Wnt-4", "FGF9 y c-kit"], "c": 2, "e": "<b>WT1 y SF1<\/b> inducen la gónada bipotencial de la 6ª semana. SRY/SOX9 dirigen después al testículo; DAX1/Wnt-4 al ovario.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-5"]}, {"t": "T1 Aparato genital", "q": "En presencia del gen SRY, en la gónada indiferenciada:", "o": ["Aumenta DAX1 y disminuye SOX9", "Disminuye DAX1 y aumenta SOX9", "Aumentan a la vez DAX1 y SOX9", "Se activan Wnt-4 y la vía SCF/c-kit"], "c": 2, "e": "SRY hace <b>bajar DAX1 y subir SOX9<\/b>, con FGF9 y degeneración cortical → testículo. Sin SRY ocurre lo contrario (DAX1 alto, SOX9 bajo, Wnt-4) → ovario. DAX1 está en los dos lados: lo que cambia es si sube o baja.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-6"]}, {"t": "T1 Aparato genital", "q": "Sobre la cronología de la diferenciación gonadal, señale la afirmación FALSA:", "o": ["El testículo se diferencia hacia la 7ª-8ª semana post-fecundación", "El ovario se diferencia entre la 9ª y la 12ª semana post-fecundación", "Ovario y testículo se diferencian a la vez, en la 8ª semana", "La gónada es bipotencial e indiferenciada en la 6ª semana"], "c": 3, "e": "Error clásico: no se diferencian a la vez. <b>Testículo 7-8ª semana; ovario 9-12ª<\/b>. En la 8ª el ovario sigue como gónada indiferenciada.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-7"]}, {"t": "T1 Aparato genital", "q": "¿En qué fase se detiene la meiosis del ovocito durante la vida fetal?", "o": ["En metafase de la segunda división", "En diplotene de la profase I", "En metafase de la primera división", "En leptotene de la profase I"], "c": 2, "e": "Hacia la <b>semana 22<\/b> los ovocitos alcanzan el <b>diplotene de la profase I<\/b> y la meiosis se detiene ahí hasta la ovulación. La parada en metafase II es la de después del pico de LH.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-8"]}, {"t": "T1 Aparato genital", "q": "Sobre la dotación de células germinales femeninas, señale la afirmación FALSA:", "o": ["El pico es de unos 7 millones hacia la semana 20 de gestación", "Al nacer quedan unos 2 millones", "En la pubertad quedan unas 400.000 células germinales", "A lo largo de la vida fértil se ovulan unas 4.000"], "c": 4, "e": "Solo se ovulan <b>unas 400<\/b> en toda la vida fértil. La atresia es masiva y empieza antes de nacer: 7 millones → 2 millones → 400.000 → 400.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-9"]}, {"t": "T1 Aparato genital", "q": "¿Cuál de los siguientes restos embrionarios es de origen MÜLLERIANO?", "o": ["Conducto de Gartner", "Epoóforo (órgano de Rosenmüller)", "Hidátide de Morgagni", "Paroóforo"], "c": 3, "e": "La trampa fácil: Gartner, epoóforo y paroóforo son <b>wolffianos<\/b>; la <b>hidátide de Morgagni es mülleriana<\/b>, un quiste cercano a la fimbria. Ojo: la tabla 1.3 de los apuntes la lista bajo Wolff por error.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-10"]}, {"t": "T1 Aparato genital", "q": "El conducto de Gartner:", "o": ["Es un resto mülleriano en forma de quiste junto a la fimbria", "Es un resto wolffiano lateral al útero y la vagina", "Equivale a los conductillos eferentes", "Se localiza en el meso-ovario, cerca del hilio ovárico"], "c": 2, "e": "Gartner es un resto <b>wolffiano<\/b> en la <b>cara lateral del útero y la vagina<\/b>, equivalente al conducto deferente y eyaculador. El que equivale a eferentes y epidídimo es el epoóforo, en el meso-ovario.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-11"]}, {"t": "T1 Aparato genital", "q": "El útero septo (clase V de la clasificación AFS) se produce por:", "o": ["Fallo de desarrollo de un conducto de Müller", "Fallo de fusión de los conductos", "Fallo de reabsorción del tabique medio", "Exposición intraútero a dietilestilbestrol"], "c": 3, "e": "Septo = <b>fallo de reabsorción del tabique<\/b>, no de fusión. Fallo de fusión → didelfo o bicorne; fallo de desarrollo de un conducto → unicorne; DES → clase VII.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-12"]}, {"t": "T1 Aparato genital", "q": "Dos úteros y dos cérvix por fallo total de fusión de los conductos de Müller corresponden a:", "o": ["Útero unicorne (clase II)", "Útero didelfo (clase III)", "Útero bicorne (clase IV)", "Útero arcuato (clase VI)"], "c": 2, "e": "<b>Didelfo (clase III)<\/b>: fallo total de fusión, dos úteros y dos cérvix. El bicorne es un fallo parcial de fusión; el arcuato, la forma más leve.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-13"]}, {"t": "T1 Aparato genital", "q": "Ante el diagnóstico de una malformación mülleriana está indicado estudiar siempre:", "o": ["El cariotipo de la paciente", "El aparato urinario", "La función tiroidea", "La reserva ovárica (AMH)"], "c": 2, "e": "Las malformaciones müllerianas se asocian a <b>malformaciones renales<\/b> porque Wolff y Müller se desarrollan como vecinos: siempre se pide <b>imagen del aparato urinario<\/b>.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-14"]}, {"t": "T1 Aparato genital", "q": "Sobre el desarrollo de los genitales externos, señale la afirmación FALSA:", "o": ["En la 7ª semana los genitales externos aún son indiferenciados", "La vía masculina requiere convertir testosterona en DHT", "Después de la 12ª semana persiste la sensibilidad a andrógenos", "La vía femenina requiere estrógenos ováricos activos"], "c": 4, "e": "La vía femenina es la que se produce <b>en ausencia de andrógenos<\/b>; no necesita estrógenos. La masculina exige testosterona → <b>5α-reductasa → DHT<\/b> → receptor. Periodo crítico: >12 semanas.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-15"]}, {"t": "T1 Aparato genital", "q": "Mujer de 17 años con amenorrea primaria, mamas de desarrollo normal, escaso vello púbico y axilar, vagina corta de terminación ciega y ausencia de útero. Cariotipo 46,XY. ¿Por qué NO tiene útero?", "o": ["Porque sus testículos no producen testosterona", "Porque la AMH testicular hizo regresar a Müller", "Porque los conductos de Wolff sustituyeron a los de Müller", "Porque carece del gen SRY y la gónada es de tipo ovárico"], "c": 2, "e": "Síndrome de Morris: hay testosterona pero el receptor no funciona. Sertoli sí fabrica <b>AMH<\/b>, así que <b>Müller regresa igual<\/b>. Wolff no se desarrolla y los externos siguen la vía femenina: fenotipo femenino sin útero ni trompas.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-16"]}, {"t": "T1 Aparato genital", "q": "El hipospadias se debe a:", "o": ["Fallo del cierre del pliegue uretral", "Exceso de andrógenos en la 8ª semana", "Regresión incompleta del conducto de Müller", "Persistencia de la membrana cloacal"], "c": 1, "e": "Hipospadias = apertura uretral anómala por <b>fallo del cierre del pliegue uretral<\/b>: posterior/penescrotal, media/peneana o anterior/glandular.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-17"]}, {"t": "T1 Aparato genital", "q": "Sobre el epitelio superficial o «germinativo» del ovario es CIERTO que:", "o": ["Da origen a las células germinales", "Es un epitelio plano estratificado", "Es el origen de la mayoría de tumores epiteliales", "Se continúa con el endotelio de los vasos del hilio"], "c": 3, "e": "Nombre engañoso: no da las células germinales (vienen del saco vitelino). Es un <b>epitelio cúbico simple<\/b> continuo con el mesotelio peritoneal, y sí es el <b>origen de la mayoría de tumores epiteliales<\/b> del ovario.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-18"]}, {"t": "T1 Aparato genital", "q": "Sobre el folículo primordial, señale la afirmación FALSA:", "o": ["Tiene células foliculares planas en una sola capa", "El ovocito está en diplotene de la profase I", "Su crecimiento depende de las gonadotrofinas", "Se sitúa bajo la túnica albugínea"], "c": 3, "e": "El folículo primordial aparece en la vida fetal y su crecimiento es <b>independiente de gonadotrofinas<\/b>. Células planas, ovocito en diplotene, bajo la albugínea.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-19"]}, {"t": "T1 Aparato genital", "q": "Los cuerpos de Call-Exner aparecen en el folículo:", "o": ["Primordial", "Primario unilaminar", "Secundario o antral", "Cuerpo albicans"], "c": 3, "e": "En el folículo <b>secundario/antral<\/b>: aparecen los antros con líquido folicular y los <b>cuerpos de Call-Exner<\/b> (hialurónico y proteoglicanos); la teca se diferencia en interna (LH) y externa.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-20"]}, {"t": "T1 Aparato genital", "q": "¿Qué glucoproteína de la zona pelúcida actúa como receptora del espermatozoide?", "o": ["ZP1, de función no caracterizada", "ZP2, de unión secundaria", "ZP3, específica de especie", "Ninguna: la receptora está en la granulosa"], "c": 3, "e": "<b>ZP3<\/b> es la <b>receptora del espermatozoide<\/b>, contribuye a la reacción acrosómica y es específica de especie. ZP2 une de forma secundaria; ZP1 no está caracterizada. La ZP la producen ovocito y granulosa.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-21"]}, {"t": "T1 Aparato genital", "q": "Sobre el epitelio del cérvix, señale la afirmación CORRECTA:", "o": ["Endocérvix plano estratificado y exocérvix cilíndrico simple", "Endocérvix cilíndrico simple y exocérvix plano estratificado", "Ambos cilíndricos, con la zona de transformación en el OCI", "Ambos planos estratificados, ricos en glucógeno"], "c": 2, "e": "<b>Endocérvix: cilíndrico simple<\/b>, secretor de moco y con cilios, en criptas. <b>Exocérvix: plano estratificado<\/b> rico en glucógeno. Entre ambos, en el OCE, la zona de transformación (metaplasia escamosa), donde nace casi todo el cáncer de cérvix.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-22"]}, {"t": "T1 Aparato genital", "q": "En la trompa de Falopio, las células ciliadas son más numerosas en:", "o": ["El istmo y la porción intramural", "El infundíbulo y la ampolla", "La porción uterina", "Se reparten por igual en toda la trompa"], "c": 2, "e": "Ciliadas (núcleo apical) predominan en <b>infundíbulo y ampolla<\/b>; las secretoras (núcleo central, secretan antes de la ovulación) en istmo y porción uterina.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-23"]}, {"t": "T1 Aparato genital", "q": "¿Cuál de los siguientes NO es un tumor de células germinales del ovario?", "o": ["Disgerminoma", "Teratoma", "Tumor de Brenner", "Tumor del seno endodérmico"], "c": 3, "e": "El <b>tumor de Brenner es epitelial<\/b> (epitelio superficial), como seroso, mucinoso, endometrioide y células claras. Germinales: teratoma, disgerminoma, coriocarcinoma, carcinoma embrionario, seno endodérmico, gonadoblastoma.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-24"]}, {"t": "T1 Aparato genital", "q": "Durante la histerectomía el uréter puede lesionarse porque:", "o": ["Pasa por encima de la arteria uterina", "Pasa por debajo de la arteria uterina", "Discurre dentro del ligamento redondo", "Cruza la arteria ovárica en el hilio"], "c": 2, "e": "Dato quirúrgico de oro: el uréter pasa <b>POR DEBAJO de la arteria uterina<\/b> («water under the bridge»). Es la causa clásica de lesión ureteral en la histerectomía.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-25"]}, {"t": "T1 Aparato genital", "q": "El nervio pudendo procede de las raíces:", "o": ["T12, L1 y L2", "L2, L3 y L4", "S2, S3 y S4", "S1 y S2"], "c": 3, "e": "<b>Pudendo: S2-S4<\/b>. Ilioinguinal y genitofemoral: T12-L2; obturador: L2-L4; cluneal inferior: S1-S2. El parasimpático pélvico también sale de S2-S4.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-26"]}, {"t": "T1 Aparato genital", "q": "El ligamento cardinal o de Mackenrodt es:", "o": ["El sostén posterior del cérvix, con los uterosacros", "El sostén lateral principal del cérvix", "El sostén anterior, pubocervical", "El que conduce los vasos ováricos hasta el hilio"], "c": 2, "e": "<b>Cardinal = sostén lateral principal del cérvix<\/b>. Uterosacros: posterior; pubocervical: anterior; los vasos ováricos van por el ligamento suspensorio (infundíbulo-pélvico).", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-27"]}, {"t": "T1 Aparato genital", "q": "Sobre los diámetros de la pelvis ósea es CIERTO que:", "o": ["El conjugado verdadero es 1,5 cm menor que el diagonal", "El conjugado diagonal no es accesible en la exploración", "El conjugado recto es fijo por la rigidez del cóccix", "El diámetro transverso es el menor del estrecho superior"], "c": 1, "e": "<b>Conjugado verdadero ~11 cm, unos 1,5 cm más corto que el diagonal<\/b>, que es el que se mide al tacto. El conjugado recto varía (9,5-11,5) por la movilidad del cóccix; el transverso es la mayor distancia del estrecho superior.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-28"]}, {"t": "T1 Aparato genital", "q": "El drenaje linfático del ovario se dirige principalmente a los ganglios:", "o": ["Inguinales superficiales", "Obturatrices", "Lumboaórticos", "De Cloquet"], "c": 3, "e": "El ovario drena a <b>lumboaórticos<\/b>, siguiendo a sus vasos, que nacen de la aorta. Vulva y tercio inferior de vagina → inguinales; útero y cérvix → pélvicos (obturatriz e ilíacos).", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-29"]}, {"t": "T1 Aparato genital", "q": "Desde el útero hacia el ovario, el orden de las porciones de la trompa es:", "o": ["Istmo → intramural → ampolla → infundíbulo", "Intramural → istmo → ampolla → infundíbulo", "Intramural → ampolla → istmo → infundíbulo", "Infundíbulo → ampolla → istmo → intramural"], "c": 2, "e": "<b>Intramural → istmo → ampolla → infundíbulo<\/b> (con las fimbrias). Del útero: fondo → cuerpo → istmo → cérvix.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-30"]}, {"t": "T1 Aparato genital", "q": "¿Qué ligamento conduce los vasos ováricos?", "o": ["El ligamento redondo del útero", "El ligamento útero-ovárico, hacia el cuerno uterino", "El ligamento suspensorio del ovario", "El ligamento ancho, con sus dos hojas peritoneales"], "c": 3, "e": "El <b>suspensorio del ovario (infundíbulo-pélvico) lleva los vasos ováricos<\/b>, que nacen de la aorta. Ancho, útero-ovárico y redondo son derivados del descenso ovárico.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-31"]}, {"t": "T1 Aparato genital", "q": "La inervación parasimpática del aparato genital femenino procede de:", "o": ["Los nervios esplácnicos sacros, de origen simpático", "Los nervios esplácnicos pélvicos (S2-S4)", "El nervio obturador, de las raíces L2-L4", "El plexo hipogástrico superior, preaórtico"], "c": 2, "e": "Parasimpático: <b>esplácnicos pélvicos, S2-S4<\/b>. Simpático: esplácnicos sacros. Vía: plexo hipogástrico superior → nervios hipogástricos → plexo hipogástrico inferior → plexo uterovaginal.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-32"]}, {"t": "T1 Aparato genital", "q": "El himen corresponde a:", "o": ["Un resto del tabique urorrectal", "Un resto de la lámina vaginal", "La membrana cloacal", "La fusión distal de los conductos de Wolff"], "c": 2, "e": "Hacia la <b>semana 20<\/b> la vagina está completamente canalizada y <b>el resto de la lámina vaginal es el himen<\/b>.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-33"]}, {"t": "T1 Aparato genital", "q": "El conducto paramesonéfrico de Müller:", "o": ["Se origina en el mesodermo intermedio, como Wolff", "Nace por invaginación del epitelio celómico", "Discurre medial y posterior al conducto de Wolff", "Origina el epidídimo y el deferente"], "c": 2, "e": "Müller nace por <b>invaginación longitudinal del epitelio celómico<\/b> y va de lateral a medial. Wolff viene del mesodermo intermedio y discurre medial y posterior a Müller.", "ns": false, "src": ["gine_T01_aparato_genital_v1|gine-34"]}, {"t": "T2 Ciclo sexual", "q": "Los pulsos rápidos de GnRH favorecen sobre todo:", "o": ["La secreción de FSH", "La secreción de LH hipofisaria", "La secreción de prolactina y GH", "La inhibición de FSH y LH"], "c": 2, "e": "Lo decisivo no es cuánta GnRH se libera sino a qué ritmo: <b>pulsos lentos → FSH; pulsos rápidos → LH<\/b>. En fase lútea los pulsos son grandes y espaciados porque la progesterona enlentece el generador.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-1"]}, {"t": "T2 Ciclo sexual", "q": "La administración CONTINUA (no pulsátil) de GnRH produce:", "o": ["Un aumento sostenido de FSH y de LH hipofisarias", "Frenado de FSH y LH por desensibilización", "Un pico de LH y ovulación", "Un aumento selectivo de la FSH sin cambio de LH"], "c": 2, "e": "La GnRH continua <b>desensibiliza al gonadotropo y frena FSH y LH<\/b>. Es el mecanismo de los análogos de GnRH (endometriosis, miomas, cáncer de próstata, FIV): das la hormona estimuladora y el efecto es de frenado.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-2"]}, {"t": "T2 Ciclo sexual", "q": "Las neuronas hipotalámicas de kisspeptina:", "o": ["Secretan FSH directamente en la adenohipófisis", "Llevan la señal del estradiol a las neuronas GnRH", "Producen inhibina en la granulosa del dominante", "Frenan la LH durante toda la fase lútea del ciclo"], "c": 2, "e": "La <b>kisspeptina es el interruptor real del eje<\/b>: traduce el estradiol a las neuronas GnRH y hace que el pico de E2 dispare la descarga de LH. También explica el inicio de la pubertad y el freno del eje en anorexia o ejercicio extremo.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-3"]}, {"t": "T2 Ciclo sexual", "q": "¿Cuál de las siguientes NO es una función de la FSH?", "o": ["El desarrollo del folículo", "La inducción de la aromatasa en la granulosa", "La síntesis de inhibina por la granulosa", "La luteinización del folículo"], "c": 4, "e": "FSH = <b>Folículo<\/b>: desarrollo folicular, aromatización estrogénica e inhibina. La <b>luteinización es de la LH<\/b> (Liberar y Luteinizar), junto con la ovulación y la maduración del ovocito.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-4"]}, {"t": "T2 Ciclo sexual", "q": "Sobre la LH, señale la afirmación FALSA:", "o": ["Estimula la teca para que produzca andrógenos", "Desencadena la ovulación unas 12 h tras su pico", "Luteiniza el folículo tras ovular", "Recluta la cohorte folicular del día 1 al 5"], "c": 4, "e": "El <b>reclutamiento de la cohorte (días 1-5) lo hace la FSH<\/b> en meseta. La LH tiene una curva plana con un pico brusco a mitad de ciclo: teca → andrógenos, ovulación y luteinización.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-5"]}, {"t": "T2 Ciclo sexual", "q": "Según la teoría de las dos células y dos gonadotropinas:", "o": ["La teca, con FSH, aromatiza los andrógenos que recibe de la granulosa", "La granulosa, con LH, capta colesterol y hace andrógenos", "Teca con LH → andrógenos; granulosa con FSH → aromatización", "La granulosa, con FSH, sintetiza progesterona en la fase folicular"], "c": 3, "e": "<b>La teca tiene el colesterol pero no la aromatasa; la granulosa tiene la aromatasa pero no el colesterol.<\/b> LH → teca → androstendiona/testosterona → difunden → granulosa (FSH, aromatasa) → estrona/estradiol.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-6"]}, {"t": "T2 Ciclo sexual", "q": "Mujer de 24 años con oligomenorrea, hirsutismo y cociente LH/FSH elevado. ¿Cuál es el mecanismo de su hiperandrogenismo?", "o": ["Déficit de producción de andrógenos por la teca ovárica", "Exceso de aromatización de andrógenos en la granulosa", "Teca hiperestimulada y aromatización insuficiente", "Pulsos lentos de GnRH que elevan la FSH"], "c": 3, "e": "Ovario poliquístico en clave del tema: <b>pulsos rápidos de GnRH → LH alta<\/b> → teca hiperestimulada → exceso de andrógenos que la granulosa no da abasto para aromatizar → hiperandrogenismo, anovulación y oligomenorrea.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-7"]}, {"t": "T2 Ciclo sexual", "q": "¿Cuál de las siguientes sustancias ejerce ÚNICAMENTE feedback negativo sobre el eje?", "o": ["Los estrógenos", "La progesterona", "La activina", "La inhibina"], "c": 4, "e": "Estrógenos y progesterona están en las dos columnas (frenan a dosis bajas, estimulan si el pico es alto y sostenido). La activina es positiva. <b>Inhibina y folistatina: solo negativo<\/b>.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-8"]}, {"t": "T2 Ciclo sexual", "q": "La folistatina:", "o": ["Estimula la FSH actuando en la hipófisis", "Secuestra a la activina y así frena la FSH", "Es la inhibina característica de la fase lútea", "Induce directamente el pico de LH"], "c": 2, "e": "La folistatina <b>no actúa sobre la hipófisis: secuestra a la activina<\/b>, y por eso su efecto neto es inhibir la FSH. Error clásico: decir que la estimula.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-9"]}, {"t": "T2 Ciclo sexual", "q": "La inhibina B se produce sobre todo en:", "o": ["La fase lútea, por el cuerpo lúteo maduro", "La fase folicular, por la granulosa", "La hipófisis, junto con la FSH", "El endometrio en fase secretora tardía"], "c": 2, "e": "<b>Inhibina B = fase folicular (granulosa); inhibina A = fase lútea<\/b>. Ambas frenan la FSH.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-10"]}, {"t": "T2 Ciclo sexual", "q": "El folículo dominante es el que:", "o": ["Sobrevive con menos FSH por tener más receptores", "Es el de mayor tamaño en el reclutamiento del día 1", "Produce menos estradiol que sus vecinos", "Recibe más LH que el resto en la fase folicular precoz"], "c": 1, "e": "La paradoja elegante: el dominante produce estradiol e inhibina, baja la FSH y con ello mata a sus competidores. Gana <b>el que aguanta con menos FSH por sobreexpresar receptores de FSH<\/b>, no el más grande.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-11"]}, {"t": "T2 Ciclo sexual", "q": "Los folículos no dominantes se atresian porque:", "o": ["Reciben un exceso de FSH que los luteiniza antes", "Sin FSH no aromatizan y se vuelven androgénicos", "La LH los luteiniza de forma prematura al día 5", "La progesterona del ciclo previo inhibe su granulosa"], "c": 2, "e": "Al bajar la FSH, los no dominantes <b>no aromatizan → ambiente androgénico → atresia<\/b>.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-12"]}, {"t": "T2 Ciclo sexual", "q": "La ovulación se produce:", "o": ["Unas 12 horas después del pico máximo de LH", "Unas 12 horas después del pico máximo de progesterona", "Unas 34-36 horas después del pico máximo de LH", "En el mismo momento del pico máximo de estradiol"], "c": 1, "e": "En la diapositiva: <b>ovulación 12 h tras el pico de LH<\/b>. Los manuales dan 10-12 h tras el pico máximo y <b>34-36 h tras el INICIO del ascenso<\/b>: es compatible, solo cambia desde dónde se mide.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-13"]}, {"t": "T2 Ciclo sexual", "q": "¿Qué desencadena el pico de LH a mitad del ciclo?", "o": ["La caída brusca del estradiol al final de la fase folicular", "El estradiol alto y sostenido, ~300 pg/mL", "El ascenso de la progesterona del cuerpo lúteo", "La inhibina A del cuerpo lúteo"], "c": 2, "e": "El estradiol sube hasta <b>~300 pg/mL<\/b> y ese pico, alto y sostenido, dispara la descarga de LH por <b>feedback positivo<\/b>. Orden causal: sube E2 → pico de LH → ovulación → progesterona.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-14"]}, {"t": "T2 Ciclo sexual", "q": "Tras el pico de LH, el ovocito:", "o": ["Completa la meiosis II y queda como óvulo haploide", "Termina la meiosis I y se detiene en metafase II", "Permanece en diplotene de la profase I hasta la fecundación", "Completa las dos divisiones meióticas seguidas"], "c": 2, "e": "Estaba en profase I desde la vida fetal. El pico de LH le permite <b>terminar la meiosis I<\/b> (1.er corpúsculo polar) y vuelve a <b>detenerse en metafase II<\/b>. Solo la fecundación completa la meiosis II.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-15"]}, {"t": "T2 Ciclo sexual", "q": "En caso de embarazo, el cuerpo lúteo se mantiene gracias a:", "o": ["La LH hipofisaria, que sigue elevada todo el embarazo", "La hCG placentaria sobre el receptor de LH", "La FSH hipofisaria, hasta la semana 7-10", "La progesterona placentaria desde la implantación"], "c": 2, "e": "La <b>hCG<\/b> actúa sobre el <b>receptor de LH<\/b> y rescata el cuerpo lúteo hasta que la placenta toma el relevo (<b>semanas 7-10<\/b>). Sin embarazo regresa a cuerpo albicans y caen E2 y Pg → menstruación.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-16"]}, {"t": "T2 Ciclo sexual", "q": "Un ciclo menstrual de 35 días se explica por:", "o": ["Una fase lútea alargada", "Una fase folicular alargada", "Una fase lútea acortada", "Una fase menstrual prolongada"], "c": 2, "e": "La <b>fase lútea es fija, unos 14 días<\/b>. Lo que alarga o acorta el ciclo es la <b>fase folicular<\/b>; por eso la ovulación puede caer entre el día 11 y el 23.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-17"]}, {"t": "T2 Ciclo sexual", "q": "¿Cuál de las siguientes NO es secretada por el ovario?", "o": ["Inhibina", "Activina", "AMH", "FSH"], "c": 4, "e": "Pregunta trampa clásica: la <b>FSH es hipofisaria<\/b>. El ovario secreta estrógenos, progesterona, inhibina, activina, folistatina y AMH.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-18"]}, {"t": "T2 Ciclo sexual", "q": "Sobre la hormona antimülleriana (AMH), señale la afirmación FALSA:", "o": ["La producen los folículos preantrales y antrales pequeños", "Es el marcador de reserva ovárica", "Varía mucho a lo largo del ciclo", "Disminuye con la edad"], "c": 3, "e": "La AMH es <b>estable a lo largo del ciclo<\/b>: por eso sirve de marcador de reserva ovárica. La producen folículos preantrales y antrales pequeños y baja con la edad.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-19"]}, {"t": "T2 Ciclo sexual", "q": "Durante la menstruación:", "o": ["Se descama la capa basal y regenera la funcional", "Se descama la capa funcional y la basal regenera", "Se descaman ambas capas del endometrio", "No se descama ninguna capa: el sangrado es por diapédesis"], "c": 2, "e": "Se va la <b>funcional<\/b> (la que crece y secreta); se queda la <b>basal<\/b>, que regenera el endometrio en cada ciclo.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-20"]}, {"t": "T2 Ciclo sexual", "q": "El primer signo histológico posovulatorio en el endometrio es:", "o": ["Glándulas rectas con abundantes mitosis epiteliales", "Vacuolas subnucleares en el epitelio glandular", "Decidualización del estroma endometrial", "Necrosis isquémica de la capa funcional"], "c": 2, "e": "Fase secretora (progesterona): <b>vacuolas subnucleares<\/b> como primer signo, luego glándulas tortuosas en sacacorchos, edema, arterias espirales y al final decidualización. Las glándulas rectas con mitosis son de la proliferativa.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-21"]}, {"t": "T2 Ciclo sexual", "q": "La ventana de implantación se sitúa aproximadamente en los días:", "o": ["5 a 9 del ciclo", "12 a 14 del ciclo", "20 a 24 del ciclo", "26 a 28 del ciclo"], "c": 3, "e": "<b>Ventana de implantación ≈ días 20-24<\/b>, con el cuerpo lúteo maduro y la progesterona máxima. Del 25 al 28 hay luteólisis e isquemia.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-22"]}, {"t": "T2 Ciclo sexual", "q": "El sangrado menstrual se desencadena por:", "o": ["Vasodilatación de las arterias espirales por estrógenos", "Vasoconstricción de las arterias espirales por PGF2α", "Trombosis de las arterias rectas de la capa basal", "Contracción del miometrio inducida por oxitocina"], "c": 2, "e": "Sin embarazo → luteólisis → caen E2 y Pg → <b>vasoconstricción de las arterias espirales (PGF2α)<\/b> → isquemia → necrosis y descamación de la capa funcional.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-23"]}, {"t": "T2 Ciclo sexual", "q": "El moco cervical periovulatorio es:", "o": ["Escaso, espeso e impenetrable para el espermatozoide", "Abundante, filante y con cristalización en helecho", "Escaso y ácido por efecto de la progesterona lútea", "Abundante pero impermeable al espermatozoide"], "c": 2, "e": "Preovulatorio (estrógenos): <b>abundante, claro, filante, cristaliza en helecho<\/b> y permeable al espermatozoide. Lúteo (progesterona): escaso, espeso, impenetrable; base del efecto de los gestágenos.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-24"]}, {"t": "T2 Ciclo sexual", "q": "Una curva de temperatura basal bifásica indica:", "o": ["Un ciclo anovulatorio, sin formación de cuerpo lúteo", "Un ciclo ovulatorio, por la progesterona", "Una fase lútea insuficiente", "Un exceso de estrógenos en la fase folicular"], "c": 2, "e": "La <b>progesterona es termogénica<\/b>: sube la basal 0,3-0,5 °C tras la ovulación. Curva bifásica = ciclo ovulatorio; curva plana = anovulación.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-25"]}, {"t": "T2 Ciclo sexual", "q": "En el estudio de esterilidad, la prueba de rutina que confirma la ovulación es:", "o": ["El estradiol en fase folicular precoz, día 3-5", "La FSH y la LH basales del tercer día del ciclo", "La progesterona en fase lútea media, día 21-22", "La LH sérica en el día 14, antes de la ovulación"], "c": 3, "e": "Sin ovulación no hay cuerpo lúteo, y sin cuerpo lúteo no hay progesterona: la <b>progesterona elevada en el día 21-22<\/b> confirma que hubo ovulación.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-26"]}, {"t": "T2 Ciclo sexual", "q": "El estrógeno predominante en la posmenopausia es:", "o": ["El estradiol, de la granulosa", "La estrona, por aromatización periférica", "El estriol, de la unidad fetoplacentaria", "El estradiol, de origen suprarrenal"], "c": 2, "e": "Edad fértil: <b>estradiol (E2)<\/b>, granulosa. Posmenopausia: <b>estrona (E1)<\/b>, aromatización periférica en tejido graso. Embarazo: <b>estriol (E3)<\/b>, unidad fetoplacentaria.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-27"]}, {"t": "T2 Ciclo sexual", "q": "Sobre la duración del ciclo menstrual, señale la afirmación FALSA:", "o": ["Es más irregular justo tras la menarquia", "Es más irregular en la perimenopausia", "Entre los 20 y los 40 años ronda los 28-30 días", "La fase lútea es la que más varía entre mujeres"], "c": 4, "e": "La fase lútea es <b>fija (~14 días)<\/b>; la variable es la folicular. El ciclo es más largo e irregular en los extremos de la vida ovárica; también lo alteran trastornos alimenticios, estrés, fármacos y tiroides, prolactina, suprarrenal u ovario poliquístico.", "ns": false, "src": ["gine_T02_ciclo_sexual_v1|gine-28"]}, {"t": "T3 Dismenorrea y TPM", "q": "Sobre la dismenorrea primaria, señale la FALSA:", "o": ["Suele comenzar después de los 25 años", "Aparece 6–24 meses tras la menarquia", "Coincide con el inicio del sangrado", "Dura típicamente entre 8 y 72 horas"], "c": 1, "e": "La primaria empieza <b>6–24 meses tras la menarquia<\/b> (ciclos ovulatorios) y dura 8–72 h. El inicio después de los 25 años o el cambio de patrón es <b>red flag<\/b> de dismenorrea secundaria.", "ns": false, "src": ["gine_T03_dismenorrea_v1|dism-1"]}, {"t": "T3 Dismenorrea y TPM", "q": "¿Cuál es el mecanismo fundamental de la dismenorrea primaria?", "o": ["Hipersecreción de estrógenos en fase folicular", "Aumento de PGF2α y PGE2 endometriales", "Déficit de síntesis de leucotrienos uterinos", "Elevación de la progesterona al final del ciclo"], "c": 2, "e": "La caída de progesterona dispara la síntesis endometrial de <b>PGF2α y PGE2 (vía COX)<\/b> y leucotrienos → hipercontractilidad, vasoconstricción e isquemia uterina relativa.", "ns": false, "src": ["gine_T03_dismenorrea_v1|dism-2"]}, {"t": "T3 Dismenorrea y TPM", "q": "¿Qué acontecimiento inicia la cascada que produce la dismenorrea primaria?", "o": ["Pico de LH a mitad del ciclo menstrual", "Ascenso de estradiol en la fase folicular", "Caída brusca de progesterona (luteólisis)", "Liberación de oxitocina por la neurohipófisis"], "c": 3, "e": "Secuencia 2026: <b>luteólisis<\/b> → fosfolípidos de membrana → ácido araquidónico → PG y leucotrienos → hipercontractilidad → isquemia → dolor.", "ns": false, "src": ["gine_T03_dismenorrea_v1|dism-3"]}, {"t": "T3 Dismenorrea y TPM", "q": "Mujer de 41 años con dismenorrea progresiva de inicio hace 3 años. En la exploración, útero aumentado, globuloso y doloroso a la palpación. ¿Diagnóstico más probable?", "o": ["Endometriosis peritoneal", "Pólipo endometrial", "Mioma subseroso", "Adenomiosis uterina"], "c": 4, "e": "El <b>útero aumentado, globuloso y doloroso<\/b> es el dato orientador de la adenomiosis (tejido endometrial dentro del miometrio → hipercontractilidad focal).", "ns": false, "src": ["gine_T03_dismenorrea_v1|dism-4"]}, {"t": "T3 Dismenorrea y TPM", "q": "En la dismenorrea secundaria, señale el binomio causa–dato clínico INCORRECTO:", "o": ["Mioma submucoso – útero globuloso y doloroso", "Endometriosis – dispareunia profunda e infertilidad", "EIP – dolor a la movilización cervical", "DIU – relación temporal con la inserción"], "c": 1, "e": "El <b>útero globuloso y doloroso<\/b> es típico de la <b>adenomiosis<\/b>; el mioma submucoso se asocia a <b>sangrado menstrual abundante<\/b>.", "ns": false, "src": ["gine_T03_dismenorrea_v1|dism-5"]}, {"t": "T3 Dismenorrea y TPM", "q": "Adolescente de 14 años con dismenorrea intensa desde la menarquia, cada vez peor, y masa pélvica palpable. ¿Qué sospecha?", "o": ["Dismenorrea primaria de inicio precoz", "Malformación mülleriana obstructiva", "Adenomiosis con útero globuloso", "Enfermedad pélvica inflamatoria"], "c": 2, "e": "Inicio <b>con la menarquia<\/b> + <b>masa pélvica palpable<\/b> = malformación mülleriana obstructiva con retención de sangre (hematómetra). Tratamiento: corrección quirúrgica.", "ns": false, "src": ["gine_T03_dismenorrea_v1|dism-6"]}, {"t": "T3 Dismenorrea y TPM", "q": "¿Cuál de los siguientes NO es un signo de alarma de dismenorrea secundaria?", "o": ["Inicio del dolor después de los 25 años", "Escasa respuesta a AINE a dosis adecuadas", "Dolor que coincide con el inicio del sangrado", "Dispareunia profunda asociada"], "c": 3, "e": "Coincidir con el inicio del sangrado es propio de la <b>primaria<\/b>. Red flags: inicio >25 años, dolor no cíclico, mala respuesta a AINE/ACO, dispareunia profunda, SUA/infertilidad, masa anexial.", "ns": false, "src": ["gine_T03_dismenorrea_v1|dism-7"]}, {"t": "T3 Dismenorrea y TPM", "q": "Mujer de 19 años con dismenorrea desde los 14, sin red flags y exploración bimanual normal. ¿Conducta?", "o": ["Ecografía transvaginal y RM pélvica", "Laparoscopia diagnóstica de entrada", "Agonistas GnRH con terapia add-back", "AINE/ACO y reevaluar a los 3 ciclos"], "c": 4, "e": "Sin red flags = dismenorrea primaria: <b>tratamiento empírico (AINE/ACO)<\/b> y <b>reevaluar si no mejora en 3 ciclos<\/b>. La imagen se reserva para los casos con red flags.", "ns": false, "src": ["gine_T03_dismenorrea_v1|dism-8"]}, {"t": "T3 Dismenorrea y TPM", "q": "Paciente con red flags de dismenorrea, ecografía transvaginal normal y sospecha persistente de endometriosis. Siguiente paso:", "o": ["Laparoscopia diagnóstica", "Repetir la ecografía al cabo de un año", "Histerectomía con doble anexectomía", "Alta con AINE a demanda"], "c": 1, "e": "Algoritmo 2026: estudio negativo pero sospecha persistente (p. ej. endometriosis) → <b>laparoscopia diagnóstica<\/b> ± tratamiento hormonal empírico.", "ns": false, "src": ["gine_T03_dismenorrea_v1|dism-9"]}, {"t": "T3 Dismenorrea y TPM", "q": "Sobre el tratamiento de la dismenorrea primaria, señale la FALSA:", "o": ["Los AINE inhiben la síntesis de prostaglandinas", "Los AINE se inician al tercer día de sangrado", "Los ACO actúan inhibiendo la ovulación", "El DIU-LNG induce atrofia endometrial"], "c": 2, "e": "Los AINE se toman <b>desde 1–2 días antes o al inicio del sangrado<\/b>, para frenar la cascada de las prostaglandinas antes de que se desencadene.", "ns": false, "src": ["gine_T03_dismenorrea_v1|dism-10"]}, {"t": "T3 Dismenorrea y TPM", "q": "En la endometriosis refractaria, ¿por qué los agonistas GnRH requieren terapia «add-back»?", "o": ["Para evitar el brote inicial o flare-up", "Para potenciar la inhibición de aromatasa", "Para prevenir la pérdida de masa ósea", "Para mantener la ovulación durante el tto"], "c": 3, "e": "Los agonistas GnRH inducen una <b>pseudomenopausia<\/b> tras un flare-up inicial; el add-back (estrógenos/progestágenos) <b>previene la pérdida ósea<\/b>.", "ns": false, "src": ["gine_T03_dismenorrea_v1|dism-11"]}, {"t": "T3 Dismenorrea y TPM", "q": "Sobre el tratamiento de la endometriosis refractaria, señale la correcta:", "o": ["Los agonistas GnRH carecen de efecto flare-up", "La laparoscopia es siempre el tratamiento inicial", "El anastrozol es un agonista de la GnRH", "El letrozol frena la síntesis local de estrógenos"], "c": 4, "e": "Letrozol y anastrozol (<b>inhibidores de aromatasa<\/b>) bloquean la conversión periférica de andrógenos a estrógenos dentro de las lesiones. La laparoscopia se reserva a dolor refractario, endometriomas grandes o infertilidad.", "ns": false, "src": ["gine_T03_dismenorrea_v1|dism-12"]}, {"t": "T3 Dismenorrea y TPM", "q": "En el tratamiento etiológico de la dismenorrea secundaria, señale el binomio INCORRECTO:", "o": ["Mioma submucoso – agonistas GnRH de por vida", "Adenomiosis sin deseo genésico – histerectomía", "Pólipo endometrial – polipectomía histeroscópica", "EIP – antibioterapia y tratar a la pareja"], "c": 1, "e": "El mioma submucoso se trata con <b>miomectomía histeroscópica<\/b> (o DIU-LNG si la clínica es leve). Los agonistas GnRH se usan antes de la cirugía en la adenomiosis.", "ns": false, "src": ["gine_T03_dismenorrea_v1|dism-13"]}, {"t": "T3 Dismenorrea y TPM", "q": "En el estudio de una dismenorrea, ¿qué asociación exploración–sospecha es INCORRECTA?", "o": ["Nodularidad uterosacra: endometriosis", "Útero aumentado regular: miomatosis", "Anexos engrosados: enfermedad inflamatoria", "Útero aumentado irregular: miomatosis"], "c": 2, "e": "El útero aumentado <b>regular<\/b> sugiere <b>adenomiosis<\/b>; el <b>irregular<\/b>, miomas. Nodularidad uterosacra → endometriosis; anexos engrosados → EIP. [Apuntes previos]", "ns": false, "src": ["gine_T03_dismenorrea_v1|dism-14"]}, {"t": "T3 Dismenorrea y TPM", "q": "En el DSM-5, la dispareunia se agrupa junto al vaginismo en el:", "o": ["Trastorno del interés/excitación sexual femenino", "Trastorno orgásmico femenino", "Trastorno de dolor génito-pélvico/penetración", "Trastorno de síntomas somáticos"], "c": 3, "e": "El DSM-5 reúne dispareunia y vaginismo en el <b>trastorno de dolor génito-pélvico/penetración<\/b>.", "ns": false, "src": ["gine_T03_dismenorrea_v1|disp-1"]}, {"t": "T3 Dismenorrea y TPM", "q": "¿Cuál de las siguientes NO es una causa típica de dispareunia superficial?", "o": ["Atrofia genitourinaria", "Vulvodinia", "Liquen escleroso", "Endometriosis"], "c": 4, "e": "La <b>endometriosis<\/b> da dispareunia <b>profunda<\/b> (fondo de saco de Douglas). Superficial: atrofia, vulvodinia, infecciones, liquen escleroso, cicatriz de episiotomía.", "ns": false, "src": ["gine_T03_dismenorrea_v1|disp-2"]}, {"t": "T3 Dismenorrea y TPM", "q": "Mujer de 56 años, posmenopáusica, con dolor al inicio de la penetración y mucosa vaginal pálida y adelgazada. Tratamiento de primera línea:", "o": ["Estrógenos vaginales tópicos", "Pregabalina oral a dosis bajas", "Laparoscopia diagnóstica", "Toxina botulínica tipo A"], "c": 1, "e": "En la atrofia genitourinaria, los <b>estrógenos vaginales tópicos<\/b> son la primera línea; ospemifeno si están contraindicados; lubricantes e hidratantes de uso regular.", "ns": false, "src": ["gine_T03_dismenorrea_v1|disp-3"]}, {"t": "T3 Dismenorrea y TPM", "q": "Respecto al ospemifeno en la dispareunia, señale la correcta:", "o": ["Es un ISRS para la vulvodinia localizada", "Es un SERM oral si los estrógenos no se toleran", "Es un anestésico tópico previo al coito", "Es un progestágeno para la dispareunia profunda"], "c": 2, "e": "El <b>ospemifeno<\/b> es un <b>SERM oral<\/b> para la atrofia cuando los estrógenos están <b>contraindicados o no se toleran<\/b>.", "ns": false, "src": ["gine_T03_dismenorrea_v1|disp-4"]}, {"t": "T3 Dismenorrea y TPM", "q": "La prueba del hisopo en la exploración de una dispareunia sirve para:", "o": ["Tomar cultivo de candidiasis vaginal", "Valorar el hipertono del elevador", "Diagnosticar vulvodinia localizada", "Descartar endometriosis profunda"], "c": 3, "e": "La <b>prueba del hisopo<\/b> se usa para la <b>vulvodinia localizada<\/b>. El hipertono se valora palpando el elevador del ano.", "ns": false, "src": ["gine_T03_dismenorrea_v1|disp-5"]}, {"t": "T3 Dismenorrea y TPM", "q": "¿Cuál NO forma parte del tratamiento de la vulvodinia/dolor neuropático?", "o": ["Fisioterapia del suelo pélvico", "Lidocaína tópica antes del coito", "Tricíclicos tópicos u orales a dosis bajas", "Antibioterapia empírica prolongada"], "c": 4, "e": "Vulvodinia: <b>fisioterapia del suelo pélvico<\/b>, <b>lidocaína<\/b> tópica, tricíclicos a dosis bajas y <b>pregabalina<\/b> para la neuralgia del pudendo.", "ns": false, "src": ["gine_T03_dismenorrea_v1|disp-6"]}, {"t": "T3 Dismenorrea y TPM", "q": "¿Cuál de las siguientes NO es causa típica de dispareunia profunda?", "o": ["Cicatriz de episiotomía", "Endometriosis", "Adherencias por EIP", "Retroversión uterina fija"], "c": 1, "e": "La <b>cicatriz de episiotomía<\/b> produce dolor <b>introital<\/b> (superficial). Profunda: endometriosis, EIP/adherencias, miomas, congestión pélvica, retroversión fija.", "ns": false, "src": ["gine_T03_dismenorrea_v1|disp-7"]}, {"t": "T3 Dismenorrea y TPM", "q": "En la fisiopatología de la dispareunia, la vulvodinia se relaciona con:", "o": ["Hipoestrogenismo posmenopáusico", "Hipersensibilidad del nervio pudendo", "Espasmo reflejo del elevador del ano", "Implantes endometriósicos en Douglas"], "c": 2, "e": "Nivel 2 (nervios periféricos): <b>vulvodinia = hipersensibilidad del nervio pudendo<\/b>, y neuroma de episiotomía.", "ns": false, "src": ["gine_T03_dismenorrea_v1|disp-8"]}, {"t": "T3 Dismenorrea y TPM", "q": "En una paciente con dispareunia, ¿cuál es el primer paso diagnóstico más rentable?", "o": ["Solicitar una RM pélvica de entrada", "Hacer laparoscopia diagnóstica precoz", "Localizar si es superficial o profundo", "Realizar cultivos vaginales seriados"], "c": 3, "e": "<b>Localizar el dolor (superficial vs profundo)<\/b> orienta directamente el estudio y evita exploraciones innecesarias.", "ns": false, "src": ["gine_T03_dismenorrea_v1|disp-9"]}, {"t": "T3 Dismenorrea y TPM", "q": "Multípara de 45 años con dolor tras el coito, como un peso hipogástrico, y varices pélvicas en la ecografía. Sospecha:", "o": ["Vulvodinia localizada", "Atrofia genitourinaria posmenopáusica", "Liquen escleroso vulvar", "Congestión venosa pélvica"], "c": 4, "e": "El dolor <b>poscoital<\/b> tipo peso hipogástrico, típico de grandes multíparas, sugiere <b>congestión venosa pélvica<\/b>. [Apuntes previos]", "ns": false, "src": ["gine_T03_dismenorrea_v1|disp-10"]}, {"t": "T3 Dismenorrea y TPM", "q": "¿Cuál es la base fisiopatológica de la tensión premenstrual y el TDPM?", "o": ["Sensibilidad anómala del SNC a hormonas normales", "Exceso de progesterona circulante en la fase lútea", "Déficit de estrógenos en la fase folicular", "Hiperprolactinemia funcional premenstrual"], "c": 1, "e": "No hay alteración de niveles hormonales: es una <b>respuesta anómala del SNC a fluctuaciones hormonales normales<\/b>, no una alteración endocrina primaria.", "ns": false, "src": ["gine_T03_dismenorrea_v1|tpm-1"]}, {"t": "T3 Dismenorrea y TPM", "q": "¿Qué metabolito y receptor se implican en la ansiedad e irritabilidad del TDPM?", "o": ["Alopregnanolona – receptor NMDA", "Alopregnanolona – receptor GABA-A", "Pregnenolona – receptor dopaminérgico D2", "Estrona – receptor serotoninérgico 5-HT1A"], "c": 2, "e": "La <b>alopregnanolona<\/b>, metabolito de la progesterona, ejerce una modulación anómala sobre el <b>receptor GABA-A<\/b> en mujeres susceptibles.", "ns": false, "src": ["gine_T03_dismenorrea_v1|tpm-2"]}, {"t": "T3 Dismenorrea y TPM", "q": "La prevalencia del trastorno disfórico premenstrual en mujeres en edad fértil es del:", "o": ["20–30 %", "40–50 %", "3–8 %", "0,5–1 %"], "c": 3, "e": "TDPM: <b>3–8 %<\/b>. El SPM llega <b>hasta 20–30 %<\/b>.", "ns": false, "src": ["gine_T03_dismenorrea_v1|tpm-3"]}, {"t": "T3 Dismenorrea y TPM", "q": "Sobre los criterios DSM-5 del TDPM, señale la FALSA:", "o": ["Al menos un síntoma afectivo", "Un total mínimo de cinco síntomas", "Registro prospectivo de al menos 2 ciclos", "Síntomas que persisten en fase folicular"], "c": 4, "e": "Los síntomas aparecen en la <b>última semana antes de la menstruación<\/b> y <b>remiten en la fase folicular<\/b>; ≥1 afectivo, 5 en total, deterioro funcional y registro prospectivo ≥2 ciclos.", "ns": false, "src": ["gine_T03_dismenorrea_v1|tpm-4"]}, {"t": "T3 Dismenorrea y TPM", "q": "Mujer de 29 años con irritabilidad, ánimo deprimido y ansiedad la semana previa a la regla, que remiten con el sangrado y le obligan a faltar al trabajo. Un registro de 2 ciclos confirma 6 síntomas. Tratamiento farmacológico de primera línea:", "o": ["Sertralina en fase lútea o continua", "Ooforectomía bilateral con histerectomía", "Agonistas GnRH con add-back", "Benzodiacepinas de forma continua"], "c": 1, "e": "Es un <b>TDPM<\/b>: primera línea farmacológica, <b>ISRS<\/b> (sertralina, fluoxetina) en fase lútea o continuos, o ACO con drospirenona. GnRH y ooforectomía son para refractarios.", "ns": false, "src": ["gine_T03_dismenorrea_v1|tpm-5"]}, {"t": "T3 Dismenorrea y TPM", "q": "El registro prospectivo de una paciente muestra síntomas afectivos que empeoran antes de la regla pero persisten en la fase folicular. Debe considerarse:", "o": ["TDPM confirmado de intensidad grave", "Depresión o ansiedad de base agravadas", "Síndrome premenstrual de grado leve", "Déficit de progesterona en fase lútea"], "c": 2, "e": "Sin patrón lúteo estricto con remisión folicular no hay SPM/TDPM: pensar en <b>exacerbación premenstrual de otro trastorno<\/b> (depresión, ansiedad de base).", "ns": false, "src": ["gine_T03_dismenorrea_v1|tpm-6"]}, {"t": "T3 Dismenorrea y TPM", "q": "¿Cuál de los siguientes NO es un tratamiento de primera línea del SPM?", "o": ["Ejercicio aeróbico regular", "Calcio y vitamina B6", "Agonistas GnRH con add-back", "Progesterona cíclica en fase lútea"], "c": 3, "e": "SPM: estilo de vida, <b>calcio 1200 mg/día<\/b> y B6, AINE, progesterona cíclica. Los <b>agonistas GnRH + add-back<\/b> se reservan al TDPM refractario.", "ns": false, "src": ["gine_T03_dismenorrea_v1|tpm-7"]}, {"t": "T3 Dismenorrea y TPM", "q": "Los anticonceptivos combinados útiles en el TDPM contienen drospirenona por su acción:", "o": ["Estrogénica potente y androgénica leve", "Glucocorticoide y progestágena pura", "Antiestrogénica y antiprogestágena", "Antimineralocorticoide y antiandrogénica"], "c": 4, "e": "La <b>drospirenona<\/b> tiene acción <b>antimineralocorticoide y antiandrogénica<\/b>.", "ns": false, "src": ["gine_T03_dismenorrea_v1|tpm-8"]}, {"t": "T3 Dismenorrea y TPM", "q": "Sobre el espectro SPM–TDPM, señale la FALSA:", "o": ["El SPM cursa con deterioro funcional grave", "Ambos comparten la cronología lútea", "El TDPM es una categoría del DSM-5", "En el TDPM predominan los síntomas afectivos graves"], "c": 1, "e": "El SPM produce <b>interferencia leve<\/b>; el <b>deterioro funcional significativo<\/b> es lo que define al TDPM.", "ns": false, "src": ["gine_T03_dismenorrea_v1|tpm-9"]}, {"t": "T3 Dismenorrea y TPM", "q": "El vaginismo se define fundamentalmente por:", "o": ["El dolor que precede a la penetración", "El espasmo muscular reflejo involuntario", "La ausencia de deseo sexual de la mujer", "Una causa orgánica vulvar objetivable"], "c": 2, "e": "Se define por el <b>espasmo reflejo<\/b>, no por el dolor; en la dispareunia el dolor precede y motiva la evitación. El deseo está <b>conservado<\/b>.", "ns": false, "src": ["gine_T03_dismenorrea_v1|vag-1"]}, {"t": "T3 Dismenorrea y TPM", "q": "¿Qué músculo es el principal implicado en el espasmo del vaginismo?", "o": ["Músculo bulboesponjoso", "Músculo piriforme", "Músculo pubococcígeo", "Músculo obturador interno"], "c": 3, "e": "Espasmo involuntario de la musculatura perineal, <b>principalmente el pubococcígeo<\/b> (y el elevador del ano), en el tercio externo vaginal.", "ns": false, "src": ["gine_T03_dismenorrea_v1|vag-2"]}, {"t": "T3 Dismenorrea y TPM", "q": "Mujer de 24 años que nunca ha podido usar tampones ni tener coito, pese a desearlo. Al intentar el tacto se contrae el introito e impide la exploración. ¿Actitud?", "o": ["Explorar bajo sedación para completar el tacto", "Diagnosticar un trastorno del deseo sexual", "Indicar himenectomía programada", "No forzar: el espasmo es diagnóstico en sí"], "c": 4, "e": "Si el espasmo impide la exploración, <b>no forzar: es diagnóstico en sí mismo<\/b>. Vaginismo primario; luego descartar causa orgánica asociada.", "ns": false, "src": ["gine_T03_dismenorrea_v1|vag-3"]}, {"t": "T3 Dismenorrea y TPM", "q": "Sobre los tipos de vaginismo, señale la FALSA:", "o": ["El secundario excluye cualquier dolor previo", "En el primario nunca se logró la penetración", "El secundario sigue a menudo a un parto traumático", "El primario asocia ansiedad anticipatoria"], "c": 1, "e": "El secundario suele seguir a un <b>desencadenante<\/b>: parto traumático, cirugía, infección o <b>dolor previo<\/b> (condicionamiento dolor-miedo-espasmo).", "ns": false, "src": ["gine_T03_dismenorrea_v1|vag-4"]}, {"t": "T3 Dismenorrea y TPM", "q": "¿Cuál es el pilar del tratamiento del vaginismo?", "o": ["Toxina botulínica de primera línea", "Fisioterapia del suelo pélvico", "Himenectomía quirúrgica", "Benzodiacepinas orales"], "c": 2, "e": "El pilar es la <b>fisioterapia del suelo pélvico<\/b> (biofeedback, masaje perineal, desensibilización) con dilatadores progresivos.", "ns": false, "src": ["gine_T03_dismenorrea_v1|vag-5"]}, {"t": "T3 Dismenorrea y TPM", "q": "Sobre los dilatadores vaginales en el vaginismo, señale la FALSA:", "o": ["Se usan de menor a mayor calibre", "Los controla la propia paciente", "Se empieza por el de mayor calibre", "Se avanza al ritmo de la paciente"], "c": 3, "e": "Los dilatadores se usan <b>de menor a mayor calibre<\/b>, bajo control de la paciente y a su ritmo, para recuperar el control de la contracción.", "ns": false, "src": ["gine_T03_dismenorrea_v1|vag-6"]}, {"t": "T3 Dismenorrea y TPM", "q": "Sobre el abordaje del vaginismo, señale la correcta:", "o": ["La toxina botulínica es de primera línea", "Basta con el ginecólogo, sin otros especialistas", "Los dilatadores se aplican bajo anestesia", "La TCC aborda el ciclo dolor-ansiedad-espasmo"], "c": 4, "e": "La <b>TCC<\/b> trata el componente ansiógeno y la fobia a la penetración. Abordaje multidisciplinar; la <b>toxina botulínica A<\/b> se reserva a refractarios severos.", "ns": false, "src": ["gine_T03_dismenorrea_v1|vag-7"]}, {"t": "T5 HUA", "q": "Según la FIGO, ¿cuál es el rango normal de frecuencia del ciclo menstrual?", "o": ["21 – 35 días", "24 – 38 días", "26 – 32 días", "28 – 40 días"], "c": 2, "e": "Parámetros normales FIGO: frecuencia <b>24-38 días<\/b>, regularidad ± 2 a 20 días, duración ≤ 8 días y volumen sin percepción de exceso.", "ns": false, "src": ["gine_T05_hua_v1|figo-1"]}, {"t": "T5 HUA", "q": "¿Qué duración del sangrado menstrual se considera normal según la FIGO?", "o": ["≤ 5 días", "≤ 6 días", "≤ 8 días", "≤ 10 días"], "c": 3, "e": "Duración normal del sangrado: <b>≤ 8 días<\/b>.", "ns": false, "src": ["gine_T05_hua_v1|figo-2"]}, {"t": "T5 HUA", "q": "Sobre la terminología FIGO de la hemorragia uterina anormal, señale la FALSA:", "o": ["Recomienda abandonar el término «menorragia»", "Conserva el término «hemorragia disfuncional»", "Describe el sangrado con 4 parámetros objetivos", "Valora el volumen por la percepción de la paciente"], "c": 2, "e": "La FIGO recomienda <b>abandonar<\/b> «menorragia», «metrorragia» y «<b>hemorragia uterina disfuncional<\/b>». El volumen normal es el que la paciente no percibe como excesivo.", "ns": false, "src": ["gine_T05_hua_v1|figo-3"]}, {"t": "T5 HUA", "q": "La HUA crónica se define como un sangrado anormal en volumen, regularidad o frecuencia presente durante:", "o": ["≥ 3 meses", "≥ 6 meses", "≥ 9 meses", "≥ 12 meses"], "c": 2, "e": "HUA crónica: sangrado anormal durante <b>≥ 6 meses<\/b>. HUA aguda: episodio abundante que requiere intervención inmediata.", "ns": false, "src": ["gine_T05_hua_v1|figo-4"]}, {"t": "T5 HUA", "q": "Mujer de 58 años, con la última regla hace 6 años, que consulta por un único episodio de manchado vaginal escaso. ¿Cuál es la actitud correcta?", "o": ["Tranquilizar: un manchado aislado es fisiológico", "Estudiarlo para descartar malignidad endometrial", "Pautar gestágenos y revisar solo si se repite", "Solicitar FSH y estradiol para confirmar menopausia"], "c": 2, "e": "<b>Todo sangrado posmenopáusico es anormal<\/b> y obliga a descartar malignidad endometrial.", "ns": false, "src": ["gine_T05_hua_v1|figo-5"]}, {"t": "T5 HUA", "q": "¿Cuál es el mecanismo fisiopatológico de la HUA anovulatoria?", "o": ["Exceso de progesterona con atrofia endometrial", "Estrógeno continuo sin oposición progestágena", "Aumento de PGF2α con vasoconstricción local", "Hiperfibrinólisis en ciclos ovulatorios regulares"], "c": 2, "e": "Sin ovulación no hay progesterona: el <b>estrógeno sin oposición<\/b> produce proliferación descontrolada, endometrio inestable y ruptura focal impredecible.", "ns": false, "src": ["gine_T05_hua_v1|fisio-1"]}, {"t": "T5 HUA", "q": "En la fisiopatología de la HUA ovulatoria (SMA) encontramos todo lo siguiente EXCEPTO:", "o": ["Aumento local de PGE2 y prostaciclina", "Aumento del activador del plasminógeno", "Vasodilatación endometrial sostenida", "Aumento local de PGF2α vasoconstrictora"], "c": 4, "e": "En la HUA ovulatoria hay <b>↑ PGE2/PGI2 y ↓ PGF2α<\/b> → vasodilatación sostenida; y ↑ activador del plasminógeno → hiperfibrinólisis local.", "ns": false, "src": ["gine_T05_hua_v1|fisio-2"]}, {"t": "T5 HUA", "q": "Adolescente de 14 años, menarquia hace un año, con sangrados irregulares e impredecibles, a veces prolongados, sin dolor menstrual. ¿Cuál es el mecanismo más probable?", "o": ["Anovulación con estrógeno sin oposición", "Hiperfibrinólisis endometrial local", "Mioma submucoso que distorsiona la cavidad", "Carcinoma de endometrio incipiente"], "c": 1, "e": "Los <b>extremos de la vida reproductiva<\/b> (adolescencia) causan disfunción ovulatoria: sangrado irregular, impredecible, <b>sin dismenorrea significativa<\/b>.", "ns": false, "src": ["gine_T05_hua_v1|fisio-3"]}, {"t": "T5 HUA", "q": "¿Cuál de las siguientes NO figura entre las causas frecuentes de disfunción ovulatoria?", "o": ["Hipotiroidismo primario", "Adenomiosis uterina difusa", "Ejercicio físico extremo", "Síndrome de ovario poliquístico"], "c": 2, "e": "Causas de disfunción ovulatoria: SOP, hipotiroidismo/hiperprolactinemia, extremos de la vida reproductiva, obesidad y ejercicio extremo, estrés y bajo peso. La <b>adenomiosis<\/b> es causa estructural y contribuye a la SMA ovulatoria.", "ns": false, "src": ["gine_T05_hua_v1|fisio-4"]}, {"t": "T5 HUA", "q": "Señale la correcta sobre el patrón clínico de la HUA ovulatoria frente a la anovulatoria:", "o": ["La ovulatoria es irregular e impredecible", "La anovulatoria asocia dismenorrea intensa", "La ovulatoria es cíclica y con dismenorrea", "Ambas cursan con ciclos regulares y cortos"], "c": 3, "e": "HUA ovulatoria: sangrado <b>cíclico, predecible, abundante, a menudo con dismenorrea<\/b>. La anovulatoria es irregular y sin dismenorrea significativa.", "ns": false, "src": ["gine_T05_hua_v1|fisio-5"]}, {"t": "T5 HUA", "q": "¿Cuál de las siguientes causas de HUA pertenece al grupo NO estructural (COEIN)?", "o": ["Pólipo endometrial", "Hiperplasia endometrial", "Disfunción ovulatoria", "Leiomioma submucoso"], "c": 3, "e": "COEIN: Coagulopatía, disfunción <b>Ovulatoria<\/b>, Endometrial, Iatrogénica, No clasificada. La hiperplasia es la «M» de PALM.", "ns": false, "src": ["gine_T05_hua_v1|palm-1"]}, {"t": "T5 HUA", "q": "Adolescente de 16 años con sangrado menstrual abundante desde la menarquia, epistaxis y equimosis fáciles. ¿Categoría PALM-COEIN y estudio clave?", "o": ["C: perfil de coagulación y factor vW", "O: TSH, prolactina y perfil androgénico", "E: diagnóstico de exclusión", "P: ecografía e histerosonografía"], "c": 1, "e": "SMA desde la menarquia con equimosis fáciles → <b>coagulopatía<\/b> (ej. von Willebrand): perfil de coagulación y factor vW; tratamiento con ácido tranexámico.", "ns": false, "src": ["gine_T05_hua_v1|palm-2"]}, {"t": "T5 HUA", "q": "Sobre la causa endometrial («E») de la clasificación PALM-COEIN, señale la correcta:", "o": ["Se identifica bien con ecografía TV", "Es un diagnóstico de exclusión", "Cursa con ciclos anovulatorios", "Equivale a la endometriosis pélvica"], "c": 2, "e": "«E» = trastorno primario de la <b>hemostasia endometrial local<\/b>, SMA con ciclos ovulatorios normales: <b>diagnóstico de exclusión<\/b>. No es endometriosis.", "ns": false, "src": ["gine_T05_hua_v1|palm-3"]}, {"t": "T5 HUA", "q": "¿Cuál de los siguientes NO es un ejemplo de causa iatrogénica de HUA?", "o": ["Tratamiento con tamoxifeno", "Anticoagulación oral", "Portadora de DIU", "Istmocele poscesárea"], "c": 4, "e": "Iatrogénica: anticoagulantes, DIU, anticonceptivos, tamoxifeno. El <b>istmocele<\/b> y la malformación arteriovenosa son «N» (no clasificada).", "ns": false, "src": ["gine_T05_hua_v1|palm-4"]}, {"t": "T5 HUA", "q": "Mujer de 42 años con sangrado menstrual abundante y dismenorrea intensa; en el tacto bimanual el útero está aumentado de tamaño y es doloroso. ¿Cuál es la sospecha principal?", "o": ["Pólipo endometrial", "Adenomiosis", "Disfunción ovulatoria", "Coagulopatía"], "c": 2, "e": "Adenomiosis (tejido endometrial en el miometrio): <b>SMA + dismenorrea, útero aumentado y doloroso<\/b>. Estudio con ECO/RM.", "ns": false, "src": ["gine_T05_hua_v1|palm-5"]}, {"t": "T5 HUA", "q": "¿Cuál es el patrón clínico típico del pólipo endometrial?", "o": ["SMA desde la menarquia con equimosis", "Sangrado intermenstrual o manchado", "SMA acompañado de presión pélvica", "SMA con dismenorrea y útero doloroso"], "c": 2, "e": "Pólipo: <b>sangrado intermenstrual o manchado<\/b>; diagnóstico con ECO TV/histerosonografía y tratamiento con polipectomía histeroscópica.", "ns": false, "src": ["gine_T05_hua_v1|palm-6"]}, {"t": "T5 HUA", "q": "Una malformación arteriovenosa uterina como causa de HUA se clasifica en la categoría:", "o": ["M – Malignidad/hiperplasia", "L – Leiomioma", "I – Iatrogénica", "N – No clasificada"], "c": 4, "e": "«N» (no clasificada): malformación arteriovenosa, istmocele. Sospechar si no hay otra causa; estudio con <b>ECO Doppler / RM<\/b>.", "ns": false, "src": ["gine_T05_hua_v1|palm-7"]}, {"t": "T5 HUA", "q": "Ante toda hemorragia uterina anormal en edad reproductiva, ¿cuál es el primer paso diagnóstico?", "o": ["Ecografía transvaginal", "Determinación de β-hCG", "Biopsia de endometrio", "Estudio de coagulación"], "c": 2, "e": "<b>β-hCG siempre, primer paso<\/b>: descartar embarazo; si es positiva, valorar causa gestacional (aborto, ectópico) antes de continuar.", "ns": false, "src": ["gine_T05_hua_v1|dx-1"]}, {"t": "T5 HUA", "q": "¿Cuál es la prueba de imagen de primera línea para evaluar el útero y el endometrio en la HUA?", "o": ["Resonancia magnética", "Ecografía transvaginal", "Histeroscopia diagnóstica", "Tomografía computarizada"], "c": 2, "e": "La <b>ecografía transvaginal<\/b> es la primera línea; la histerosonografía caracteriza lesiones focales intracavitarias.", "ns": false, "src": ["gine_T05_hua_v1|dx-2"]}, {"t": "T5 HUA", "q": "Mujer de 38 años, obesa y con SOP, que consulta por sangrados irregulares. La ecografía transvaginal no muestra lesión focal. ¿Cuál es el paso siguiente más adecuado?", "o": ["Biopsia endometrial", "Tratar como COEIN sin más estudio", "Resonancia magnética pélvica", "Histerectomía total"], "c": 1, "e": "Biopsia si <b>≥ 45 años o < 45 con factores de riesgo<\/b> (obesidad, SOP, estrógeno sin oposición, fallo terapéutico): es una alerta que cambia la ruta del algoritmo.", "ns": false, "src": ["gine_T05_hua_v1|dx-3"]}, {"t": "T5 HUA", "q": "En la anamnesis de una paciente con HUA, el antecedente de epistaxis, gingivorragia y hemorragia posparto debe hacer sospechar:", "o": ["Una coagulopatía de base", "Una disfunción ovulatoria", "Una adenomiosis difusa", "Un pólipo endometrial"], "c": 1, "e": "Antecedentes de sangrado (epistaxis, gingivorragia, hemorragia posparto o quirúrgica) → <b>sospechar coagulopatía<\/b>.", "ns": false, "src": ["gine_T05_hua_v1|dx-4"]}, {"t": "T5 HUA", "q": "En el algoritmo diagnóstico de la HUA, si la ecografía transvaginal no muestra lesión focal ni estructural y no hay alertas, ¿qué se hace?", "o": ["Repetir la ecografía a los 6 meses", "Clasificar como causa COEIN", "Indicar histeroscopia quirúrgica", "Solicitar RM obligatoriamente"], "c": 2, "e": "Sin lesión estructural → <b>COEIN<\/b> (no estructural). Si hay lesión → histerosonografía, RMN, histeroscopia o biopsia dirigida.", "ns": false, "src": ["gine_T05_hua_v1|dx-5"]}, {"t": "T5 HUA", "q": "¿Cuál es la opción médica más eficaz para el sangrado menstrual abundante crónico?", "o": ["Ácido tranexámico", "DIU de levonorgestrel", "Naproxeno durante la regla", "Anticonceptivo oral combinado"], "c": 2, "e": "El <b>DIU con levonorgestrel<\/b> es la opción médica más eficaz para el SMA crónico.", "ns": false, "src": ["gine_T05_hua_v1|tto-1"]}, {"t": "T5 HUA", "q": "En el manejo agudo de una HUA grave en urgencias, ¿cuál se considera el tratamiento de elección?", "o": ["DIU de levonorgestrel", "Ácido tranexámico", "Análogos de GnRH", "Ablación endometrial"], "c": 2, "e": "Manejo agudo grave: estrógenos IV/orales a dosis alta, <b>ácido tranexámico (tratamiento de elección en urgencias)<\/b> y taponamiento con balón si es refractario.", "ns": false, "src": ["gine_T05_hua_v1|tto-2"]}, {"t": "T5 HUA", "q": "Sobre el tratamiento médico de la HUA, señale la FALSA:", "o": ["El ácido tranexámico se usa solo durante el sangrado", "Los AINE son útiles si hay dismenorrea asociada", "Los análogos de GnRH se usan de forma prolongada", "Los ACO pueden darse en pauta cíclica o continua"], "c": 3, "e": "Los <b>análogos de GnRH<\/b> son de <b>uso breve<\/b>: previos a cirugía o en casos refractarios.", "ns": false, "src": ["gine_T05_hua_v1|tto-3"]}, {"t": "T5 HUA", "q": "Mujer de 31 años con SMA de causa no estructural que desea gestación en el futuro. ¿Qué opción NO le indicaría?", "o": ["Ácido tranexámico", "AINE en la menstruación", "Ablación endometrial", "Corregir la causa de base"], "c": 3, "e": "La <b>ablación endometrial<\/b> destruye el endometrio: solo está indicada <b>sin deseo de fertilidad<\/b> y sin sospecha de malignidad.", "ns": false, "src": ["gine_T05_hua_v1|tto-4"]}, {"t": "T5 HUA", "q": "Según el algoritmo terapéutico, en una paciente estable con HUA de causa COEIN, la primera línea es:", "o": ["AINE o ácido tranexámico", "Ablación endometrial", "Análogos de GnRH prolongados", "Histerectomía simple"], "c": 1, "e": "COEIN: <b>1.ª línea AINE / ácido tranexámico → hormonal (DIU-LNG, ACO)<\/b>; si falla o hay contraindicación → ablación / histerectomía.", "ns": false, "src": ["gine_T05_hua_v1|tto-5"]}, {"t": "T5 HUA", "q": "Mujer de 33 años con SMA por un mioma submucoso y deseo de gestación. ¿Qué tratamiento es el más adecuado?", "o": ["Ablación endometrial", "Miomectomía histeroscópica", "Histerectomía total", "Análogos de GnRH indefinidos"], "c": 2, "e": "La polipectomía/<b>miomectomía histeroscópica<\/b> reseca de forma dirigida pólipos o miomas submucosos y <b>preserva la fertilidad<\/b>.", "ns": false, "src": ["gine_T05_hua_v1|tto-6"]}, {"t": "T14 Exploración y VPH", "q": "En la entrevista sexual de la historia clínica ginecológica se recomienda el esquema de las «5P» del CDC. ¿Cuál de las siguientes NO es una de ellas?", "o": ["Parejas sexuales", "Prácticas sexuales", "Paridad previa", "Pasado de ITS"], "c": 3, "e": "Las 5P son <b>Parejas, Prácticas, Prevención de embarazo, Protección frente a ITS y Pasado de ITS<\/b>. La paridad pertenece a los antecedentes obstétricos, no al esquema de la entrevista sexual.", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|expl-1"]}, {"t": "T14 Exploración y VPH", "q": "Respecto a la exploración de los genitales externos, señale la opción correcta:", "o": ["La palpación busca sobre todo las glándulas de Bartolino", "La inspección del himen solo se hace en mujeres vírgenes", "Los prolapsos se valoran únicamente con espéculo", "Los condilomas se diagnostican por tacto bimanual"], "c": 1, "e": "En externos: inspección (vello, labios, introito, himen, secreciones, lesiones, prolapsos) y <b>palpación de las glándulas de Bartolino<\/b> buscando masas o abscesos; además signos de vulvitis, condilomas y traumatismos.", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|expl-2"]}, {"t": "T14 Exploración y VPH", "q": "Adolescente de 15 años, sin relaciones sexuales, que consulta por dolor pélvico. ¿Cuál es la actitud exploratoria más adecuada?", "o": ["Espéculo pediátrico y citología cervical", "Tacto rectal y ecografía transabdominal", "Colposcopia con ácido acético y Lugol", "Ecografía transvaginal y toma de citología"], "c": 2, "e": "El espéculo se reserva para adultas y adolescentes sexualmente activas; en la adolescente que no lo tolera el <b>tacto rectal<\/b> es el complemento. La ecografía es <b>transabdominal en vírgenes<\/b> y transvaginal en sexualmente activas.", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|expl-3"]}, {"t": "T14 Exploración y VPH", "q": "¿Con qué instrumental se toma la muestra para citología cervicouterina?", "o": ["Espátula de Ayre y citocepillo", "Hisopo de dacron y torunda seca", "Pinza de biopsia y legra fina", "Cánula de Cornier y espátula"], "c": 1, "e": "La toma de Papanicolaou se hace con <b>espátula de Ayre<\/b> (exocérvix, giro de 360°) y <b>citocepillo<\/b> (canal endocervical, giro de 360°).", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|expl-4"]}, {"t": "T14 Exploración y VPH", "q": "Las técnicas de inspección visual del cuello uterino IVA e IVL utilizan, respectivamente:", "o": ["Ácido acético y Lugol", "Azul de toluidina y Lugol", "Ácido acético y eosina", "Yodo y ácido tricloroacético"], "c": 1, "e": "<b>IVA = inspección visual con ácido acético<\/b>; <b>IVL = inspección visual con Lugol<\/b>. Son las mismas tinciones que se usan en la colposcopia.", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|expl-5"]}, {"t": "T14 Exploración y VPH", "q": "¿Cuál de las siguientes NO es una indicación de colposcopia citada en clase?", "o": ["Lesión cervical sospechosa a simple vista", "Citología alterada", "Infección por VPH", "Dismenorrea primaria en adolescente"], "c": 4, "e": "Las indicaciones son <b>lesiones sospechosas, citología alterada y VPH<\/b>. La dismenorrea primaria no es indicación de colposcopia.", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|expl-6"]}, {"t": "T14 Exploración y VPH", "q": "Sobre las exploraciones complementarias en ginecología, ¿cuál es la afirmación correcta?", "o": ["La mamografía de cribado se inicia a los 40 años", "La ecografía transrectal es la vía de elección en vírgenes", "La ecografía mamaria sustituye a la mamografía a partir de los 50", "El cariotipo forma parte de la analítica básica"], "c": 1, "e": "La <b>mamografía se indica a partir de los 40 años<\/b> (antes si factores de riesgo). En vírgenes la ecografía es transabdominal; la transrectal se reserva para casos seleccionados. Cariotipo y RM son estudios especiales.", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|expl-7"]}, {"t": "T14 Exploración y VPH", "q": "Adolescente con menarquia hace 6 meses que presenta sangrados menstruales muy abundantes con anemia. ¿Qué debe descartarse en primer lugar?", "o": ["Coagulopatía", "Endometriosis", "Miomatosis", "Pólipo uterino"], "c": 1, "e": "Ante <b>sangrado excesivo en la adolescente<\/b> hay que descartar coagulopatías, anemia y causas funcionales antes que patología orgánica (miomas y pólipos son raros a esa edad).", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|expl-8"]}, {"t": "T14 Exploración y VPH", "q": "Según se insistió en clase, en la adolescente el ciclo menstrual debe considerarse:", "o": ["Un signo vital", "Un dato accesorio", "Un marcador tumoral", "Un reflejo emocional"], "c": 1, "e": "La diapositiva subraya la <b>importancia del ciclo menstrual como signo vital<\/b>: sus alteraciones (amenorrea, sangrado excesivo, dismenorrea) orientan a patología sistémica, nutricional o endocrina.", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|expl-9"]}, {"t": "T14 Exploración y VPH", "q": "En la toma de la citología, la espátula debe girarse 360° apoyada en:", "o": ["La unión escamocolumnar", "El fondo de saco posterior", "El orificio cervical interno", "La pared vaginal lateral"], "c": 1, "e": "La espátula recoge el exocérvix en la <b>unión escamocolumnar<\/b> (zona de transformación, donde asienta la patología); después el citocepillo se introduce en el canal y gira 360°.", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|cito-1"]}, {"t": "T14 Exploración y VPH", "q": "En la nomenclatura de Bethesda 2001, la sigla ASC-H significa:", "o": ["Atípicas en las que no puede excluirse H-SIL", "Atípicas de significado indeterminado (ASC-US)", "Adenocarcinoma endocervical in situ de alto grado", "Atipia glandular con hiperplasia de endometrio"], "c": 1, "e": "<b>ASC-H<\/b> = atípicas en las que <b>no puede excluirse una lesión de alto grado<\/b>; ASC-US = de significado indeterminado. El AIS es el adenocarcinoma in situ, categoría glandular.", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|cito-2"]}, {"t": "T14 Exploración y VPH", "q": "¿Cuál de las siguientes lesiones histológicas queda englobada en la categoría citológica L-SIL?", "o": ["CIN 1 y cambios por VPH", "CIN 2 y CIN 3 sin invasión", "Carcinoma in situ (CIS)", "Adenocarcinoma in situ (AIS)"], "c": 1, "e": "<b>L-SIL = displasia leve/CIN 1 + cambios por VPH<\/b>. H-SIL engloba displasia moderada y severa, CIS, CIN 2 y CIN 3. El AIS es glandular.", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|cito-3"]}, {"t": "T14 Exploración y VPH", "q": "Señale la afirmación FALSA sobre la clasificación de Bethesda 2001:", "o": ["H-SIL incluye CIN 2 y CIN 3", "AGC son células glandulares atípicas", "L-SIL incluye el carcinoma in situ", "El adenocarcinoma puede ser extrauterino"], "c": 3, "e": "El <b>carcinoma in situ (CIS) pertenece a H-SIL<\/b>, no a L-SIL. AGC = células glandulares atípicas (endocervicales, endometriales o NOS); el adenocarcinoma se clasifica en endocervical, endometrial, extrauterino o NOS.", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|cito-4"]}, {"t": "T14 Exploración y VPH", "q": "Dentro de las anomalías de células glandulares de Bethesda, ¿cuál es la categoría más avanzada antes del adenocarcinoma invasor?", "o": ["Adenocarcinoma endocervical in situ (AIS)", "Células glandulares atípicas NOS (AGC)", "Células atípicas sugestivas de neoplasia", "Metaplasia escamosa inmadura de la ZT"], "c": 1, "e": "La escala glandular es AGC → células atípicas sugestivas de neoplasia → <b>AIS<\/b> → adenocarcinoma. La metaplasia escamosa es un hallazgo normal de la zona de transformación.", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|cito-5"]}, {"t": "T14 Exploración y VPH", "q": "Mujer de 32 años con citología ASC-US. ¿Qué prueba complementaria, según los apuntes, permite estratificar mejor su riesgo de lesión de alto grado?", "o": ["Test de VPH de alto riesgo", "Biopsia endometrial", "Repetir la citología en 6 meses", "Ecografía transvaginal"], "c": 1, "e": "El ASC-US es la alteración citológica más frecuente (2-5 % de las citologías). <b>Con test de VPH negativo el riesgo de HSIL/CIN 3 es bajo<\/b>, por lo que el VPH es la prueba que estratifica el riesgo antes de decidir colposcopia. [Apuntes 2021]", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|cito-6"]}, {"t": "T14 Exploración y VPH", "q": "Respecto al virus del papiloma humano, señale la afirmación correcta:", "o": ["Es un virus ADN de la familia Papillomaviridae", "Es un virus ARN de la familia Herpesviridae", "Requiere coito completo para transmitirse", "Los tipos 6 y 11 causan el 70 % del cáncer de cérvix"], "c": 1, "e": "El VPH es un <b>virus ADN (Papillomaviridae)<\/b>; se transmite por contacto sexual directo <b>sin necesidad de coito completo<\/b>. Los tipos 6 y 11 producen verrugas; el 70 % del cáncer de cérvix se debe a los de alto riesgo (16, 18…).", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|vph-1"]}, {"t": "T14 Exploración y VPH", "q": "¿Qué serotipos de VPH son responsables de alrededor del 90 % de las verrugas genitales?", "o": ["6 y 11", "16 y 18", "31 y 33", "45 y 52"], "c": 1, "e": "Los tipos de <b>bajo riesgo 6 y 11<\/b> causan el 90 % de las verrugas genitales. 16, 18, 31, 33, 45 y 52 son de alto riesgo oncogénico.", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|vph-2"]}, {"t": "T14 Exploración y VPH", "q": "Los serotipos de alto riesgo del VPH se asocian, además del cáncer de cérvix, a todos los siguientes EXCEPTO:", "o": ["Cáncer de orofaringe", "Cáncer de ano", "Cáncer de pene", "Cáncer de endometrio"], "c": 4, "e": "Los tipos oncogénicos causan cáncer de <b>cérvix, vulva, vagina, ano, pene y orofaringe<\/b>. El cáncer de endometrio no está relacionado con el VPH.", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|vph-3"]}, {"t": "T14 Exploración y VPH", "q": "Sobre la historia natural de la infección por VPH, ¿cuál es la afirmación correcta?", "o": ["La mayoría de las infecciones son transitorias", "Toda infección persiste de por vida", "Solo el 5 % de las personas activas se exponen", "La persistencia de tipos 6 y 11 produce CIN 3"], "c": 1, "e": "<b>La mayoría de infecciones se aclaran<\/b>; el 75 % de las personas sexualmente activas se exponen. Es la <b>persistencia de tipos oncogénicos<\/b> la que conduce a HSIL/CIN 2-3 y cáncer.", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|vph-4"]}, {"t": "T14 Exploración y VPH", "q": "¿Cuál de los siguientes NO figura entre los factores de riesgo de infección persistente y cáncer de cérvix citados en clase?", "o": ["Inicio precoz de las relaciones sexuales", "Número elevado de parejas", "Inmunosupresión", "Consumo de alcohol"], "c": 4, "e": "Los factores citados son <b>inicio precoz, número de parejas, inmunosupresión y tabaquismo<\/b>. El alcohol no aparece entre ellos.", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|vph-5"]}, {"t": "T14 Exploración y VPH", "q": "Según el esquema de cribado explicado en los apuntes, en una mujer de 45 años sin antecedentes la pauta recomendada es:", "o": ["Citología cada 3 años o test de VPH cada 5", "Citología anual hasta llegar a la menopausia", "Test de VPH anual y citología cada 2 años", "No precisa cribado si está bien vacunada"], "c": 1, "e": "Entre <b>30 y 65 años: citología cada 3 años o prueba de VPH cada 5<\/b>; 25-30 citología cada 3; < 25 no se criba; > 65 se finaliza con 3 citologías o 2 VPH negativos y sin CIN en 20 años. [Apuntes 2021]", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|vph-6"]}, {"t": "T14 Exploración y VPH", "q": "¿Qué tamaño mínimo de lesión permite descubrir el colposcopio según la clase?", "o": ["200 µm o menos", "2 mm o menos", "5 mm o menos", "1 cm o menos"], "c": 1, "e": "El colposcopio (microscopio binocular con luz potente) descubre <b>lesiones de 200 µm o menos<\/b>, no reconocibles por simple inspección visual.", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|colpo-1"]}, {"t": "T14 Exploración y VPH", "q": "Tras aplicar ácido acético en la colposcopia, el epitelio anormal:", "o": ["Se tiñe de blanco", "Se tiñe de negro", "Permanece rosado", "Se tiñe de amarillo mostaza"], "c": 1, "e": "El ácido acético <b>coagula las proteínas celulares<\/b> y el epitelio anormal, con mayor densidad nuclear, se vuelve <b>blanco (acetoblanqueamiento)<\/b>. El amarillo mostaza es el resultado del Lugol en epitelio anormal.", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|colpo-2"]}, {"t": "T14 Exploración y VPH", "q": "En el test de Schiller, el epitelio sano se tiñe de negro porque:", "o": ["Contiene glucógeno que capta el yodo", "Sus proteínas se coagulan con el yodo", "Es más vascularizado que el anormal", "Carece de queratina superficial"], "c": 1, "e": "El Lugol tiñe el <b>glucógeno del epitelio escamoso maduro<\/b> (negro/marrón). El epitelio displásico carece de glucógeno y queda <b>amarillo mostaza<\/b>: yodo-negativo.", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|colpo-3"]}, {"t": "T14 Exploración y VPH", "q": "¿Cuál de los siguientes es un hallazgo colposcópico NORMAL?", "o": ["Quistes de Naboth", "Mosaico grueso", "Vasos atípicos", "Epitelio acetoblanco denso"], "c": 1, "e": "Son normales el epitelio escamoso maduro o atrófico, la <b>ectopia y los quistes de Naboth<\/b>. Mosaico grueso y acetoblanco denso son cambios mayores; los vasos atípicos sugieren malignidad.", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|colpo-4"]}, {"t": "T14 Exploración y VPH", "q": "Señale cuál de los siguientes corresponde a un cambio MAYOR (grado 2) en la colposcopia:", "o": ["Epitelio acetoblanco denso de aparición rápida", "Puntillado fino de distribución regular", "Mosaico fino con bordes geográficos", "Epitelio acetoblanco delgado y evanescente"], "c": 1, "e": "Cambios mayores: <b>mosaico y puntillado gruesos, signo de cresta, acetoblanco denso y rápido, bordes engrosados<\/b>. Mosaico fino, puntillado fino y acetoblanco delgado son cambios menores (grado 1).", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|colpo-5"]}, {"t": "T14 Exploración y VPH", "q": "En una colposcopia se observa una lesión exofítica con vasos atípicos y superficie irregular. ¿Cómo debe interpretarse?", "o": ["Sospecha de malignidad", "Cambio menor (grado 1)", "Hallazgo normal por ectopia", "Cambio menor por atrofia"], "c": 1, "e": "<b>Vasos atípicos, lesión exofítica y superficie irregular<\/b> son los signos de sospecha de malignidad: obligan a biopsia dirigida.", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|colpo-6"]}, {"t": "T14 Exploración y VPH", "q": "Según los apuntes de otros años, ¿qué tipo de borde es característico de los cambios MENORES en la colposcopia?", "o": ["Irregular o geográfico", "Regular y bien definido", "Sobreelevado", "Ulcerado"], "c": 1, "e": "Trampa clásica: en colposcopia el <b>borde irregular/geográfico es de cambio menor<\/b> y el regular bien definido, de cambio mayor (al revés que en el resto de la patología). [Apuntes 2021]", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|colpo-7"]}, {"t": "T14 Exploración y VPH", "q": "En la biopsia endometrial, el endometrio de 5-6 mm de espesor, blanco-parduzco y blando corresponde a:", "o": ["Fase secretora", "Fase proliferativa", "Fase menstrual", "Endometrio atrófico"], "c": 1, "e": "La <b>fase secretora (días 14-28)<\/b> muestra un endometrio de <b>5-6 mm<\/b>, blanco-parduzco por el edema del estroma y blando. La proliferativa es de 1-2 mm con coloración desigual.", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|biop-1"]}, {"t": "T14 Exploración y VPH", "q": "¿Qué intervalo del ciclo corresponde a la fase proliferativa del endometrio?", "o": ["Días 4-14", "Días 14-28", "Días 1-4", "Días 21-28"], "c": 1, "e": "La <b>fase proliferativa es preovulatoria, días 4-14<\/b>; la secretora es postovulatoria, días 14-28.", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|biop-2"]}, {"t": "T14 Exploración y VPH", "q": "Señale la afirmación correcta sobre el aspecto macroscópico del endometrio en fase proliferativa:", "o": ["Es delgado, de 1-2 mm, con coloración desigual", "Es grueso, de 5-6 mm y blanco-parduzco", "Es homogéneamente violáceo y de 8 mm", "Es blando y edematoso por acción de la progesterona"], "c": 1, "e": "Proliferativa: <b>1-2 mm, coloración desigual<\/b> (zonas rojizas alternando con pálidas o violáceas). El edema y la consistencia blanda son de la fase secretora.", "ns": false, "src": ["gine_T14_exploracion_hpv_v1|biop-3"]}, {"t": "T15 Eco e histeroscopia", "q": "¿A partir de qué frecuencia se considera que un sonido es un ultrasonido?", "o": ["Más de 2.000 Hz", "Más de 20.000 Hz", "Más de 3 MHz", "Más de 150.000 Hz"], "c": 2, "e": "Ultrasonido es cualquier sonido de <b>más de 20.000 Hz<\/b>. Los 3-15 MHz son el rango que usa la imagen médica, no el umbral del ultrasonido.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|eco_fis-1"]}, {"t": "T15 Eco e histeroscopia", "q": "¿Qué rango de frecuencias utilizan habitualmente las imágenes médicas por ecografía?", "o": ["20-200 kHz", "0,5-2 MHz", "3-15 MHz", "20-50 MHz"], "c": 3, "e": "Las imágenes médicas usan frecuencias de <b>3 a 15 MHz<\/b>.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|eco_fis-2"]}, {"t": "T15 Eco e histeroscopia", "q": "Sobre los transductores ecográficos, señale la FALSA:", "o": ["El convexo da imagen en trapecio y trabaja a 3,5-5 MHz", "El lineal da imagen rectangular y estudia estructuras superficiales", "El intracavitario trabaja a 5-7,5 MHz", "El lineal es el de elección para estructuras profundas"], "c": 4, "e": "Para estructuras <b>profundas<\/b> (abdomen, obstetricia) se usa el <b>convexo<\/b>; el lineal es para músculo, tendón, mama o tiroides.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|eco_fis-3"]}, {"t": "T15 Eco e histeroscopia", "q": "¿Qué tipo de transductor produce una imagen triangular o en abanico?", "o": ["Sectorial", "Convexo", "Lineal", "Intracavitario"], "c": 1, "e": "El <b>sectorial<\/b> da imagen en abanico; el convexo, en trapecio; el lineal, rectangular.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|eco_fis-4"]}, {"t": "T15 Eco e histeroscopia", "q": "Una estructura que no genera ecos porque no tiene interfases en su interior y se ve negra se denomina:", "o": ["Hiperecoica", "Isoecoica", "Anecoica", "Hipoecoica"], "c": 3, "e": "<b>Anecoica<\/b>: no genera ecos por ausencia de interfases; típica de los <b>líquidos<\/b>, color negro intenso.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|eco_fis-5"]}, {"t": "T15 Eco e histeroscopia", "q": "Los ecos que forman la imagen ecográfica se producen principalmente:", "o": ["En el interior de los líquidos homogéneos", "En la interfase entre dos materiales", "Por la emisión térmica propia de los tejidos", "Por la absorción total del haz en el hueso"], "c": 2, "e": "La reflexión ocurre en la <b>interfase de dos materiales<\/b> con distinta <b>impedancia acústica<\/b>.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|eco_fis-6"]}, {"t": "T15 Eco e histeroscopia", "q": "En Doppler color, por consenso, el color rojo indica:", "o": ["Flujo que se aleja del transductor", "Flujo turbulento de muy alta velocidad", "Ausencia de flujo en la estructura", "Flujo que se acerca al transductor"], "c": 4, "e": "Por consenso, <b>rojo = se acerca<\/b> al transductor y <b>azul = se aleja<\/b>; la intensidad refleja la velocidad.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|eco_fis-7"]}, {"t": "T15 Eco e histeroscopia", "q": "¿Cuál de los siguientes NO es un inconveniente de la ecografía?", "o": ["Interferencia del gas y del hueso", "Baja especificidad", "Uso de radiación ionizante", "Dependencia del explorador"], "c": 3, "e": "La eco es <b>inocua<\/b>. Sus límites son <b>gas y superficie ósea<\/b>, <b>baja especificidad<\/b> y ser <b>explorador-dependiente<\/b>.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|eco_fis-8"]}, {"t": "T15 Eco e histeroscopia", "q": "Sobre la ecografía transabdominal ginecológica, señale la correcta:", "o": ["Requiere tener la vejiga vacía", "Usa ondas de alta frecuencia", "Da un amplio campo de visión", "El meteorismo intestinal no interfiere"], "c": 3, "e": "Ventaja: <b>amplio campo de visión<\/b>. Desventajas: <b>vejiga llena<\/b>, baja frecuencia y el meteorismo interfiere.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|eco_gin-1"]}, {"t": "T15 Eco e histeroscopia", "q": "Para realizar una ecografía transvaginal, la vejiga de la paciente debe estar:", "o": ["Llena, para servir de ventana acústica", "Vacía, para acercar los órganos", "Llena solo si hay una masa anexial", "Con contraste intravesical"], "c": 2, "e": "En la TV la vejiga debe estar <b>vacía<\/b> para llevar los órganos pélvicos hacia el transductor.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|eco_gin-2"]}, {"t": "T15 Eco e histeroscopia", "q": "¿Cuál es una contraindicación de la ecografía transvaginal?", "o": ["Paciente virgen", "Menopausia", "Portadora de DIU", "Sospecha de mioma"], "c": 1, "e": "Contraindicaciones: <b>pacientes vírgenes<\/b> y las que <b>no consienten<\/b>. En vírgenes puede usarse la <b>vía rectal<\/b>.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|eco_gin-3"]}, {"t": "T15 Eco e histeroscopia", "q": "Sobre la ecografía transvaginal, ¿cuál es FALSA?", "o": ["Da mejor resolución de los genitales internos", "Es insuficiente para masas pélvicas grandes", "Busca imágenes transversales y coronales", "Es de elección en masas pélvicas grandes"], "c": 4, "e": "La TV tiene <b>mejor resolución<\/b> por la cercanía de la sonda, pero es <b>insuficiente para masas pélvicas grandes<\/b>.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|eco_gin-4"]}, {"t": "T15 Eco e histeroscopia", "q": "En la ecografía del ovario normal, ¿qué es cierto?", "o": ["La médula central es la zona menos ecogénica", "Los folículos son hiperecoicos y centrales", "Los folículos son anecoicos y periféricos", "El cuerpo lúteo es siempre anecoico y central"], "c": 3, "e": "Ecotextura homogénea con <b>médula central más ecogénica<\/b> y <b>folículos anecoicos en la periferia<\/b> (corteza).", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|eco_gin-5"]}, {"t": "T15 Eco e histeroscopia", "q": "¿Qué parámetro se considera el mejor método para determinar el tamaño del ovario?", "o": ["El diámetro longitudinal", "El volumen ovárico", "El recuento de folículos", "El diámetro transversal"], "c": 2, "e": "El <b>volumen ovárico<\/b> se ha considerado el mejor método para determinar el tamaño del ovario.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|eco_gin-6"]}, {"t": "T15 Eco e histeroscopia", "q": "Mujer de 30 años con masa ovárica heterogénea: polo sólido ecorrefringente, zona grasa con ecos lineales y sin mapa color. ¿Diagnóstico ecográfico?", "o": ["Endometrioma tipo II", "Quiste simple anexial", "Hidrosálpinx", "Teratoma benigno"], "c": 4, "e": "Polo sólido + <b>grasa<\/b> + <b>ecos lineales (pelos)<\/b> sin flujo al Doppler = <b>teratoma ovárico benigno<\/b>.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|eco_gin-7"]}, {"t": "T15 Eco e histeroscopia", "q": "La histeroscopia se define como un procedimiento:", "o": ["Solo diagnóstico, bajo control ecográfico", "Diagnóstico-terapéutico, con visión directa", "Terapéutico, que exige laparoscopia asociada", "Diagnóstico, realizado a ciegas"], "c": 2, "e": "Procedimiento <b>diagnóstico-terapéutico<\/b> por orificios naturales, realizado <b>siempre bajo visión directa<\/b> endoscópica.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|hsc_eq-1"]}, {"t": "T15 Eco e histeroscopia", "q": "¿Cuál es la angulación de la óptica más utilizada en el histeroscopio rígido?", "o": ["0º", "12º", "30º", "120º"], "c": 3, "e": "Rígidos de 0º, 12º y 30º; el más usado es el de <b>30º<\/b>. En el resectoscopio, en cambio, la más usada es la de 12º.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|hsc_eq-2"]}, {"t": "T15 Eco e histeroscopia", "q": "Sobre el resectoscopio (histeroscopio quirúrgico), señale la FALSA:", "o": ["Su óptica más usada es la de 12º", "Lleva un electrodo electroquirúrgico", "La vaina externa extrae el líquido de irrigación", "La vaina externa introduce el líquido"], "c": 4, "e": "La <b>vaina interna<\/b> irriga la cavidad y la <b>vaina externa<\/b> extrae el líquido. Óptica de 4 mm, la más usada de <b>12º<\/b>.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|hsc_eq-3"]}, {"t": "T15 Eco e histeroscopia", "q": "Respecto al histeroscopio flexible frente al rígido, es cierto que:", "o": ["No ha demostrado mejores ventajas", "Tiene menor diámetro que el rígido", "Es el más usado en consulta", "Es el único con ópticas de 30º"], "c": 1, "e": "El flexible (3,6-4,9 mm) permite dirigir la punta, pero <b>no ha demostrado mejores ventajas<\/b> que el rígido (3-4 mm).", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|hsc_eq-4"]}, {"t": "T15 Eco e histeroscopia", "q": "En la histeroscopia quirúrgica con energía monopolar, el medio de distensión adecuado es:", "o": ["Suero fisiológico", "Solución no electrolítica", "Ringer lactato", "Dióxido de carbono (CO2)"], "c": 2, "e": "Con <b>monopolar<\/b> se usan <b>soluciones no electrolíticas<\/b> (no conducen la electricidad). El suero es para diagnóstica y bipolar.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|hsc_eq-5"]}, {"t": "T15 Eco e histeroscopia", "q": "¿Cuál es el principal riesgo de las soluciones no electrolíticas como medio de distensión?", "o": ["Hipovolemia con hipernatremia", "Embolia grasa pulmonar masiva", "Hipervolemia con hiponatremia", "Hiperpotasemia grave aguda"], "c": 3, "e": "Tienen <b>gran capacidad miscible con la sangre<\/b> y pueden provocar <b>hipervolemia con hiponatremia<\/b>.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|hsc_eq-6"]}, {"t": "T15 Eco e histeroscopia", "q": "Con CO2 como medio de distensión, ¿qué límites no deben superarse?", "o": ["60 ml/min y 100 mmHg", "100 ml/min y 200 mmHg", "200 ml/min y 100 mmHg", "250 ml/min y 300 mmHg"], "c": 2, "e": "Uso habitual 25-60 ml/min y 50-100 mmHg; <b>no sobrepasar 100 ml/min ni 200 mmHg<\/b>.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|hsc_eq-7"]}, {"t": "T15 Eco e histeroscopia", "q": "En la técnica de la histeroscopia con útero en retroflexión, se recomienda pinzar con la pinza de Pozzi:", "o": ["El labio anterior del cérvix", "El fondo de saco vaginal anterior", "El labio posterior del cérvix", "Ambos labios cervicales a la vez"], "c": 3, "e": "Se pinza el labio anterior, pero <b>si el útero está en retroflexión, el labio posterior<\/b>. También puede hacerse sin pinzamiento.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|hsc_eq-8"]}, {"t": "T15 Eco e histeroscopia", "q": "Mujer de 62 años con sangrado posmenopáusico. ¿Qué grosor de línea endometrial indica histeroscopia?", "o": ["Más de 4 mm", "Más de 8 mm", "Más de 11 mm", "Más de 15 mm"], "c": 1, "e": "En sangrado posmenopáusico: <b>LE > 4 mm<\/b>, LE mal visualizable, imposibilidad de biopsia, FR o sangrado recurrente.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|hsc_ind-1"]}, {"t": "T15 Eco e histeroscopia", "q": "En la menopausia, un endometrio engrosado asintomático es indicación de histeroscopia cuando la línea endometrial mide:", "o": ["Más de 4 mm", "Más de 6 mm", "Más de 11 mm", "Más de 8 mm"], "c": 3, "e": "<b>LE > 11 mm<\/b> asintomática tiene el mismo riesgo de cáncer que la sintomática (<b>6,7 %<\/b>).", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|hsc_ind-2"]}, {"t": "T15 Eco e histeroscopia", "q": "¿Cuál de los siguientes tiene el mayor riesgo de cáncer de endometrio?", "o": ["Tamoxifeno", "Síndrome de Lynch", "Nuliparidad", "Diabetes mellitus tipo 2"], "c": 2, "e": "<b>Síndrome de Lynch<\/b>: riesgo muy alto, 22-50 % de por vida. Tamoxifeno, nuliparidad y diabetes: RR 2.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|hsc_ind-3"]}, {"t": "T15 Eco e histeroscopia", "q": "Premenopáusica con pólipo endometrial por eco. ¿Qué porcentaje de estos pólipos no se objetiva en la histeroscopia?", "o": ["5 %", "10 %", "25 %", "50 %"], "c": 3, "e": "El <b>25 % (1/4)<\/b> son pólipos funcionales; por eso la HSC se hace en <b>primera fase del ciclo<\/b> o con <b>ACO<\/b>.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|hsc_ind-4"]}, {"t": "T15 Eco e histeroscopia", "q": "Sobre la histeroscopia en miomas submucosos, señale la FALSA:", "o": ["En premenopausia se indica si hay deseo gestacional", "Los muy sintomáticos precisan análogos de GnRH", "El tamaño y la localización no influyen", "Se usa la clasificación FIGO"], "c": 3, "e": "El <b>tamaño y la localización SÍ importan<\/b> (FIGO): fúndicos y laterales, > 2 cm, nulíparas y tipo 2.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|hsc_ind-5"]}, {"t": "T15 Eco e histeroscopia", "q": "¿Cuál de las siguientes NO puede tratarse mediante histeroscopia?", "o": ["Mioma submucoso tipo 0", "Pólipo endometrial", "DIU incrustado", "Quiste anexial simple"], "c": 4, "e": "La HSC trata procesos de la <b>cavidad endometrial, ostium tubáricos y canal endocervical<\/b>; no llega al anejo. [Apuntes previos]", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|hsc_ind-6"]}, {"t": "T15 Eco e histeroscopia", "q": "El legrado obstétrico puede realizarse en la puérpera para limpiar la cavidad dentro de los:", "o": ["7 días posparto", "21 días posparto", "42 días posparto", "100 días posparto"], "c": 3, "e": "Legrado obstétrico: en gestante o puérpera, incluidos los <b>42 días posparto o poscesárea<\/b>.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|legrado-1"]}, {"t": "T15 Eco e histeroscopia", "q": "¿Cuál de las siguientes es indicación de legrado GINECOLÓGICO?", "o": ["Mola hidatiforme", "Aborto incompleto", "Endometritis puerperal", "DIU retenido"], "c": 4, "e": "El ginecológico es en <b>no gestantes<\/b>: HUA, sangrado posmenopáusico, patología endometrial, <b>DIU retenido<\/b>, pólipos.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|legrado-2"]}, {"t": "T15 Eco e histeroscopia", "q": "En el legrado, la dilatación cervical se realiza con:", "o": ["Tallos de Hegar", "Pinzas de Winter", "Cánulas de Karman", "Valvas de Doyen"], "c": 1, "e": "Dilatación con <b>tallos de Hegar<\/b>; Winter extrae fragmentos, Karman aspira y Doyen separa la vagina.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|legrado-3"]}, {"t": "T15 Eco e histeroscopia", "q": "El legrado por aspiración está indicado en gestaciones:", "o": ["Menos de 8 semanas", "Menos de 12 semanas", "Menos de 16 semanas", "Menos de 20 semanas"], "c": 2, "e": "Aspiración en gestaciones <b>< 12 semanas<\/b>, con aspirador y <b>cánulas de Karman de 4 a 12 mm<\/b>.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|legrado-4"]}, {"t": "T15 Eco e histeroscopia", "q": "Mujer de 33 años con hipomenorrea y deseo gestacional seis meses después de un legrado. ¿Qué complicación sospecha?", "o": ["Perforación uterina", "Síndrome de Asherman", "Lesión cervical aguda", "Atonía uterina"], "c": 2, "e": "El <b>síndrome de Asherman<\/b> (sinequias) es la complicación <b>tardía<\/b> del legrado; las demás son inmediatas.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|legrado-5"]}, {"t": "T15 Eco e histeroscopia", "q": "¿Cuál de las siguientes NO es una complicación inmediata del legrado?", "o": ["Perforación uterina", "Sangrado por atonía uterina", "Lesión cervical", "Síndrome de Asherman"], "c": 4, "e": "Inmediatas: <b>perforación, sangrado por atonía, lesión cervical<\/b>. El <b>Asherman<\/b> es tardío.", "ns": false, "src": ["gine_T15_eco_histeroscopia_v1|legrado-6"]}, {"t": "T16 Laparoscopia y HSG", "q": "¿Quién inició la laparoscopia como técnica quirúrgica y en qué época?", "o": ["Raoul Palmer, en la década de 1940", "Harith Hasson, en la década de 1970", "Raoul Palmer, en la década de 1970", "Harith Hasson, en la década de 1940"], "c": 1, "e": "La laparoscopia la inició el ginecólogo francés <b>Raoul Palmer en la década de 1940<\/b>. Hasson diseñó en los años 70 el trócar de punta roma para la técnica abierta.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|lps-1"]}, {"t": "T16 Laparoscopia y HSG", "q": "¿Cuál de las siguientes NO es una ventaja de la laparoscopia frente a la laparotomía?", "o": ["Menor infección de la herida quirúrgica", "Tolerancia digestiva más precoz", "Mejor sensibilidad táctil del cirujano", "Menor afectación de la función pulmonar"], "c": 3, "e": "La <b>pérdida de la sensibilidad táctil<\/b> es un inconveniente de la laparoscopia, igual que la pérdida de la tridimensionalidad. El resto son ventajas.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|lps-2"]}, {"t": "T16 Laparoscopia y HSG", "q": "Señale cuál de los siguientes es un inconveniente de la cirugía laparoscópica:", "o": ["Mayor respuesta al estrés quirúrgico", "Pérdida de la tridimensionalidad", "Más analgesia postoperatoria", "Estancia hospitalaria más larga"], "c": 2, "e": "Inconvenientes: <b>pérdida de sensibilidad táctil y de tridimensionalidad<\/b>, espacio de trabajo reducido, aspiración/irrigación limitadas, necesidad de ayudante y curva de aprendizaje.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|lps-3"]}, {"t": "T16 Laparoscopia y HSG", "q": "Una vez conseguido el acceso a la cavidad abdominal, ¿cuál es el siguiente paso de una laparoscopia?", "o": ["Introducción de la óptica", "Colocación de los trócares accesorios", "Creación del neumoperitoneo", "Realización de la cirugía"], "c": 3, "e": "Orden: acceso a la cavidad → <b>creación del neumoperitoneo<\/b> → entrada de la óptica → colocación de trócares → cirugía.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|lps-4"]}, {"t": "T16 Laparoscopia y HSG", "q": "Respecto a la óptica del laparoscopio, señale la FALSA:", "o": ["Su diámetro oscila entre 3 y 10 mm", "Suele ser un endoscopio flexible", "La recta de 0º da visión panorámica", "La angulada sirve en campos profundos"], "c": 2, "e": "El laparoscopio es un endoscopio <b>habitualmente rígido<\/b> de 3-10 mm. La óptica recta (0º) da visión panorámica e intuitiva; la angulada (12º-120º), campos profundos o restringidos.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|lps-5"]}, {"t": "T16 Laparoscopia y HSG", "q": "El verde de indocianina (ICG), detectado por fluorescencia cercana al infrarrojo, se usa con frecuencia en laparoscopia para:", "o": ["Medir la presión intraabdominal", "Calentar el CO2 insuflado", "Detectar el ganglio centinela", "Valorar la permeabilidad tubárica"], "c": 3, "e": "Muchos laparoscopios detectan fluorescencia cercana al infrarrojo, base del <b>ICG<\/b>, de aplicación frecuente en la <b>detección de ganglios centinela<\/b>.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|lps-6"]}, {"t": "T16 Laparoscopia y HSG", "q": "Sobre la fuente de luz en laparoscopia, señale la correcta:", "o": ["Se genera en la punta de la óptica", "Suele ser luz fría por fibra óptica", "Solo admite lámparas halógenas", "Emite luz caliente de alta potencia"], "c": 2, "e": "La luz la genera una <b>fuente externa<\/b> y llega al laparoscopio por <b>fibra óptica<\/b>; suele ser <b>luz fría<\/b> (xenón, LED o HMI).", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|lps-7"]}, {"t": "T16 Laparoscopia y HSG", "q": "¿Cuál de las siguientes características corresponde a la cirugía laparotómica y no a la laparoscópica?", "o": ["Tecnológico-dependiente", "Sujeta a fracaso por fallo técnico", "Precisa comprobación preoperatoria", "Elevada morbilidad"], "c": 4, "e": "La laparotomía da <b>control en tus manos<\/b> y campo quirúrgico directo, pero con <b>elevada morbilidad<\/b>. Lo tecnológico, el fallo técnico y la comprobación preoperatoria son de la laparoscopia.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|lps-8"]}, {"t": "T16 Laparoscopia y HSG", "q": "La técnica de Hasson para la entrada en laparoscopia consiste en:", "o": ["Técnica abierta: disección por planos y trócar romo", "Técnica cerrada: punción con aguja de punta retráctil", "Técnica directa: trócar sin neumoperitoneo previo", "Punción transvaginal a través del fondo de Douglas"], "c": 1, "e": "Hasson = <b>técnica abierta<\/b>: incisión algo mayor que el trócar, <b>disección por planos<\/b> hasta el peritoneo y colocación de un <b>trócar de punta roma<\/b>.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|entrada-1"]}, {"t": "T16 Laparoscopia y HSG", "q": "Sobre la aguja de Veres, señale la correcta:", "o": ["Tiene punta roma y carece de mecanismo de protección", "Se usa en la técnica abierta de Hasson", "Tiene punta cortante con protección retráctil", "Se introduce tras crear el neumoperitoneo"], "c": 3, "e": "La aguja de Veres (técnica cerrada) tiene <b>punta cortante y un protector autorretráctil<\/b> que vuelve a su posición al cesar la resistencia, evitando dañar estructuras peritoneales.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|entrada-2"]}, {"t": "T16 Laparoscopia y HSG", "q": "Gestante de 16 semanas que precisa una laparoscopia por una masa anexial. ¿Qué técnica de entrada es de elección?", "o": ["Cerrada con aguja de Veres umbilical", "Abierta o de Hasson", "Cerrada con punción en el punto de Palmer", "Directa, sin neumoperitoneo previo"], "c": 2, "e": "La <b>técnica abierta<\/b> es de elección en <b>gestación<\/b>, en cirugías previas en la localización del trócar y en hernia umbilical.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|entrada-3"]}, {"t": "T16 Laparoscopia y HSG", "q": "Mujer de 45 años con obesidad mórbida y sin cirugías abdominales previas, programada para histerectomía laparoscópica. Técnica de entrada de elección:", "o": ["Abierta o de Hasson", "Directa con visión", "Cerrada o de Veres", "Laparotomía media"], "c": 3, "e": "Según la tabla del tema, la técnica <b>cerrada (Veres)<\/b> es la de elección en <b>obesidad<\/b>.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|entrada-4"]}, {"t": "T16 Laparoscopia y HSG", "q": "¿Cuál es el mecanismo de seguridad propio de la técnica de entrada abierta?", "o": ["La lectura del neumoperitoneo", "Las maniobras de Palmer", "La visión directa de las estructuras", "La protección retráctil de la aguja de Veres"], "c": 3, "e": "Abierta: <b>visualización directa de estructuras<\/b>. Cerrada: lectura del neumoperitoneo y maniobras de Palmer.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|entrada-5"]}, {"t": "T16 Laparoscopia y HSG", "q": "Con técnica cerrada en una paciente con cirugías abdominales previas, el neumoperitoneo se crea principalmente en:", "o": ["El ombligo", "El punto de Palmer", "La región suprapúbica", "El fondo vaginal posterior"], "c": 2, "e": "En la técnica cerrada el neumoperitoneo es umbilical o en el <b>punto de Palmer, principalmente en presencia de cirugías previas<\/b>.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|entrada-6"]}, {"t": "T16 Laparoscopia y HSG", "q": "En la técnica de entrada directa en laparoscopia:", "o": ["El trócar entra sin neumoperitoneo previo", "Se disecan todos los planos antes de entrar", "Se punciona primero con la aguja de Veres", "El trócar lleva siempre la punta roma"], "c": 1, "e": "Técnica directa = <b>entrada cerrada sin crear antes el neumoperitoneo<\/b>: se introduce el trócar y se insufla después.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|entrada-7"]}, {"t": "T16 Laparoscopia y HSG", "q": "La introducción de la aguja de Veres junto con la del primer trócar causa aproximadamente qué porcentaje de las complicaciones graves vasculares e intestinales:", "o": ["20-30 %", "40-50 %", "60-70 %", "80-90 %"], "c": 3, "e": "La aguja de Veres(-Palmer) y el primer trócar causan el <b>60-70 %<\/b> de las complicaciones graves vasculares e intestinales.", "ns": true, "src": ["gine_T16_laparoscopia_hsg_v1|entrada-8"]}, {"t": "T16 Laparoscopia y HSG", "q": "Respecto a la preparación antes de la entrada en laparoscopia, señale la FALSA:", "o": ["Estómago y vejiga deben estar vacíos", "Hay que colocar bien a la paciente", "Los trócares se colocan con visión directa", "Los trócares accesorios van antes de entrar"], "c": 4, "e": "Primero se entra en la cavidad (<b>primer trócar / neumoperitoneo<\/b>) y después se colocan los <b>trócares bajo visión directa<\/b>.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|entrada-9"]}, {"t": "T16 Laparoscopia y HSG", "q": "Sobre los trócares de laparoscopia, señale la correcta:", "o": ["Los de cuchilla separan y los romos cortan", "Los de cuchilla cortan y los romos separan", "Su diámetro no influye en la incisión", "Siempre son de un solo uso"], "c": 2, "e": "Punta del trócar: <b>cuchilla, cortan; roma, separan<\/b>. El diámetro determina el tamaño de la incisión y hay trócares desechables y reutilizables.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|entrada-10"]}, {"t": "T16 Laparoscopia y HSG", "q": "Mujer operada ayer de quistectomía ovárica por laparoscopia que refiere dolor en ambos hombros. La causa más probable es:", "o": ["Irritación diafragmática por el CO2", "Lesión del plexo braquial en la mesa", "Embolia gaseosa por CO2", "Neumotórax a tensión"], "c": 1, "e": "El <b>dolor de hombros<\/b> se debe a la <b>irritación del diafragma por el CO2<\/b> y su rápida insuflación; se controla con analgésicos y desaparece en <b>48 h<\/b>.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|compl-1"]}, {"t": "T16 Laparoscopia y HSG", "q": "¿Cuál de estas complicaciones de la laparoscopia se considera de las más críticas y obliga a descomprimir rápidamente el abdomen?", "o": ["Dolor en los hombros", "Hipotermia por CO2", "Embolia de CO2", "Neumotórax"], "c": 3, "e": "La <b>embolia de CO2<\/b> (insuflación en un vaso venoso de gran calibre o bocas venosas en disecciones amplias) puede ser fatal: <b>descompresión rápida<\/b> y maniobras cardiorrespiratorias.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|compl-2"]}, {"t": "T16 Laparoscopia y HSG", "q": "Sobre las complicaciones de la laparoscopia, señale la FALSA:", "o": ["La hipercapnia causa acidosis metabólica", "El neumotórax no suele necesitar terapia", "La hipotermia favorece la infección", "El dolor de hombros cede en unas 48 h"], "c": 1, "e": "La retención de CO2 produce <b>acidosis respiratoria<\/b>, no metabólica. El neumotórax casi nunca precisa terapia y la hipotermia aumenta la infección de herida. (Los apuntes previos dicen «metabólica» por error.)", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|compl-3"]}, {"t": "T16 Laparoscopia y HSG", "q": "Si no se calienta el CO2, ¿cuánta temperatura se estima que pierde la paciente por cada 50 L insuflados?", "o": ["0,1 ºC", "0,3 ºC", "1 ºC", "3 ºC"], "c": 2, "e": "Sin calefactor de CO2 se calcula una pérdida de <b>0,3 ºC por cada 50 L<\/b> de CO2 insuflados.", "ns": true, "src": ["gine_T16_laparoscopia_hsg_v1|compl-4"]}, {"t": "T16 Laparoscopia y HSG", "q": "Según el tema, el rango de presión de trabajo del insuflador (superior a la presión de la vena cava, lo que reduce el gasto cardíaco) es:", "o": ["4-6 mmHg", "12-14 mmHg", "20-25 mmHg", "30-35 mmHg"], "c": 2, "e": "El rango de operación del equipo es <b>12-14 mmHg<\/b>, superior a la presión de la vena cava, por lo que <b>disminuye el gasto cardíaco<\/b>.", "ns": true, "src": ["gine_T16_laparoscopia_hsg_v1|compl-5"]}, {"t": "T16 Laparoscopia y HSG", "q": "¿Cuál de las siguientes es contraindicación de la histerosalpingografía pero NO de la histerosonografía?", "o": ["Embarazo", "Infección pélvica", "Alergia al contraste", "Neoplasia de endometrio"], "c": 3, "e": "La HSG usa <b>contraste yodado<\/b>; la histerosonografía no necesita contraste. Ambas comparten embarazo, infección pélvica y neoplasia de endometrio.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|hsg-1"]}, {"t": "T16 Laparoscopia y HSG", "q": "¿Cuál de las siguientes NO es indicación de histerosalpingografía?", "o": ["Comprobación de la ligadura de trompas", "Sospecha de neoplasia de endometrio", "Pólipos y mioma submucoso", "Síndrome de Asherman"], "c": 2, "e": "La <b>neoplasia de endometrio es contraindicación<\/b> de la HSG. Indicaciones: esterilidad (permeabilidad tubárica), malformación uterina, pólipos y mioma submucoso, ligadura tubárica y Asherman.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|hsg-2"]}, {"t": "T16 Laparoscopia y HSG", "q": "Mujer de 34 años tratada con metotrexato hace 3 años por un embarazo ectópico, que no consigue gestación desde entonces. Prueba de elección para valorar la permeabilidad tubárica:", "o": ["Ecografía transvaginal", "Histerosalpingografía", "Histeroscopia diagnóstica", "Tomografía computarizada"], "c": 2, "e": "La HSG es la <b>prueba diagnóstica de la patología tubárica<\/b> y de uso frecuente en el estudio de fertilidad para valorar la <b>permeabilidad tubárica<\/b>.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|hsg-3"]}, {"t": "T16 Laparoscopia y HSG", "q": "Las complicaciones típicas de la histerosalpingografía son:", "o": ["Cuadro vasovagal y sangrado vaginal", "Perforación uterina y hemoperitoneo", "Embolia gaseosa y neumotórax", "Hipercapnia y acidosis respiratoria"], "c": 1, "e": "Las complicaciones de la HSG son <b>poco frecuentes<\/b>; las típicas son el <b>cuadro vasovagal y el sangrado vaginal<\/b>, además de la EPI.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|hsg-4"]}, {"t": "T16 Laparoscopia y HSG", "q": "Sobre la histerosonografía, señale la correcta:", "o": ["Es radiológica y usa contraste yodado", "Es ecográfica, poco invasiva y tolerable", "Está contraindicada en el sangrado anómalo", "Su uso más frecuente es el tubárico"], "c": 2, "e": "La histerosonografía es una <b>técnica ecográfica<\/b>, sin contraste, <b>poco invasiva y bien tolerada<\/b>, de uso frecuente en <b>patología endometrial<\/b>; el sangrado uterino anómalo es indicación.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|hsg-5"]}, {"t": "T16 Laparoscopia y HSG", "q": "¿Cuál de las siguientes NO es indicación de histerosonografía?", "o": ["Sangrado uterino anómalo", "Infección pélvica activa", "Infertilidad", "Endometrio mal visto por ECOTV"], "c": 2, "e": "La <b>infección pélvica<\/b> es contraindicación (junto con embarazo y neoplasia de endometrio). Son indicaciones el SUA, la infertilidad y la visualización subóptima del endometrio por ECOTV.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|hsg-6"]}, {"t": "T16 Laparoscopia y HSG", "q": "En una histerosalpingografía se ven defectos de repleción en la porción intramural de las trompas que no producen obstrucción. Corresponden a:", "o": ["Hidrosálpinx bilateral", "Obstrucción tubárica proximal", "Pólipos tubáricos, variante normal", "Imagen de cicatriz post-cesárea"], "c": 3, "e": "Los <b>pólipos tubáricos<\/b> son defectos de repleción intramurales que <b>no obstruyen<\/b> y se consideran <b>variantes de la normalidad<\/b>.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|hsg-7"]}, {"t": "T16 Laparoscopia y HSG", "q": "Entre las complicaciones de la histerosonografía NO se encuentra:", "o": ["Fracaso de la técnica", "Reacción alérgica al contraste", "Síndrome vasovagal", "Fiebre tras el procedimiento"], "c": 2, "e": "La histerosonografía <b>no necesita contraste<\/b>. Sus complicaciones son fracaso de la técnica, dolor pélvico, síndrome vasovagal y fiebre tras el procedimiento.", "ns": false, "src": ["gine_T16_laparoscopia_hsg_v1|hsg-8"]}, {"t": "Obste T25 Control gestacional", "q": "Respecto a los cambios metabólicos de la gestación, señale la FALSA:", "o": ["El metabolismo basal aumenta alrededor de un 20 %", "La primera mitad del embarazo es fundamentalmente anabólica", "La segunda mitad del embarazo es catabólica", "Las necesidades energéticas suben unas 800 kcal/día"], "c": 4, "e": "Las demandas energéticas adicionales son de <b>hasta 300 kcal/día<\/b>. Metabolismo basal ↑20 %; 1.ª mitad anabólica (reservas), 2.ª catabólica (glucosa al feto).", "ns": false, "src": ["obste_T25_control_gestacional_v1|meta-1"]}, {"t": "Obste T25 Control gestacional", "q": "La gestación se considera un estado diabetógeno debido principalmente a:", "o": ["El aumento de la secreción de glucagón materno", "La resistencia a la insulina por hPL y progesterona", "La disminución de la secreción pancreática de insulina", "El descenso de la absorción intestinal de glucosa"], "c": 2, "e": "La <b>resistencia a la insulina<\/b> secundaria al <b>hPL (lactógeno placentario) y la progesterona<\/b> hace de la gestación un estado diabetógeno; la insulina aumenta de forma compensatoria.", "ns": false, "src": ["obste_T25_control_gestacional_v1|meta-2"]}, {"t": "Obste T25 Control gestacional", "q": "¿Cuál es el patrón glucémico característico de la gestante sana?", "o": ["Hiperglucemia en ayunas e hipoglucemia posprandial", "Glucemias estables con insulinemia disminuida", "Hipoglucemia en ayunas e hiperglucemia posprandial", "Hiperglucemia mantenida con hipoinsulinemia relativa"], "c": 3, "e": "<b>Hipoglucemia leve en ayunas, hiperglucemia posprandial e hiperinsulinemia<\/b> compensatoria. Tendencia a hipoglucemia nocturna (difusión al feto) y a la cetoacidosis.", "ns": false, "src": ["obste_T25_control_gestacional_v1|meta-3"]}, {"t": "Obste T25 Control gestacional", "q": "En relación con los iones y vitaminas en el embarazo, ¿qué es lo correcto?", "o": ["Aumentan el sodio y el potasio", "Aumentan el calcio y el hierro", "Aumenta el ácido fólico plasmático", "Disminuyen el sodio y el potasio"], "c": 1, "e": "Iones: <b>↑ Na y K; ↓ Ca y Fe<\/b>. Vitaminas: <b>↓ ácido fólico<\/b> (de ahí el suplemento).", "ns": false, "src": ["obste_T25_control_gestacional_v1|meta-4"]}, {"t": "Obste T25 Control gestacional", "q": "¿Cuál es el aumento medio de peso durante la gestación según el tema?", "o": ["Unos 6,5 kg de media", "Unos 12,5 kg de media", "Unos 18,5 kg de media", "Unos 22 kg de media"], "c": 2, "e": "Aumento de peso medio: <b>12,5 kg<\/b> (útero, líquido amniótico, placenta y feto).", "ns": false, "src": ["obste_T25_control_gestacional_v1|meta-5"]}, {"t": "Obste T25 Control gestacional", "q": "Respecto a los cambios hematológicos del embarazo, señale la FALSA:", "o": ["Anemia relativa por dilución con Hb en torno a 11 g/dL", "Leucocitosis de hasta 15.000/mm³ sin desviación izquierda", "Plaquetopenia transitoria por hemodilución", "Disminución de la mayoría de factores de coagulación"], "c": 4, "e": "<b>Aumentan<\/b> la mayoría de los factores de coagulación (fibrinógeno, tromboplastina, I, III, VII, VIII, IX, X): el riesgo tromboembólico se multiplica ×3.", "ns": false, "src": ["obste_T25_control_gestacional_v1|meta-6"]}, {"t": "Obste T25 Control gestacional", "q": "Durante el embarazo, ¿cuál de los siguientes aumenta su valor absoluto?", "o": ["La masa eritrocitaria", "El recuento de plaquetas", "El hematocrito", "La concentración de hemoglobina"], "c": 1, "e": "Aumenta la <b>masa eritrocitaria<\/b>, pero aumenta todavía más el volumen plasmático → anemia dilucional (Hb 11 g/dL, Hto 34 %) y plaquetopenia por hemodilución.", "ns": false, "src": ["obste_T25_control_gestacional_v1|meta-7"]}, {"t": "Obste T25 Control gestacional", "q": "Gestante de 30 semanas con analítica: Hb 11 g/dL, Hto 34 %, leucocitos 14.000/mm³ sin desviación izquierda. ¿Qué actitud es correcta?", "o": ["Iniciar hierro intravenoso por anemia grave", "Considerarlo fisiológico de la gestación", "Pedir hemocultivos por leucocitosis", "Estudiar una hemopatía maligna"], "c": 2, "e": "Hb 11 g/dL y Hto 34 % = <b>anemia fisiológica por dilución<\/b>; leucocitosis <b>hasta 15.000/mm³ sin desviación izquierda<\/b> es reactiva y fisiológica.", "ns": false, "src": ["obste_T25_control_gestacional_v1|meta-8"]}, {"t": "Obste T25 Control gestacional", "q": "Respecto a los cambios endocrinos del embarazo, señale la FALSA:", "o": ["La producción tiroidea aumenta un 40-100 %", "Aumentan la TBG y la T4", "La hCG puede disminuir la TSH en las primeras semanas", "La T4 materna no influye en el cerebro fetal"], "c": 4, "e": "La <b>T4 materna<\/b> es imprescindible para el <b>desarrollo cerebral fetal antes de la semana 12<\/b>. La hCG produce un hipertiroidismo subclínico transitorio (↓TSH).", "ns": false, "src": ["obste_T25_control_gestacional_v1|meta-9"]}, {"t": "Obste T25 Control gestacional", "q": "En la auscultación cardiaca de una gestante, ¿qué hallazgo NO es fisiológico?", "o": ["Soplo sistólico funcional suave", "Refuerzo del segundo ruido pulmonar", "Galope por tercer ruido cardiaco (S3)", "Soplo diastólico en foco mitral"], "c": 4, "e": "Soplo sistólico funcional, refuerzo del 2.º ruido pulmonar y S3 son fisiológicos. <b>Un soplo diastólico no es fisiológico<\/b>.", "ns": false, "src": ["obste_T25_control_gestacional_v1|fisio-1"]}, {"t": "Obste T25 Control gestacional", "q": "¿Cómo evoluciona la presión arterial en la gestación normal?", "o": ["Aumenta desde el inicio y se normaliza tras la semana 20", "Desciende hasta las 24-26 semanas y luego se normaliza", "Se mantiene estable durante todo el embarazo", "Desciende de forma progresiva hasta el parto"], "c": 2, "e": "La TA <b>↓ hasta las 24-26 semanas<\/b>; después sube a valores normales de la población general (<b>&lt;140/90 mmHg<\/b>). >140/90 es signo de alarma.", "ns": false, "src": ["obste_T25_control_gestacional_v1|fisio-2"]}, {"t": "Obste T25 Control gestacional", "q": "La disminución de las resistencias vasculares periféricas en el embarazo se debe a:", "o": ["El efecto vasoconstrictor de los estrógenos", "La relajación del músculo liso por progesterona", "La compresión uterina de los grandes vasos", "El aumento del gasto cardiaco en reposo de la madre"], "c": 2, "e": "Resistencia vascular ↓ por la <b>acción relajante de la progesterona<\/b> sobre el músculo liso vascular. La compresión uterina explica la hipotensión supina.", "ns": false, "src": ["obste_T25_control_gestacional_v1|fisio-3"]}, {"t": "Obste T25 Control gestacional", "q": "Respecto a los cambios respiratorios del embarazo, señale la correcta:", "o": ["La frecuencia respiratoria aumenta claramente", "Se produce una acidosis respiratoria", "La capacidad vital permanece sin cambios", "La capacidad funcional residual aumenta"], "c": 3, "e": "FR <b>no cambia<\/b>; <b>alcalosis respiratoria<\/b>; CRF y VR <b>disminuyen<\/b>; <b>CV no se modifica<\/b> → ↓CPT (CPT = CV + VR).", "ns": false, "src": ["obste_T25_control_gestacional_v1|fisio-4"]}, {"t": "Obste T25 Control gestacional", "q": "Gestante de 22 semanas con creatinina sérica de 0,9 mg/dL. ¿Qué interpretación es la adecuada?", "o": ["Es el valor esperado en una gestación normal", "Refleja el aumento fisiológico de reabsorción", "Sugiere nefropatía y obliga a ampliar estudio", "Indica deshidratación leve sin más relevancia"], "c": 3, "e": "En la gestación normal la creatinina baja de <b>0,7 a 0,5 mg/dL<\/b> (FG ↑ hasta 40 %). <b>0,9 mg/dL sugiere nefropatía subyacente<\/b> y obliga a valoración complementaria.", "ns": false, "src": ["obste_T25_control_gestacional_v1|fisio-5"]}, {"t": "Obste T25 Control gestacional", "q": "Sobre los cambios urinarios en el embarazo, señale la FALSA:", "o": ["Existe dilatación pieloureteral", "El filtrado glomerular aumenta hasta un 40 %", "El esfínter uretral es menos eficaz", "Disminuye el riesgo de infección urinaria"], "c": 4, "e": "El retraso en la eliminación de orina <b>aumenta las ITU<\/b>, y el esfínter menos eficaz aumenta la incontinencia. FG y FPR ↑ hasta 40 %.", "ns": false, "src": ["obste_T25_control_gestacional_v1|fisio-6"]}, {"t": "Obste T25 Control gestacional", "q": "¿Qué parámetro hepático se modifica de forma fisiológica en el embarazo?", "o": ["Las transaminasas, que llegan a duplicarse", "La bilirrubina total, que aumenta claramente", "La fosfatasa alcalina, que sube 1,5-2 veces", "La GGT, que llega a triplicar su valor"], "c": 3, "e": "La <b>fosfatasa alcalina aumenta hasta 1,5-2 veces<\/b>. <b>No se modifican las transaminasas ni la bilirrubina<\/b>.", "ns": false, "src": ["obste_T25_control_gestacional_v1|fisio-7"]}, {"t": "Obste T25 Control gestacional", "q": "La acción de la progesterona sobre el tubo digestivo favorece todo lo siguiente EXCEPTO:", "o": ["Reflujo gastroesofágico y pirosis", "Estreñimiento", "Litiasis biliar por hipotonía vesicular", "Aumento de la motilidad intestinal"], "c": 4, "e": "La progesterona relaja el músculo liso: <b>↓ motilidad<\/b>, RGE, pirosis, estreñimiento e hipotonía vesicular (litiasis).", "ns": false, "src": ["obste_T25_control_gestacional_v1|fisio-8"]}, {"t": "Obste T25 Control gestacional", "q": "La hiperpigmentación del embarazo (línea alba, cloasma) se debe a:", "o": ["Estímulo de la MSH mediado por la progesterona", "Déficit de ácido fólico en el tercer trimestre", "Aumento de la TSH por acción de la hCG", "Exceso de cortisol libre de origen placentario"], "c": 1, "e": "Hiperpigmentación (<b>90 %<\/b> de las mujeres) por <b>estimulación de la MSH mediada por la progesterona<\/b>: línea alba y cloasma/melasma.", "ns": false, "src": ["obste_T25_control_gestacional_v1|fisio-9"]}, {"t": "Obste T25 Control gestacional", "q": "Respecto al aparato reproductor y las mamas en la gestación, señale la correcta:", "o": ["El útero rota hacia la izquierda al crecer", "El útero crece por formación de miocitos nuevos", "Máxima función del cuerpo lúteo: semanas 6-7", "Los tubérculos de Montgomery son glándulas sudoríparas"], "c": 3, "e": "Cuerpo lúteo: función máxima las <b>primeras 6-7 semanas posfecundación<\/b>. Útero: <b>dextrorrotación<\/b>, hipertrofia e hiperplasia de miocitos ya existentes. Montgomery: glándulas <b>sebáceas<\/b>.", "ns": false, "src": ["obste_T25_control_gestacional_v1|fisio-10"]}, {"t": "Obste T25 Control gestacional", "q": "¿Cuál es la dosis de ácido fólico recomendada como profilaxis general de defectos del tubo neural?", "o": ["0,25 mg/día", "0,4 mg/día", "4 mg/día", "5 mg/día"], "c": 2, "e": "Aporte farmacológico general: <b>0,4 mg/día<\/b>. La dieta rica en folatos (0,25 mg) es insuficiente; alto riesgo: 4 mg (SEGO) o 5 mg (OMS).", "ns": false, "src": ["obste_T25_control_gestacional_v1|precon-1"]}, {"t": "Obste T25 Control gestacional", "q": "En una paciente de alto riesgo de defectos del tubo neural, la dosis de ácido fólico según la SEGO es:", "o": ["0,4 mg/día", "1 mg/día", "4 mg/día", "10 mg/día"], "c": 3, "e": "Alto riesgo de DTN: <b>4 mg/día (SEGO)<\/b> y <b>5 mg/día (OMS)<\/b>.", "ns": false, "src": ["obste_T25_control_gestacional_v1|precon-2"]}, {"t": "Obste T25 Control gestacional", "q": "¿Durante cuánto tiempo se recomienda la suplementación con ácido fólico?", "o": ["Solo durante el tercer trimestre de gestación", "Desde la semana 12 hasta el final de la gestación", "Desde al menos 1 mes antes hasta la semana 12", "Solo durante la lactancia materna exclusiva"], "c": 3, "e": "Suplementación diaria desde, <b>al menos, un mes antes<\/b> de la gestación y durante las <b>primeras 12 semanas<\/b>.", "ns": false, "src": ["obste_T25_control_gestacional_v1|precon-3"]}, {"t": "Obste T25 Control gestacional", "q": "Mujer de 29 años, epiléptica en tratamiento con ácido valproico, que desea gestación. ¿Qué pauta de ácido fólico es la adecuada?", "o": ["0,4 mg/día desde el test de embarazo positivo", "4 mg/día desde al menos 1 mes antes de gestar", "0,25 mg/día con dieta rica en folatos", "No precisa suplemento si la dieta es buena"], "c": 2, "e": "La epilepsia (sobre todo con <b>valproico o carbamazepina<\/b>) es de <b>alto riesgo de DTN<\/b>: 4 mg/día (SEGO) desde ≥1 mes antes hasta la semana 12.", "ns": false, "src": ["obste_T25_control_gestacional_v1|precon-4"]}, {"t": "Obste T25 Control gestacional", "q": "Respecto al yodo en la gestación, señale la FALSA:", "o": ["El aporte recomendado en gestación y lactancia es 250 µg/día", "Preconcepcionalmente se recomiendan 150 µg/día", "Se suplementa a gestantes con 200 µg/día de yoduro potásico", "La mayoría de las gestantes españolas tienen yodo suficiente"], "c": 4, "e": "Estudios españoles y europeos: <b>la mayoría de las gestantes presenta yododeficiencia<\/b> pese a las recomendaciones y, en consecuencia, hipotiroxinemia.", "ns": false, "src": ["obste_T25_control_gestacional_v1|precon-5"]}, {"t": "Obste T25 Control gestacional", "q": "¿Cuál de las siguientes vacunas NO debe administrarse durante el embarazo?", "o": ["Antigripal", "Tos ferina", "Triple vírica", "COVID-19 (ARNm)"], "c": 3, "e": "La <b>triple vírica<\/b> (virus vivos; rubeola muy teratógena) se pone <b>antes<\/b> de la gestación si IgG negativa, esperando 28 días. Gripe, tos ferina y COVID sí se recomiendan.", "ns": false, "src": ["obste_T25_control_gestacional_v1|precon-6"]}, {"t": "Obste T25 Control gestacional", "q": "Tras vacunar de rubeola a una mujer seronegativa que busca gestación, ¿cuánto debe esperar para quedarse embarazada?", "o": ["No es necesario esperar", "28 días", "6 meses", "1 año"], "c": 2, "e": "Triple vírica y varicela: esperar <b>28 días<\/b> (un mes). VHB y gripe: no se requiere espera.", "ns": false, "src": ["obste_T25_control_gestacional_v1|precon-7"]}, {"t": "Obste T25 Control gestacional", "q": "Respecto a la vacunación preconcepcional frente al VHB, señale la correcta:", "o": ["Se indica a todas las mujeres sin excepción", "Pauta de 3 dosis a los 0-1-6 meses", "Obliga a esperar 28 días para gestar", "Se da una dosis única de recuerdo"], "c": 2, "e": "VHB: <b>pacientes de riesgo<\/b> previa comprobación de seronegatividad (anti-HBc y anti-HBs negativos); <b>3 dosis 0-1-6 meses<\/b>; no requiere espera.", "ns": false, "src": ["obste_T25_control_gestacional_v1|precon-8"]}, {"t": "Obste T25 Control gestacional", "q": "En la consulta preconcepcional, ¿qué edad materna se considera factor de riesgo?", "o": ["Menor de 18 o mayor de 30 años", "Menor de 16 o mayor de 35 años", "Menor de 20 o mayor de 40 años", "Solo mayor de 40 años"], "c": 2, "e": "Edad <b>&lt;16 años o &gt;35 años<\/b> = factor de riesgo en la evaluación preconcepcional.", "ns": false, "src": ["obste_T25_control_gestacional_v1|precon-9"]}, {"t": "Obste T25 Control gestacional", "q": "¿Quién realiza el control gestacional en las gestaciones de bajo riesgo?", "o": ["El obstetra hospitalario en consultas externas", "La matrona en atención primaria de salud", "El médico de familia exclusivamente", "El ginecólogo privado de la paciente"], "c": 2, "e": "El control de las gestaciones de bajo riesgo lo realizan <b>las matronas en atención primaria<\/b>.", "ns": false, "src": ["obste_T25_control_gestacional_v1|control-1"]}, {"t": "Obste T25 Control gestacional", "q": "¿Cuál de las siguientes serologías NO forma parte del cribado universal de la gestante?", "o": ["Rubeola", "Sífilis", "Zika", "VIH"], "c": 3, "e": "Cribado universal: <b>rubeola, VHB (HBsAg), sífilis y VIH<\/b>. Chagas y <b>Zika<\/b> se criban solo en <b>grupos de riesgo<\/b>.", "ns": false, "src": ["obste_T25_control_gestacional_v1|control-2"]}, {"t": "Obste T25 Control gestacional", "q": "En el cribado serológico universal, ¿qué determinación se repite en la analítica del tercer trimestre en todas las gestantes?", "o": ["Rubeola", "VIH", "CMV", "Chagas"], "c": 2, "e": "VIH: <b>repetir determinación en la analítica del 3.er trimestre<\/b>; en población de riesgo, también en el 2.º. VHB y sífilis se repiten en el 3.º solo si hay riesgo.", "ns": false, "src": ["obste_T25_control_gestacional_v1|control-3"]}, {"t": "Obste T25 Control gestacional", "q": "Gestante con serología de rubeola sin anticuerpos. ¿Cuál es la conducta indicada?", "o": ["Vacunar de inmediato con triple vírica", "Recomendar la vacunación posparto", "Interrumpir la gestación", "Administrar gammaglobulina específica"], "c": 2, "e": "Rubeola: valorar la inmunidad y <b>recomendar vacunación posparto<\/b> si no tiene anticuerpos (vacuna de virus vivos, no se pone en el embarazo).", "ns": false, "src": ["obste_T25_control_gestacional_v1|control-4"]}, {"t": "Obste T25 Control gestacional", "q": "¿En cuál de las siguientes gestantes está indicado el cribado de enfermedad de Chagas?", "o": ["Nacida en España, de madre boliviana", "Procedente de Cuba, sin otros antecedentes", "Viaje de 10 días a México hace un año", "Nacida y residente en Marruecos"], "c": 1, "e": "Chagas: origen latinoamericano (<b>excepto islas del Caribe<\/b>), <b>madre latinoamericana aunque la paciente haya nacido en España<\/b>, o estancia <b>&gt;1 mes<\/b> en Latinoamérica.", "ns": false, "src": ["obste_T25_control_gestacional_v1|control-5"]}, {"t": "Obste T25 Control gestacional", "q": "Respecto al cribado de virus Zika, se debe valorar la inmunidad en todos los casos EXCEPTO:", "o": ["Gestante que viajó a zona endémica el mes previo", "Pareja varón que volvió de zona endémica hace 4 meses", "Gestante procedente de zona endémica activa", "Pareja mujer que volvió de zona endémica hace 5 meses"], "c": 4, "e": "RRSS de riesgo con <b>mujeres si hace &lt;2 meses<\/b> de la vuelta y con <b>hombres si &lt;6 meses<\/b>. Viaje o procedencia: durante la gestación o los 2 meses previos.", "ns": false, "src": ["obste_T25_control_gestacional_v1|control-6"]}, {"t": "Obste T25 Control gestacional", "q": "¿En qué ventana se realiza la ecografía del primer trimestre?", "o": ["Semanas 8+0 a 10+6", "Semanas 11+0 a 13+6", "Semanas 14+0 a 16+6", "Semanas 18+0 a 21+6"], "c": 2, "e": "Ecografías: <b>11+0-13+6<\/b>, <b>18+0-21+6<\/b> (morfológica) y <b>34+0-36+6<\/b> (en apuntes previos: 36-40).", "ns": false, "src": ["obste_T25_control_gestacional_v1|control-7"]}, {"t": "Obste T25 Control gestacional", "q": "¿En qué semana se realiza el test de O'Sullivan a las gestantes sin factores de riesgo?", "o": ["Semana 12", "Semana 20", "Semana 24", "Semana 34"], "c": 3, "e": "<b>O'Sullivan en la semana 24<\/b> (2.º trimestre, a todas). En el 1.er y 3.er trimestre, cribado de diabetes solo si hay factores de riesgo (tabla de la diapositiva).", "ns": false, "src": ["obste_T25_control_gestacional_v1|control-8"]}, {"t": "Obste T25 Control gestacional", "q": "Respecto al seguimiento del embarazo de bajo riesgo, señale la FALSA:", "o": ["La TSH se solicita en la analítica del primer trimestre", "La altura uterina se mide desde el segundo trimestre", "El Coombs indirecto se pide en el 1.er y 2.º trimestre", "El estudio de coagulación se pide en el 1.er trimestre"], "c": 4, "e": "La <b>coagulación<\/b> se pide en la analítica del <b>3.er trimestre<\/b> (hemograma, coagulación, serologías). TSH en el 1.º; Coombs en 1.º y 2.º.", "ns": false, "src": ["obste_T25_control_gestacional_v1|control-9"]}, {"t": "Obste T25 Control gestacional", "q": "En la ecografía del primer trimestre, ¿qué combinación de hallazgos se asocia a alta probabilidad de síndrome de Down?", "o": ["Hueso nasal presente y translucencia nucal normal", "Sin hueso nasal, ductus alterado y edema nucal", "Placenta previa con líquido amniótico aumentado", "Biometría fetal acorde y latido embrionario normal"], "c": 2, "e": "Se miran <b>edema/translucencia nucal, ductus venoso y hueso nasal<\/b>: ausencia de hueso nasal + ductus alterado + edema nucal → alta probabilidad de Down (junto con la analítica).", "ns": false, "src": ["obste_T25_control_gestacional_v1|control-10"]}, {"t": "Obste T25 Control gestacional", "q": "Gestante Rh negativo con Coombs indirecto negativo. ¿Qué medida del seguimiento está indicada?", "o": ["Gammaglobulina anti-D a la madre", "Transfusión fetal intrauterina", "Cordocentesis para conocer el Rh fetal", "Ninguna, salvo que el padre sea Rh negativo"], "c": 1, "e": "A las madres <b>Rh negativas<\/b> se les administra <b>gammaglobulina anti-D<\/b> (en clase: semana 28) para evitar la isoinmunización.", "ns": false, "src": ["obste_T25_control_gestacional_v1|control-11"]}];
+/* ═══ Generador de simulacros sin repetidas (QRecall) ═══
+   Cada simulacro se monta en el momento: primero preguntas que este navegador nunca ha respondido
+   (en ningún banco de la asignatura ni en simulacros anteriores), luego las falladas, y solo al final las ya acertadas. */
+var GEN=(function(){
+  var GK='gine_simnuevo_v1';
+  function lsGet(k){try{return JSON.parse(localStorage.getItem(k)||'null');}catch(e){return null;}}
+  function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+  function lsDel(k){try{localStorage.removeItem(k);}catch(e){}}
+  function shuffle(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=b[i];b[i]=b[j];b[j]=t;}return b;}
+  var G=lsGet(GK)||{};G.hist=G.hist||{};   // hist: {idx: 'ok'|'ko'|'vista'} de simulacros anteriores
+  var TEMAS=[];POOL.forEach(function(p){if(TEMAS.indexOf(p.t)<0)TEMAS.push(p.t);});
+  function drawKey(id){return 'gine_simnuevo_'+id;}
+  /* estado de cada pregunta: 0 nunca respondida · 1 vista sin responder · 2 acertada · 3 fallada */
+  function estados(){
+    var cache={},out=[];
+    POOL.forEach(function(p,i){
+      var st=0;
+      p.src.forEach(function(s){
+        var k=s.split('|')[0],qid=s.split('|')[1];
+        if(!(k in cache))cache[k]=lsGet(k)||{};
+        var d=cache[k],a=d.state&&d.state[qid];
+        if(a)st=Math.max(st,a.r?2:3);
+        if(d.failHist&&d.failHist[qid])st=3;
+      });
+      var h=G.hist[i];
+      if(h==='ko')st=3;else if(h==='ok')st=Math.max(st,2);else if(h==='vista')st=Math.max(st,1);
+      out.push(st);
+    });
+    return out;
+  }
+  /* guarda en el historial lo respondido en el simulacro actual */
+  function archivar(){
+    var c=G.cur;if(!c)return;
+    var d=lsGet(drawKey(c.id))||{},s=d.state||{};
+    c.ids.forEach(function(idx,k){
+      var a=s['sim-'+(k+1)];
+      if(a)G.hist[idx]=a.r?'ok':'ko';
+      else if(c.vistas&&!G.hist[idx])G.hist[idx]='vista';
+    });
+    lsDel(drawKey(c.id));
+  }
+  function generar(temas,n){
+    var est=estados(),cand=[];
+    POOL.forEach(function(p,i){if(temas.indexOf(p.t)>=0)cand.push(i);});
+    /* prioridad: 0 nunca vista → 3 fallada → 1 vista sin responder → 2 acertada */
+    var orden=[0,3,1,2],sel=[],stats={nueva:0,fallada:0,vista:0,acertada:0};
+    var nom={0:'nueva',3:'fallada',1:'vista',2:'acertada'};
+    orden.forEach(function(b){
+      if(sel.length>=n)return;
+      var porTema={};
+      shuffle(cand.filter(function(i){return est[i]===b;})).forEach(function(i){(porTema[POOL[i].t]=porTema[POOL[i].t]||[]).push(i);});
+      var ts=shuffle(Object.keys(porTema)),alguna=true;
+      while(sel.length<n&&alguna){
+        alguna=false;
+        ts.forEach(function(t){if(sel.length<n&&porTema[t].length){sel.push(porTema[t].shift());stats[nom[b]]++;alguna=true;}});
+      }
+    });
+    var id=Date.now().toString(36);
+    G.cur={id:id,ids:shuffle(sel),temas:temas,n:n,fecha:new Date().toISOString().slice(0,10),stats:stats,vistas:false};
+    lsSet(GK,G);
+    lsSet(drawKey(id),{timerSec:Math.round(n*72)});   /* 50 preguntas → 60 min */
+  }
+  if(!G.cur)generar(TEMAS,50);
+  var c=G.cur,qs=c.ids.map(function(idx,k){var p=POOL[idx];return {n:String(k+1),noShuffle:p.ns,img:null,q:p.q,o:p.o,c:p.c,e:p.e+' <i style="opacity:.6">['+p.t+']</i>'};});
+  c.vistas=true;lsSet(GK,G);
+  function nuevo(temas,n){archivar();delete G.cur;generar(temas,n);location.reload();}
+  function resumen(){
+    var est=estados(),tot={},nunca={};
+    POOL.forEach(function(p,i){tot[p.t]=(tot[p.t]||0)+1;if(est[i]===0)nunca[p.t]=(nunca[p.t]||0)+1;});
+    return {tot:tot,nunca:nunca};
+  }
+  return {key:drawKey(c.id),cur:c,temas:TEMAS,nuevo:nuevo,resumen:resumen,
+    meta:{titulo:'Ginecología y Obstetricia · Simulacro nuevo',subtitulo:c.n+' preguntas montadas el '+c.fecha.split('-').reverse().join('/')+' · prioriza las que nunca has respondido',
+      examen:'Simulacro · la nota resta 1/3 por fallo · temporizador 72 s por pregunta',
+      secciones:{sim:{label:'Simulacro · '+c.n+' preguntas',emoji:'⏱️',color:'#0f766e',colorDim:'#ccfbf1',desc:'Temas mezclados · pulsa «Calcular nota» al terminar'}}},
+    d:{sim:qs}};
+})();
+</script>
+
+<header>
+  <h1 id="h-tit">Banco MIR</h1>
+  <div class="hright">
+    <span class="hmeta" id="h-meta"></span>
+    <!-- Temporizador -->
+    <div id="timer-wrap" title="Haz clic en el tiempo para editar">
+      <span id="timer-display">0:00:00</span>
+      <button id="btn-tplay" onclick="timerToggle()" title="Play/Pausa">▶</button>
+      <button onclick="timerReset()" title="Reset">↺</button>
+    </div>
+    <button class="hbtn" id="btn-dark" onclick="toggleDark()" title="Modo oscuro">🌙</button>
+    <span id="save-badge" class="sbadge"></span>
+  </div>
+</header>
+<div id="prog-wrap"><div id="prog-bar"></div></div>
+
+<div class="container" id="main-cont" data-tab="all">
+<div id="gen-panel" style="background:var(--surf);border:1.5px solid #0f766e;border-radius:12px;padding:14px 16px;margin:0 0 14px">
+  <div style="font-weight:700;font-size:15px;margin-bottom:4px">🎲 Simulacro nuevo cada vez</div>
+  <div id="gen-info" style="font-size:13px;color:var(--txt2);line-height:1.5"></div>
+  <details style="margin-top:8px;font-size:13px">
+    <summary style="cursor:pointer;font-weight:600;color:#0f766e">Montar otro simulacro</summary>
+    <div id="gen-temas" style="display:flex;flex-wrap:wrap;gap:6px 14px;margin:10px 0"></div>
+    <label>Preguntas: <select id="gen-n" style="font-size:13px;padding:3px;border-radius:6px;background:var(--surf);color:var(--txt);border:1px solid var(--bd2)"><option>25</option><option selected>50</option></select></label>
+    <button id="gen-btn" type="button" style="margin-left:10px;padding:7px 14px;border-radius:8px;border:none;background:#0f766e;color:#fff;font-weight:600;cursor:pointer">Montar simulacro nuevo</button>
+    <div style="font-size:12px;color:var(--txt3);margin-top:8px">Lo que hayas contestado en este se guarda en tu historial: el siguiente empezará por preguntas que no hayas visto, luego las falladas y al final las acertadas. Todo se queda en este navegador.</div>
+  </details>
+</div>
+<script>
+(function(){
+  var c=GEN.cur,s=c.stats,r=GEN.resumen();
+  var totNunca=0,tot=0;GEN.temas.forEach(function(t){tot+=r.tot[t];totNunca+=(r.nunca[t]||0);});
+  document.getElementById('gen-info').innerHTML='<b>'+s.nueva+'</b> de '+c.n+' son preguntas que no habías respondido nunca'
+    +(s.fallada?' · <b>'+s.fallada+'</b> falladas antes':'')+(s.vista+s.acertada?' · '+(s.vista+s.acertada)+' ya vistas (no quedaban nuevas suficientes)':'')
+    +'<br>Te quedan <b>'+totNunca+'</b> de '+tot+' preguntas de Gine que aún no has visto (cuentan también las de los demás bancos de la asignatura).';
+  var box=document.getElementById('gen-temas');
+  GEN.temas.forEach(function(t){
+    var l=document.createElement('label');l.style.whiteSpace='nowrap';
+    var cb=document.createElement('input');cb.type='checkbox';cb.value=t;cb.checked=c.temas.indexOf(t)>=0;
+    l.appendChild(cb);l.appendChild(document.createTextNode(' '+t+' ('+(r.nunca[t]||0)+' nuevas)'));box.appendChild(l);
+  });
+  var b=document.getElementById('gen-btn'),armed=false;
+  b.addEventListener('click',function(){
+    var ts=[].slice.call(box.querySelectorAll('input:checked')).map(function(x){return x.value;});
+    if(!ts.length){b.textContent='Marca al menos un tema';return;}
+    if(!armed){armed=true;b.textContent='¿Seguro? Pulsa otra vez';b.style.background='#b45309';return;}
+    GEN.nuevo(ts,parseInt(document.getElementById('gen-n').value,10));
+  });
+})();
+</script>
+
+  <!-- Buscador -->
+  <div class="search-wrap">
+    <input type="text" id="search-input" placeholder="🔍 Buscar en enunciados..." oninput="onSearch(this.value)">
+    <button class="search-clear" id="search-clear" onclick="clearSearch()">✕</button>
+  </div>
+  <div id="search-count"></div>
+
+  <!-- Modo -->
+  <div class="mode-bar">
+    <span style="font-size:11.5px;color:var(--txt3);font-weight:600">MODO:</span>
+    <button class="mode-btn on" id="mode-test" onclick="setMode('test')">📝 Test</button>
+    <button class="mode-btn" id="mode-quick" onclick="setMode('quick')">⚡ Repaso rápido</button>
+    <button class="mode-btn" id="btn-stars" onclick="filterStarred()" style="margin-left:auto;border-color:#f59e0b;color:#b45309">⭐ Marcadas</button>
+    <button class="mode-btn" id="btn-stats" onclick="toggleStats()">📊 Errores</button>
+  </div>
+
+  <!-- Stats globales -->
+  <div class="stats-box" id="stats-global"></div>
+
+  <!-- Tabs -->
+  <div class="tabs" id="tabs-wrap"></div>
+
+  <!-- Score global -->
+  <div class="ph-global">
+    <div class="ph-left">
+      <span class="ph-desc" id="ph-gdesc"></span>
+      <div class="score-row">
+        <span class="sc ok" id="sc-ok-all">✓ 0</span>
+        <span class="sc ko" id="sc-ko-all">✗ 0</span>
+        <span class="sc rem" id="sc-rem-all">○ 0</span>
+      </div>
+    </div>
+  </div>
+  <div class="global-actions">
+    <button class="reset-btn" onclick="resetAll()">↺ Reiniciar y mezclar</button>
+    <button class="nota-btn" onclick="calcNotaAll()">✎ Calcular nota global</button>
+  </div>
+  <div class="global-nota-box" id="nota-all"></div>
+  <p class="hint">💡 <b>1–5</b> responde · <b>↑↓</b> navega · <b>S</b> marca ⭐ · Progreso guardado automáticamente</p>
+
+  <div id="panels-wrap"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════ MOTOR v10 ═══════════════════════════════════════ */
+
+var KEY=/*__KEY__*/GEN.key;
+var META=/*__META_JSON__*/GEN.meta;
+var D=/*__D_JSON__*/GEN.d;
+var IMGS=/*__IMGS_JSON__*/{};
+
+/* ── Estado ── */
+var canSave=typeof localStorage!=='undefined';
+var saved={};try{saved=JSON.parse(localStorage.getItem(KEY)||'null')||{};}catch(e){}
+var state   =saved.state   ||{};
+var qOrd    =saved.qOrd    ||{};
+var oOrd    =saved.oOrd    ||{};
+var starred =saved.starred ||{};
+var failHist=saved.failHist||{};  // {qid: count} entre sesiones
+var darkMode=saved.dark    ||false;
+var timerSec=saved.timerSec||0;   // segundos configurados
+var SECS=Object.keys(META.secciones||{});
+var fFailed={};
+var qIdx={};           // {sec: {n: q}}
+var qNums={};          // {sec: {n: numero_correlativo}}
+var allOrder=null;     // orden mezclado inter-secciones para pestaña Todos
+var activeCid=null;
+var currentTab='all';
+var currentMode='test';
+var saveTimer=null;
+var starsFilter=false;
+var statsVisible=false;
+var timerRunning=false;
+var timerRemaining=timerSec;
+var timerInterval=null;
+
+/* ── INIT ── */
+(function init(){
+  SECS.forEach(function(s){fFailed[s]=false;});
+  injectSecCSS();
+  buildHeader();
+  buildTabs();
+  buildPanels();
+  buildIdx();
+  buildNums();
+  buildAllOrder();
+  SECS.forEach(render);
+  renderAll();
+  updateScores();
+  updateProg();
+  applyTheme();
+  initTimer();
+  setBadge(canSave?'Guardado':'Sin guardado',canSave?'ok':'warn');
+  document.addEventListener('keydown',handleKey);
+  var si=document.getElementById('search-input');
+  if(si)si.addEventListener('keydown',function(e){if(e.key==='Escape'){clearSearch();}});
+})();
+
+/* ── CSS dinámico ── */
+function injectSecCSS(){
+  var css='';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{};
+    var c=m.color||'#1a56db',cd=m.colorDim||'#e8f0fe';
+    css+='.tab.t-'+s+'.on{background:'+cd+';color:'+c+';border-color:'+c+'}\n';
+    css+='.ph.s-'+s+'{border-left:4px solid '+c+'}\n';
+    // Variables CSS por sección para el badge coloreado
+    css+='#panel-'+s+' .qnum.sec-colored{background:'+cd+';color:'+c+'}\n';
+  });
+  var st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+}
+
+/* ── Header ── */
+function buildHeader(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var t=document.getElementById('h-tit');if(t)t.textContent=META.titulo||'Banco MIR';
+  var pt=document.getElementById('page-title');if(pt)pt.textContent=META.titulo||'Banco MIR';
+  var m=document.getElementById('h-meta');
+  if(m){var p=[];if(total)p.push(total+' preguntas');if(META.examen)p.push(META.examen);m.textContent=p.join(' · ');}
+  var d=document.getElementById('ph-gdesc');if(d)d.textContent=META.subtitulo||'';
+  var r=document.getElementById('sc-rem-all');if(r)r.textContent='○ '+total;
+}
+
+/* ── Tabs ── */
+function buildTabs(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var h='<button class="tab t-all on" onclick="showTab(\'all\')">📋 Todos ('+total+')</button>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<button class="tab t-'+s+'" onclick="showTab(\''+s+'\')">'+(m.emoji?m.emoji+' ':'')+escH(m.label||s)+' ('+cnt+')</button>';
+  });
+  var w=document.getElementById('tabs-wrap');if(w)w.innerHTML=h;
+}
+
+/* ── Paneles ── */
+function buildPanels(){
+  var h='<div id="panel-all" class="sec-panel visible"><div id="qs-all"></div><div class="no-results" id="nr-all">No se encontraron preguntas</div></div>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<div id="panel-'+s+'" class="sec-panel">';
+    h+='<div class="ph s-'+s+'">';
+    h+='<div class="ph-left">';
+    h+='<span class="ph-label">'+(m.emoji?m.emoji+'&nbsp;':'')+escH(m.label||s)+'</span>';
+    if(m.desc)h+='<span class="ph-desc">'+escH(m.desc)+'</span>';
+    h+='<div class="score-row">';
+    h+='<span class="sc ok" id="sc-ok-'+s+'">✓ 0</span>';
+    h+='<span class="sc ko" id="sc-ko-'+s+'">✗ 0</span>';
+    h+='<span class="sc rem" id="sc-rem-'+s+'">○ '+cnt+'</span>';
+    h+='</div></div>';
+    h+='<button class="fbtn" id="fb-'+s+'" onclick="toggleFail(\''+s+'\')">Solo falladas</button>';
+    h+='</div>';
+    h+='<div id="qs-'+s+'"></div>';
+    h+='<div class="no-failed" id="nf-'+s+'">Aún no has fallado ninguna 🎉</div>';
+    h+='<div class="no-results" id="nr-'+s+'">No se encontraron preguntas</div>';
+    h+='<div class="sec-actions">';
+    h+='<button class="reset-btn" onclick="resetSec(\''+s+'\')">↺ Reiniciar</button>';
+    h+='<button class="nota-btn" onclick="calcNota(\''+s+'\')">✎ Calcular nota</button>';
+    h+='</div>';
+    h+='<div class="nota-box" id="nota-'+s+'"></div>';
+    h+='</div>';
+  });
+  var pw=document.getElementById('panels-wrap');if(pw)pw.innerHTML=h;
+}
+
+/* ── Índice O(1) + numeración fija ── */
+function buildIdx(){
+  SECS.forEach(function(s){
+    qIdx[s]={};
+    if(D[s])D[s].forEach(function(q){qIdx[s][q.n]=q;});
+  });
+}
+function buildNums(){
+  // Numeración correlativa fija: 1, 2, 3... por sección
+  SECS.forEach(function(s){
+    qNums[s]={};
+    if(D[s])D[s].forEach(function(q,i){qNums[s][q.n]=i+1;});
+  });
+}
+function getNum(sec,n){return qNums[sec]?qNums[sec][n]||n:n;}
+function findQ(qid){
+  var d=qid.indexOf('-'),s=qid.substring(0,d),n=qid.substring(d+1);
+  return(qIdx[s]&&qIdx[s][n])||null;
+}
+function getSecFromQid(qid){return qid.substring(0,qid.indexOf('-'));}
+function getNFromQid(qid){return qid.substring(qid.indexOf('-')+1);}
+
+/* ── Orden inter-secciones para Todos ── */
+function buildAllOrder(){
+  var all=[];
+  SECS.forEach(function(s){if(D[s])D[s].forEach(function(q){all.push({sec:s,n:q.n});});});
+  if(!qOrd['__all__'])qOrd['__all__']=shuffle(all.map(function(x){return x.sec+'|'+x.n;}));
+  allOrder=qOrd['__all__'].map(function(key){
+    var p=key.indexOf('|'),sec=key.substring(0,p),n=key.substring(p+1);
+    return{sec:sec,n:n,q:qIdx[sec]&&qIdx[sec][n]};
+  }).filter(function(x){return x.q;});
+}
+
+/* ── Utilidades ── */
+function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function shuffle(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=b[i];b[i]=b[j];b[j]=t;}return b;}
+function getQOrd(s,qs){if(!qOrd[s])qOrd[s]=shuffle(qs.map(function(q){return q.n;}));return qOrd[s];}
+function getOOrd(qid){
+  var q=findQ(qid);var n=q&&q.o?q.o.length:4;
+  if(q&&q.noShuffle){var a=[];for(var i=0;i<n;i++)a.push(i);return a;}
+  if(!oOrd[qid]){var a=[];for(var i=0;i<n;i++)a.push(i);oOrd[qid]=shuffle(a);}
+  return oOrd[qid];
+}
+function imgHtml(key){
+  if(!IMGS[key]){console.warn('IMGS: clave no encontrada →',key);return'';}
+  return'<div class="clinimg-wrap"><img src="'+IMGS[key]+'" class="clinimg" alt="Imagen clínica" loading="lazy"><div class="clinimg-cap">Imagen clínica</div></div>';
+}
+
+/* ── localStorage debounce ── */
+function saveLocal(){
+  if(!canSave)return;
+  if(saveTimer)clearTimeout(saveTimer);
+  saveTimer=setTimeout(function(){
+    try{
+      localStorage.setItem(KEY,JSON.stringify({state:state,qOrd:qOrd,oOrd:oOrd,starred:starred,failHist:failHist,dark:darkMode,timerSec:timerSec}));
+      setBadge('Guardado','ok');
+    }catch(e){setBadge('Sin guardado','warn');}
+  },300);
+}
+function setBadge(t,c){var b=document.getElementById('save-badge');if(b){b.textContent=t;b.className='sbadge '+c;}}
+
+/* ── Construcción de tarjeta ── */
+function buildCard(q,sec,inAll,allPos){
+  var qid=sec+'-'+q.n;
+  var cid=(inAll?'A-':'S-')+qid;
+  var num=inAll?(allPos+1):getNum(sec,q.n);
+  var oo=getOOrd(qid);
+  var sOpts=oo.map(function(i){return q.o[i];});
+  var nc=oo.indexOf(q.c-1)+1;
+  var ans=state[qid];
+  var cc=ans?(ans.r?' answered-ok':' answered-wrong'):'';
+  var badgeCls='qnum'+(inAll?'':' sec-colored');
+  var h='<div class="qcard s-'+sec+cc+'" id="card-'+cid+'">';
+  h+='<div class="qhead" id="h-'+cid+'" data-cid="'+cid+'" data-qid="'+qid+'" data-sec="'+sec+'" onclick="tog(this.dataset.cid)">';
+  h+='<span class="'+badgeCls+'">'+num+'</span>';
+  h+='<span class="qtxt">'+q.q+(ans?'<span class="atag '+(ans.r?'ok':'ko')+'">'+(ans.r?'✓ acertada':'✗ fallada')+'</span>':'')+'</span>';
+  h+='<button class="star-btn'+(starred[qid]?' on':'')+'\" id="star-'+cid+'" onclick="event.stopPropagation();toggleStar(\''+qid+'\')" title="Marcar (S)"><span class="si">\u2606</span><span class="sf">\u2605</span></button>';
+  h+='<span class="chev">▾</span>';
+  h+='</div>';
+  h+='<div class="qbody" id="b-'+cid+'">';
+  if(q.img)h+=imgHtml(q.img);
+  if(currentMode==='quick'){
+    h+='<div class="quick-card"><div class="quick-rc">✓ Respuesta correcta: opción '+nc+' — '+escH(q.o[q.c-1])+'</div><div class="expbox">'+q.e+'</div></div>';
+  } else {
+    h+='<ul class="opts" id="opts-'+cid+'">';
+    h+=sOpts.map(function(o,i){
+      var p=i+1,oc='opt';
+      if(ans){oc+=' done';if(p===nc)oc+=' correct';else if(p===ans.c&&!ans.r)oc+=' wrong';}
+      return'<li class="'+oc+'" data-qid="'+qid+'" data-pos="'+p+'" data-sec="'+sec+'" onclick="answer(this.dataset.qid,+this.dataset.pos,this.dataset.sec)"><span class="onum">'+p+'.</span><span>'+o+'</span></li>';
+    }).join('');
+    h+='</ul>';
+    if(ans){h+='<div class="expbox"><span class="et">'+(ans.r?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e+'</div>';}
+  }
+  h+='</div></div>';
+  return h;
+}
+
+/* ── Render sección ── */
+function render(sec){
+  var qs=D[sec];if(!qs)return;
+  var ord=getQOrd(sec,qs);
+  var sorted=ord.map(function(n){return qIdx[sec]&&qIdx[sec][n];}).filter(Boolean);
+  var el=document.getElementById('qs-'+sec);
+  if(el)el.innerHTML=sorted.map(function(q){return buildCard(q,sec,false,0);}).join('');
+}
+
+/* ── Render Todos (mezcla inter-secciones) ── */
+function renderAll(){
+  if(!allOrder)buildAllOrder();
+  var el=document.getElementById('qs-all');
+  if(el)el.innerHTML=allOrder.map(function(x,i){return buildCard(x.q,x.sec,true,i);}).join('');
+}
+
+/* ── Toggle open/close ── */
+function tog(cid){
+  var b=document.getElementById('b-'+cid),h=document.getElementById('h-'+cid);
+  if(!b||!h)return;
+  var opening=!b.classList.contains('open');
+  b.classList.toggle('open');h.classList.toggle('open');
+  if(opening){
+    if(activeCid&&activeCid!==cid){var pc=document.getElementById('card-'+activeCid);if(pc)pc.classList.remove('kb-focus');}
+    activeCid=cid;
+    var card=document.getElementById('card-'+cid);if(card)card.classList.add('kb-focus');
+  }else{
+    if(activeCid===cid){activeCid=null;var card=document.getElementById('card-'+cid);if(card)card.classList.remove('kb-focus');}
+  }
+}
+
+/* ── Responder ── */
+function answer(qid,pos,sec){
+  if(state[qid])return;
+  var q=findQ(qid);if(!q)return;
+  var oo=getOOrd(qid);
+  var nc=oo.indexOf(q.c-1)+1;
+  var isRight=pos===nc;
+  state[qid]={c:pos,r:isRight};
+  // Registro de errores
+  if(!isRight){failHist[qid]=(failHist[qid]||0)+1;}
+  saveLocal();
+  // Actualizar todas las instancias del card (panel sección + panel all)
+  // Actualizar opciones en todas las instancias del card
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var optsEl=document.querySelectorAll('#opts-'+cid+' .opt');
+    optsEl.forEach(function(el,i){
+      el.classList.add('done');
+      if(i+1===nc)el.classList.add('correct');
+      else if(i+1===pos&&!isRight)el.classList.add('wrong');
+    });
+    var bdy=document.getElementById('b-'+cid);
+    if(bdy){
+      var eb=bdy.querySelector('.expbox');
+      if(!eb){eb=document.createElement('div');eb.className='expbox';bdy.appendChild(eb);}
+      eb.innerHTML='<span class="et">'+(isRight?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e;
+    }
+    var hd=document.getElementById('h-'+cid);
+    if(hd){var qt=hd.querySelector('.qtxt');if(qt&&!qt.querySelector('.atag')){var at=document.createElement('span');at.className='atag '+(isRight?'ok':'ko');at.innerHTML=isRight?'✓ acertada':'✗ fallada';qt.appendChild(at);}}
+    var card=document.getElementById('card-'+cid);
+    if(card)card.classList.add(isRight?'answered-ok':'answered-wrong');
+  });
+  updateScores();updateProg();
+  if(fFailed[sec]&&isRight){
+    var fcard=document.getElementById('card-S-'+qid);
+    if(fcard)fcard.style.display='none';
+    refreshNF(sec);
+  }
+}
+
+/* ── Estrella ── */
+function toggleStar(qid){
+  starred[qid]=!starred[qid];
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var btn=document.getElementById('star-'+cid);
+    if(btn)btn.classList.toggle('on',starred[qid]);
+  });
+  saveLocal();
+}
+function filterStarred(){
+  starsFilter=!starsFilter;
+  var btn=document.getElementById('btn-stars');
+  if(btn){btn.style.background=starsFilter?'#fef3c7':'';btn.style.fontWeight=starsFilter?'700':'';}
+  document.querySelectorAll('.qcard').forEach(function(card){
+    if(starsFilter){
+      var hd=card.querySelector('.qhead');
+      var qid=hd?hd.dataset.qid:'';
+      card.style.display=starred[qid]?'':'none';
+    }else{card.style.display='';}
+  });
+}
+
+/* ── Filtro falladas ── */
+function refreshNF(sec){
+  var c=document.getElementById('qs-'+sec);if(!c||!fFailed[sec])return;
+  var n=c.querySelectorAll('.qcard.answered-wrong').length;
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',n===0);
+}
+function toggleFail(sec){
+  fFailed[sec]=!fFailed[sec];
+  var btn=document.getElementById('fb-'+sec);
+  if(btn){btn.classList.toggle('on',fFailed[sec]);btn.textContent=fFailed[sec]?'← Ver todas':'Solo falladas';}
+  var c=document.getElementById('qs-'+sec);if(!c)return;
+  var nf=0;
+  c.querySelectorAll('.qcard').forEach(function(card){
+    if(fFailed[sec]){var show=card.classList.contains('answered-wrong');card.style.display=show?'':'none';if(show)nf++;}
+    else{card.style.display='';}
+  });
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',fFailed[sec]&&nf===0);
+}
+
+/* ── Scores y progreso ── */
+function updateScores(){
+  var tok=0,tok2=0,tok3=0;
+  SECS.forEach(function(sec){
+    var ok=0,ko=0;
+    if(D[sec])D[sec].forEach(function(q){var a=state[sec+'-'+q.n];if(a){if(a.r)ok++;else ko++;}});
+    var tot=D[sec]?D[sec].length:0,rem=tot-ok-ko;
+    tok+=ok;tok2+=ko;tok3+=rem;
+    var eok=document.getElementById('sc-ok-'+sec),eko=document.getElementById('sc-ko-'+sec),erm=document.getElementById('sc-rem-'+sec);
+    if(eok)eok.textContent='✓ '+ok;if(eko)eko.textContent='✗ '+ko;if(erm)erm.textContent='○ '+rem;
+  });
+  var eok=document.getElementById('sc-ok-all'),eko=document.getElementById('sc-ko-all'),erm=document.getElementById('sc-rem-all');
+  if(eok)eok.textContent='✓ '+tok;if(eko)eko.textContent='✗ '+tok2;if(erm)erm.textContent='○ '+tok3;
+}
+function updateProg(){
+  var total=0,done=Object.keys(state).length;
+  SECS.forEach(function(s){if(D[s])total+=D[s].length;});
+  var pct=total>0?Math.round(done/total*100):0;
+  var bar=document.getElementById('prog-bar');if(bar)bar.style.width=pct+'%';
+}
+
+/* ── Tabs ── */
+function showTab(t){
+  currentTab=t;
+  document.querySelectorAll('.tab').forEach(function(b){b.classList.remove('on');});
+  var tb=document.querySelector('.tab.t-'+t);if(tb)tb.classList.add('on');
+  var mc=document.getElementById('main-cont');if(mc)mc.setAttribute('data-tab',t);
+  var panelAll=document.getElementById('panel-all');
+  if(panelAll)panelAll.classList.toggle('visible',t==='all');
+  SECS.forEach(function(s){
+    var p=document.getElementById('panel-'+s);
+    if(p)p.classList.toggle('visible',t===s);
+  });
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  clearSearch();
+}
+
+/* ── Reset ── */
+function resetSec(sec){
+  if(D[sec])D[sec].forEach(function(q){var qid=sec+'-'+q.n;delete state[qid];delete oOrd[qid];});
+  delete qOrd[sec];fFailed[sec]=false;activeCid=null;
+  var btn=document.getElementById('fb-'+sec);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+  var nb=document.getElementById('nota-'+sec);if(nb){nb.style.display='none';nb.className='nota-box';}
+  saveLocal();render(sec);
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.remove('show');
+  updateScores();updateProg();
+  // Reconstruir panel all para reflejar cambios
+  buildAllOrder();renderAll();
+}
+function resetAll(){
+  Object.keys(state).forEach(function(k){delete state[k];});
+  Object.keys(oOrd).forEach(function(k){delete oOrd[k];});
+  Object.keys(qOrd).forEach(function(k){delete qOrd[k];});
+  activeCid=null;starsFilter=false;allOrder=null;
+  var bs=document.getElementById('btn-stars');if(bs){bs.style.background='';bs.style.fontWeight='';}
+  SECS.forEach(function(s){
+    fFailed[s]=false;
+    var btn=document.getElementById('fb-'+s);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+    var nb=document.getElementById('nota-'+s);if(nb){nb.style.display='none';nb.className='nota-box';}
+  });
+  saveLocal();
+  SECS.forEach(render);
+  buildAllOrder();renderAll();
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  updateScores();updateProg();
+}
+
+/* ── Nota y revisión ── */
+function buildRevList(sec){
+  var qs=D[sec];if(!qs)return'';
+  var failed=qs.filter(function(q){var a=state[sec+'-'+q.n];return a&&!a.r;});
+  if(!failed.length)return'';
+  var html='<div class="review-list"><div class="review-title">📋 '+failed.length+' pregunta'+(failed.length>1?'s':'')+' fallada'+(failed.length>1?'s':'')+' — repasa aquí:</div>';
+  failed.forEach(function(q){
+    var qid=sec+'-'+q.n;var oo=getOOrd(qid);var nc=oo.indexOf(q.c-1)+1;
+    html+='<details class="review-item"><summary><span><b>'+getNum(sec,q.n)+'.</b> '+q.q+'</span></summary>';
+    html+='<div class="review-body"><div class="review-ans">✓ Opción '+nc+': '+escH(q.o[q.c-1]||'')+'</div>';
+    html+='<div class="expbox">'+q.e+'</div></div></details>';
+  });
+  return html+'</div>';
+}
+function calcNota(sec){
+  var qs=D[sec];if(!qs)return;
+  var total=qs.length,ok=0,ko=0,skip=0;
+  qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-'+sec);if(!box)return;
+  box.className='nota-box '+(pass?'pass':'fail');
+  box.innerHTML='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>'
+    +buildRevList(sec);
+  box.style.display='block';
+}
+function calcNotaAll(){
+  var total=0,ok=0,ko=0,skip=0;
+  SECS.forEach(function(sec){
+    var qs=D[sec];if(!qs)return;
+    total+=qs.length;
+    qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  });
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-all');if(!box)return;
+  box.className='global-nota-box '+(pass?'pass':'fail');
+  var html='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10 (global)</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>';
+  SECS.forEach(function(sec){
+    var rv=buildRevList(sec);
+    if(rv){var m=META.secciones[sec]||{};html+='<div class="review-sec-label">'+(m.emoji?m.emoji+' ':'')+escH(m.label||sec)+'</div>'+rv;}
+  });
+  box.innerHTML=html;box.style.display='block';
+}
+
+/* ── Estadísticas de errores ── */
+function toggleStats(){
+  statsVisible=!statsVisible;
+  var btn=document.getElementById('btn-stats');
+  if(btn){btn.style.background=statsVisible?'var(--ko-bg)':'';btn.style.color=statsVisible?'var(--ko-t)':'';}
+  var box=document.getElementById('stats-global');
+  if(!box)return;
+  if(!statsVisible){box.classList.remove('show');return;}
+  var entries=Object.entries(failHist).filter(function(e){return e[1]>0;});
+  if(!entries.length){box.innerHTML='<div class="stats-title">📊 Sin errores registrados todavía</div>';box.classList.add('show');return;}
+  entries.sort(function(a,b){return b[1]-a[1];});
+  var top=entries.slice(0,10);
+  var maxV=top[0][1];
+  var html='<div class="stats-title">📊 Preguntas más falladas (acumulado entre sesiones)</div>';
+  top.forEach(function(e,i){
+    var qid=e[0],count=e[1];
+    var q=findQ(qid);if(!q)return;
+    var sec=getSecFromQid(qid),n=getNFromQid(qid);
+    var m=META.secciones[sec]||{};
+    var pct=Math.round(count/maxV*100);
+    html+='<div class="stats-item">';
+    html+='<span class="stats-n" style="min-width:18px;color:var(--ko-t);font-weight:700">'+(i+1)+'.</span>';
+    html+='<span class="stats-q">'+(m.emoji?m.emoji+' ':'')+getNum(sec,n)+'. '+q.q.substring(0,60)+(q.q.length>60?'…':'')+'</span>';
+    html+='<div class="stats-bar-wrap"><div class="stats-bar" style="width:'+pct+'%"></div></div>';
+    html+='<span class="stats-n">'+count+'✗</span>';
+    html+='</div>';
+  });
+  box.innerHTML=html;box.classList.add('show');
+}
+
+/* ── Buscador ── */
+function onSearch(val){
+  var v=val.trim().toLowerCase();
+  var clr=document.getElementById('search-clear');
+  var cnt=document.getElementById('search-count');
+  if(clr)clr.style.display=v?'block':'none';
+  var found=0,total=0;
+  document.querySelectorAll('.qcard').forEach(function(card){
+    total++;
+    if(!v){card.classList.remove('search-hidden');found++;}
+    else{
+      var qtxt=card.querySelector('.qtxt');
+      var match=qtxt&&qtxt.textContent.toLowerCase().indexOf(v)!==-1;
+      card.classList.toggle('search-hidden',!match);
+      if(match)found++;
+    }
+  });
+  if(cnt){
+    if(v){cnt.textContent=found+' de '+total+' preguntas';cnt.style.display='block';}
+    else{cnt.style.display='none';}
+  }
+  // Mostrar "sin resultados" por panel
+  ['all'].concat(SECS).forEach(function(s){
+    var panel=document.getElementById('panel-'+s);if(!panel||!panel.classList.contains('visible'))return;
+    var cards=panel.querySelectorAll('.qcard:not(.search-hidden)');
+    var nr=document.getElementById('nr-'+s);if(nr)nr.style.display=cards.length===0&&v?'block':'none';
+  });
+}
+function clearSearch(){
+  var si=document.getElementById('search-input');if(si)si.value='';
+  onSearch('');
+}
+
+/* ── Modo ── */
+function setMode(mode){
+  currentMode=mode;
+  document.getElementById('mode-test').classList.toggle('on',mode==='test');
+  document.getElementById('mode-quick').classList.toggle('on',mode==='quick');
+  // Rerenderizar todo
+  SECS.forEach(render);renderAll();
+}
+
+/* ── Modo oscuro ── */
+function applyTheme(){
+  document.documentElement.setAttribute('data-theme',darkMode?'dark':'light');
+  var btn=document.getElementById('btn-dark');if(btn)btn.textContent=darkMode?'☀️':'🌙';
+}
+function toggleDark(){darkMode=!darkMode;applyTheme();saveLocal();}
+
+/* ── Temporizador ── */
+function initTimer(){
+  timerRemaining=timerSec;
+  renderTimer();
+  var disp=document.getElementById('timer-display');
+  if(disp){
+    disp.addEventListener('click',function(){startEditTimer();});
+  }
+}
+function fmtTime(s){
+  var h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60;
+  return h+':'+(m<10?'0':'')+m+':'+(ss<10?'0':'')+ss;
+}
+function renderTimer(){
+  var disp=document.getElementById('timer-display');
+  if(!disp)return;
+  disp.textContent=fmtTime(timerRemaining);
+  disp.classList.toggle('danger',timerSec>0&&timerRemaining===0);
+}
+function timerToggle(){
+  if(timerRunning){
+    clearInterval(timerInterval);timerRunning=false;
+    document.getElementById('btn-tplay').textContent='▶';
+  }else{
+    if(timerRemaining<=0&&timerSec>0)timerRemaining=timerSec;
+    timerRunning=true;
+    document.getElementById('btn-tplay').textContent='⏸';
+    timerInterval=setInterval(function(){
+      if(timerRemaining>0){timerRemaining--;renderTimer();}
+      else{clearInterval(timerInterval);timerRunning=false;document.getElementById('btn-tplay').textContent='▶';renderTimer();}
+    },1000);
+  }
+}
+function timerReset(){
+  clearInterval(timerInterval);timerRunning=false;
+  timerRemaining=timerSec;
+  document.getElementById('btn-tplay').textContent='▶';
+  renderTimer();
+}
+function startEditTimer(){
+  var disp=document.getElementById('timer-display');if(!disp)return;
+  if(timerRunning){timerToggle();}
+  var old=fmtTime(timerRemaining);
+  disp.contentEditable='true';disp.classList.add('editing');
+  disp.textContent=old;
+  disp.focus();
+  var range=document.createRange();range.selectNodeContents(disp);
+  var sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
+  function commit(){
+    disp.contentEditable='false';disp.classList.remove('editing');
+    var txt=disp.textContent.trim();
+    var parts=txt.split(':').map(Number);
+    var secs=0;
+    if(parts.length===3)secs=parts[0]*3600+parts[1]*60+parts[2];
+    else if(parts.length===2)secs=parts[0]*60+parts[1];
+    else if(parts.length===1)secs=parts[0]*60;
+    if(!isNaN(secs)&&secs>=0){timerSec=secs;timerRemaining=secs;saveLocal();}
+    renderTimer();
+  }
+  disp.addEventListener('blur',commit,{once:true});
+  disp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();disp.blur();}});
+}
+
+/* ── Helpers cid ── */
+function cidToQid(cid){return cid.replace(/^[AS]-/,'');}
+
+/* ── Teclado ── */
+function handleKey(e){
+  var tg=e.target.tagName;
+  if(tg==='INPUT'||tg==='TEXTAREA'||e.target.contentEditable==='true')return;
+  var k=e.key;
+  if(k>='1'&&k<='5'){
+    if(activeCid&&!state[cidToQid(activeCid)]){
+      var aqid=cidToQid(activeCid);
+      var pos=parseInt(k),q=findQ(aqid);
+      if(q&&pos<=q.o.length){e.preventDefault();answer(aqid,pos,getSecFromQid(aqid));}
+    }
+  }else if(k==='ArrowDown'||k==='ArrowUp'){
+    e.preventDefault();navigateQ(k==='ArrowDown'?1:-1);
+  }else if(k==='s'||k==='S'){
+    if(activeCid)toggleStar(cidToQid(activeCid));
+  }
+}
+function navigateQ(dir){
+  var cards=Array.from(document.querySelectorAll('.sec-panel.visible .qcard')).filter(function(c){return c.style.display!=='none'&&!c.classList.contains('search-hidden');});
+  var cids=cards.map(function(c){return c.id.replace('card-','');});
+  if(!cids.length)return;
+  var idx=activeCid?cids.indexOf(activeCid):-1;
+  var nidx=Math.max(0,Math.min(cids.length-1,idx+dir));
+  var ncid=cids[nidx];if(!ncid||ncid===activeCid)return;
+  if(activeCid){var ob=document.getElementById('b-'+activeCid);var oh=document.getElementById('h-'+activeCid);if(ob)ob.classList.remove('open');if(oh)oh.classList.remove('open');var oc=document.getElementById('card-'+activeCid);if(oc)oc.classList.remove('kb-focus');}
+  activeCid=ncid;
+  var nb=document.getElementById('b-'+ncid);var nh=document.getElementById('h-'+ncid);
+  if(nb)nb.classList.add('open');if(nh)nh.classList.add('open');
+  var nc2=document.getElementById('card-'+ncid);if(nc2){nc2.classList.add('kb-focus');nc2.scrollIntoView({behavior:'smooth',block:'nearest'});}
+}
+</script>
+<!-- QRecall · medición anónima del sprint (sin nombre, sin email, sin IP guardada) -->
+<script>
+(function(){
+  var ENDPOINT='https://script.google.com/macros/s/AKfycbzDOUNVlK0wD1y0Xc4V0efc2asUI2-x0OlNbDzd6stsaLNz5avSIn1o1whusnkNC5I/exec'; // URL del Web App de Google Apps Script
+  if(!ENDPOINT||ENDPOINT.indexOf('http')!==0)return;
+  var ls;try{ls=window.localStorage;if(!ls)return;}catch(e){return;}
+  var banco='gine_simulacro_nuevo'||location.pathname.split('/').pop()||'desconocido';
+  var today=new Date().toISOString().slice(0,10);
+  function get(k){try{return ls.getItem(k);}catch(e){return null;}}
+  function set(k,v){try{ls.setItem(k,v);}catch(e){}}
+  var SRC=(function(){var m=location.search.match(/[?&]src=([A-Za-z0-9_-]+)/);if(m){set('qr_src',m[1]);return m[1];}return get('qr_src')||'';})();
+  var uid=get('qr_uid');
+  if(!uid){uid=Math.random().toString(36).slice(2,10)+Date.now().toString(36);set('qr_uid',uid);}
+  var first=get('qr_first');
+  if(!first){first=today;set('qr_first',first);}
+  var sentKey='qr_sent_'+banco;
+  var sent={};try{sent=JSON.parse(get(sentKey)||'{}')||{};}catch(e){}
+  function send(ev){
+    var q='uid='+encodeURIComponent(uid)+'&banco='+encodeURIComponent(banco)+'&ev='+encodeURIComponent(ev)+'&d='+today+'&t='+encodeURIComponent(new Date().toISOString())+'&p='+encodeURIComponent(location.pathname+(SRC?'?src='+SRC:''))+'&_='+Date.now();
+    var url=ENDPOINT+'?'+q;
+    try{fetch(url,{method:'GET',mode:'no-cors',keepalive:true,cache:'no-store'}).catch(function(){});}
+    catch(e){try{var im=new Image();im.src=url;}catch(e2){}}
+  }
+  function once(ev){if(sent[ev])return;sent[ev]=today;set(sentKey,JSON.stringify(sent));send(ev);}
+  // 1) abre: cada carga
+  send('abre');
+  // 2) vuelve: carga en un día distinto al de la primera visita (una vez)
+  if(first!==today)once('vuelve');
+  // 3) respuestas: se cuentan tarjetas contestadas en el DOM (dedupe por pregunta)
+  function answered(){
+    var seen={},n=0;
+    var cards=document.querySelectorAll('[id^="card-"].answered-ok,[id^="card-"].answered-wrong');
+    for(var i=0;i<cards.length;i++){
+      var qid=cards[i].id.replace(/^card-[AS]-/,'');
+      if(!seen[qid]){seen[qid]=1;n++;}
+    }
+    return n;
+  }
+  function check(){
+    var n=answered();
+    if(n>=1)once('primera_respuesta');
+    if(n>=10)once('10_respuestas');
+  }
+  document.addEventListener('click',function(e){
+    var t=e.target;
+    while(t&&t!==document){if(t.classList&&t.classList.contains('opt')){setTimeout(check,50);break;}t=t.parentNode;}
+  },true);
+  document.addEventListener('keydown',function(e){if(/^[1-5]$/.test(e.key))setTimeout(check,50);},true);
+  setTimeout(check,1500); // por si ya había respuestas guardadas de otra sesión
+})();
+</script>
+</body>
+</html>
