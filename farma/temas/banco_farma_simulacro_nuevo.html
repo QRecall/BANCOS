@@ -1,0 +1,1063 @@
+<!--
+=============================================================
+  MOTOR BANCO MIR — v10
+  Novedades respecto a v9:
+  - Numeración correlativa fija por sección (no se mezcla)
+  - Badge neutro en pestaña "Todos" + mezcla real inter-secciones
+  - Temporizador sticky editable en header (play/pausa/reset)
+  - Buscador de texto en tiempo real
+  - Modo repaso rápido (muestra RC + explicación directamente)
+  - Estadísticas de errores recurrentes entre sesiones
+=============================================================
+-->
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title id="page-title">Banco MIR</title>
+<style>
+:root{
+  --bg:#f4f3ef;--surf:#fff;--bd:#e5e5e5;--bd2:#ddd;
+  --txt:#1a1a1a;--txt2:#555;--txt3:#999;--txt4:#666;
+  --hdr:#1a1a1a;--hdr-t:#fff;
+  --ok-bg:#e6f9ef;--ok-t:#0b6e52;--ok-bd:#2da060;
+  --ko-bg:#fdecea;--ko-t:#b91c1c;--ko-bd:#d94f45;
+  --sc-ok:#dcf5ed;--sc-ko:#fdecea;--sc-rem:#f0f0f0;--sc-rem-t:#666;
+  --exp:#fffbe6;--exp-bd:#f0c04a;--exp-t:#5a4500;
+  --prog:#e5e5e5;--prog-fill:#1a56db;
+  --star:#ccc;--star-on:#f59e0b;
+  --hint:#fafafa;--hint-bd:#eee;
+  --tab-bd:#ddd;--tab-t:#555;
+  --all-bg:#e8f0fe;--all-t:#1a56db;--all-bd:#1a56db;
+  --fab:#1a1a1a;--fab-t:#fff;
+  --nota-btn-t:#1a56db;--nota-btn-bd:#1a56db;--nota-btn-bg:var(--surf);
+  --timer-bg:#222;--timer-t:#fff;--timer-danger:#ef4444;
+}
+[data-theme="dark"]{
+  --bg:#0f0f1a;--surf:#1e1e30;--bd:#2a2a45;--bd2:#333355;
+  --txt:#e8e8f0;--txt2:#aaa;--txt3:#555;--txt4:#888;
+  --hdr:#0a0a14;--hdr-t:#e8e8f0;
+  --ok-bg:#0b3020;--ok-t:#4ade80;--ok-bd:#166534;
+  --ko-bg:#2d0a0a;--ko-t:#f87171;--ko-bd:#7f1d1d;
+  --sc-ok:#0b3020;--sc-ko:#2d0a0a;--sc-rem:#252540;--sc-rem-t:#aaa;
+  --exp:#1a1500;--exp-bd:#a37f10;--exp-t:#d4b84a;
+  --prog:#2a2a45;--prog-fill:#60a5fa;
+  --star:#444;--star-on:#f59e0b;
+  --hint:#1a1a2e;--hint-bd:#2a2a45;
+  --tab-bd:#2a2a45;--tab-t:#aaa;
+  --all-bg:#1a2a4a;--all-t:#60a5fa;--all-bd:#3b82f6;
+  --fab:#2a2a50;--fab-t:#e8e8f0;
+  --nota-btn-t:#60a5fa;--nota-btn-bd:#3b82f6;--nota-btn-bg:var(--surf);
+  --timer-bg:#1a1a2e;--timer-t:#e8e8f0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;transition:background .25s,color .25s}
+
+/* ── Header ── */
+header{background:var(--hdr);color:var(--hdr-t);padding:9px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;position:sticky;top:0;z-index:100}
+header h1{font-size:13.5px;font-weight:600;white-space:nowrap}
+.hright{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.hmeta{font-size:11px;color:#888}
+.hbtn{background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:3px 5px;border-radius:5px;transition:background .15s;color:var(--hdr-t)}
+.hbtn:hover{background:rgba(255,255,255,.12)}
+.sbadge{font-size:11px;padding:3px 9px;border-radius:5px;font-weight:500}
+.sbadge.ok{background:#15803d;color:#dcfce7}.sbadge.warn{background:#92400e;color:#fef3c7}
+
+/* ── Temporizador ── */
+#timer-wrap{display:flex;align-items:center;gap:4px;background:var(--timer-bg);border-radius:7px;padding:3px 8px;border:1px solid rgba(255,255,255,.1)}
+#timer-display{font-size:13px;font-weight:700;font-family:monospace;color:var(--timer-t);min-width:58px;text-align:center;cursor:pointer;border-radius:3px;padding:1px 3px}
+#timer-display:hover{background:rgba(255,255,255,.08)}
+#timer-display.editing{background:rgba(255,255,255,.15);outline:none;color:var(--timer-t)}
+#timer-display.danger{color:var(--timer-danger)}
+#timer-wrap button{background:none;border:none;cursor:pointer;color:rgba(255,255,255,.7);font-size:12px;padding:1px 3px;border-radius:3px;line-height:1}
+#timer-wrap button:hover{background:rgba(255,255,255,.12);color:#fff}
+
+/* ── Barra de progreso ── */
+#prog-wrap{height:3px;background:var(--prog);position:sticky;top:40px;z-index:99}
+#prog-bar{height:100%;background:var(--prog-fill);width:0%;transition:width .4s}
+
+/* ── Contenedor ── */
+.container{max-width:820px;margin:0 auto;padding:16px 12px}
+
+/* ── Buscador ── */
+.search-wrap{position:relative;margin-bottom:13px}
+.search-wrap input{width:100%;padding:8px 34px 8px 12px;border:1.5px solid var(--bd2);border-radius:8px;font-size:13px;background:var(--surf);color:var(--txt);outline:none;transition:border-color .15s}
+.search-wrap input:focus{border-color:var(--prog-fill)}
+.search-clear{position:absolute;right:9px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--txt3);font-size:16px;display:none;line-height:1}
+#search-count{font-size:11px;color:var(--txt3);margin-top:4px;display:none}
+
+/* ── Modo repaso ── */
+.mode-bar{display:flex;gap:6px;margin-bottom:12px;align-items:center}
+.mode-btn{padding:5px 12px;border:1.5px solid var(--bd2);border-radius:7px;cursor:pointer;font-size:12px;font-weight:500;background:var(--surf);color:var(--txt2);transition:all .15s}
+.mode-btn:hover{border-color:#999}
+.mode-btn.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Tabs ── */
+.tabs{display:flex;gap:7px;margin-bottom:13px;flex-wrap:wrap}
+.tab{padding:7px 14px;border:1.5px solid var(--tab-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;background:var(--surf);color:var(--tab-t);transition:all .15s}
+.tab:hover{border-color:#999;color:var(--txt)}
+.tab.t-all.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Score global ── */
+.ph-global{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 15px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-left:4px solid var(--prog-fill)}
+.score-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.sc{font-size:12px;font-weight:600;padding:3px 9px;border-radius:6px}
+.sc.ok{background:var(--sc-ok);color:var(--ok-t)}.sc.ko{background:var(--sc-ko);color:var(--ko-t)}.sc.rem{background:var(--sc-rem);color:var(--sc-rem-t)}
+
+/* ── Acciones ── */
+.global-actions{display:none;margin-bottom:10px;gap:7px;flex-wrap:wrap;align-items:center}
+.container[data-tab="all"] .global-actions{display:flex}
+.sec-actions{margin:6px 0 15px;display:flex;gap:7px;flex-wrap:wrap}
+.reset-btn{padding:7px 14px;background:var(--fab);color:var(--fab-t);border:none;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:opacity .15s}
+.reset-btn:hover{opacity:.82}
+.nota-btn{padding:7px 14px;background:var(--nota-btn-bg);color:var(--nota-btn-t);border:1.5px solid var(--nota-btn-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:background .15s}
+.nota-btn:hover{background:var(--all-bg)}
+
+/* ── Nota box ── */
+.nota-box,.global-nota-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:2px solid var(--bd2);font-size:13px;line-height:1.7;display:none}
+.nota-box.pass,.global-nota-box.pass{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t)}
+.nota-box.fail,.global-nota-box.fail{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t)}
+.nota-score{font-size:26px;font-weight:700;display:block;margin-bottom:4px}
+.nota-detail{font-size:12px;opacity:.85;font-family:monospace}
+
+/* ── Vista revisión ── */
+.review-list{margin-top:12px;border-top:1px solid var(--bd2);padding-top:10px}
+.review-title{font-size:12px;font-weight:700;margin-bottom:9px;color:var(--txt)}
+.review-sec-label{font-size:11.5px;font-weight:700;color:var(--txt3);margin:8px 0 5px;padding-top:6px;border-top:1px solid var(--bd)}
+.review-item{background:var(--surf);border-radius:8px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden}
+.review-item summary{padding:9px 12px;cursor:pointer;font-size:12.5px;color:var(--txt);list-style:none;display:flex;gap:8px;align-items:flex-start}
+.review-item summary::-webkit-details-marker{display:none}
+.review-item summary::before{content:'▶';font-size:9px;color:var(--txt3);flex-shrink:0;margin-top:4px;transition:transform .18s}
+details[open] summary::before{transform:rotate(90deg)}
+.review-body{padding:0 12px 11px}
+.review-ans{font-size:12px;color:var(--ok-t);margin-bottom:7px;font-weight:500}
+
+/* ── Estadísticas ── */
+.stats-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:1.5px solid var(--bd2);background:var(--surf);display:none}
+.stats-box.show{display:block}
+.stats-title{font-size:12px;font-weight:700;margin-bottom:10px;color:var(--txt)}
+.stats-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:12.5px}
+.stats-item:last-child{border-bottom:none}
+.stats-bar-wrap{flex:1;background:var(--sc-rem);border-radius:4px;height:6px;overflow:hidden}
+.stats-bar{height:100%;background:var(--ko-bd);border-radius:4px;transition:width .4s}
+.stats-n{font-size:11px;color:var(--txt3);white-space:nowrap}
+.stats-q{flex:2;color:var(--txt);font-size:12px;line-height:1.3}
+
+/* ── Panel secciones ── */
+.sec-panel{display:none}.sec-panel.visible{display:block}
+.ph{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ph-left{flex:1;display:flex;flex-direction:column;gap:5px}
+.ph-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt3);margin-bottom:1px}
+.ph-desc{font-size:12px;color:var(--txt4)}
+.fbtn{padding:6px 12px;font-size:12px;font-weight:500;border:1.5px solid var(--bd2);border-radius:8px;cursor:pointer;background:var(--surf);color:var(--txt2);transition:all .15s;white-space:nowrap}
+.fbtn:hover{border-color:#999;color:var(--txt)}.fbtn.on{background:var(--ko-bg);color:#b91c1c;border-color:#f87171}
+.no-failed{display:none;text-align:center;padding:16px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin-top:4px}
+.no-failed.show{display:block}
+.no-results{display:none;text-align:center;padding:20px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin:8px 0}
+
+/* ── Hint ── */
+.hint{font-size:11px;color:var(--txt3);margin-bottom:15px;padding:7px 11px;background:var(--hint);border-radius:6px;border:1px solid var(--hint-bd)}
+
+/* ── Tarjeta ── */
+.qcard{background:var(--surf);border-radius:10px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden;transition:box-shadow .15s}
+.qcard:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.qcard.kb-focus{outline:2px solid var(--prog-fill);outline-offset:-2px}
+.qcard.search-hidden{display:none}
+.qhead{padding:11px 13px;cursor:pointer;display:flex;align-items:flex-start;gap:9px}
+
+/* ── Badge numérico ── */
+.qnum{font-size:11px;font-weight:700;padding:3px 7px;border-radius:5px;white-space:nowrap;flex-shrink:0;margin-top:2px;background:var(--sc-rem);color:var(--sc-rem-t)}
+/* En pestaña "Todos" siempre neutro; en sección aplica color de sección */
+.qnum.sec-colored{background:var(--sec-dim);color:var(--sec-col)}
+
+.qtxt{font-size:13px;line-height:1.5;flex:1}
+.star-btn{background:none;border:none;cursor:pointer;font-size:15px;color:var(--star);padding:0 2px;flex-shrink:0;margin-top:2px;line-height:1;transition:color .15s,transform .15s}
+.star-btn:hover{transform:scale(1.2)}
+.star-btn .si{display:inline}.star-btn .sf{display:none}
+.star-btn.on .si{display:none}.star-btn.on .sf{display:inline;color:var(--star-on)}
+.chev{font-size:15px;color:var(--bd2);flex-shrink:0;margin-top:2px;transition:transform .2s}
+.qhead.open .chev{transform:rotate(180deg)}
+.qbody{display:none;padding:0 13px 13px}.qbody.open{display:block}
+
+/* ── Imagen ── */
+.clinimg-wrap{margin:9px 0 7px;background:#111;border-radius:8px;overflow:hidden;border:1px solid var(--bd2);text-align:center}
+.clinimg{max-width:100%;max-height:340px;object-fit:contain;display:block;margin:0 auto}
+.clinimg-cap{font-size:11px;color:var(--txt3);padding:4px 0 5px;background:var(--hint);border-top:1px solid var(--bd)}
+
+/* ── Opciones ── */
+.opts{list-style:none;margin-top:9px;display:flex;flex-direction:column;gap:5px}
+.opt{padding:9px 12px;border-radius:8px;border:1.5px solid var(--bd2);cursor:pointer;display:flex;align-items:flex-start;gap:9px;color:var(--txt);font-size:13px;line-height:1.45;transition:border-color .12s,background .12s;user-select:none}
+.opt:hover:not(.done){border-color:#999;background:var(--hint)}
+.opt.correct{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t);font-weight:500;cursor:default}
+.opt.wrong{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t);cursor:default}
+.opt.done:not(.correct):not(.wrong){cursor:default;opacity:.7}
+.onum{font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px;min-width:15px}
+
+/* ── Modo repaso rápido ── */
+.quick-card{padding:9px 12px;border-radius:8px;border:1.5px solid var(--ok-bd);background:var(--ok-bg);margin-top:8px}
+.quick-rc{font-size:12.5px;font-weight:600;color:var(--ok-t);margin-bottom:6px}
+
+/* ── Explicación ── */
+.expbox{margin-top:10px;padding:10px 12px;background:var(--exp);border-left:4px solid var(--exp-bd);border-radius:0 8px 8px 0;font-size:12.5px;color:var(--exp-t);line-height:1.65}
+.expbox b,.expbox strong{font-weight:600}
+.et{display:block;margin-bottom:4px;font-weight:600;font-size:13px}
+.atag{font-size:10px;padding:2px 6px;border-radius:4px;margin-left:5px;vertical-align:middle}
+.atag.ok{background:var(--sc-ok);color:var(--ok-t)}.atag.ko{background:var(--sc-ko);color:#c0392b}
+
+/* ── All-tab CSS ── */
+.container[data-tab="all"] .ph{display:none!important}
+.container[data-tab="all"] .sec-actions{display:none!important}
+.container[data-tab="all"] .no-failed{display:none!important}
+.container[data-tab="all"] .nota-box{display:none!important}
+.container:not([data-tab="all"]) .global-nota-box{display:none!important}
+.container:not([data-tab="all"]) #stats-global{display:none!important}
+</style>
+</head>
+<body>
+<script>var POOL=[{"t": "T1 Introducción", "q": "El uso de vacunas frente a la gripe es un tratamiento de tipo:", "o": ["Etiológico o curativo", "Patogénico o correctivo", "Profiláctico", "Sintomático"], "c": 3, "e": "Las <b>vacunas<\/b> son el ejemplo de tratamiento <b>profiláctico<\/b> (prevención). Antibióticos = curativo/etiológico; insulina = patogénico; paliativos = supresivo; anticatarrales = sintomático. (Pregunta gemela de Julio-2024 Q1.)", "ns": false, "src": ["farma_T01_introduccion_v1|farma-1"]}, {"t": "T1 Introducción", "q": "La administración de insulina a un paciente diabético es un tratamiento:", "o": ["Etiológico, porque combate la causa de la enfermedad", "Patogénico o correctivo, porque actúa frente al mecanismo patológico sin combatir la causa", "Profiláctico", "Supresivo"], "c": 2, "e": "La insulina <b>no cura<\/b> la diabetes: actúa sobre el mecanismo patológico (déficit de insulina). Es el ejemplo clásico de tratamiento <b>patogénico o correctivo<\/b>. Trampa habitual: llamarlo curativo.", "ns": false, "src": ["farma_T01_introduccion_v1|farma-2"]}, {"t": "T1 Introducción", "q": "Señale la afirmación INCORRECTA sobre las fases de los ensayos clínicos:", "o": ["En la fase I se estudia la seguridad a corto plazo en voluntarios adultos sanos", "En la fase II se establece la relación dosis/eficacia en pacientes con la enfermedad", "En la fase III se compara el fármaco frente al tratamiento estándar, al placebo o ambos", "En la fase I se incluyen pacientes enfermos con criterios de inclusión muy restringidos"], "c": 4, "e": "La fase I se realiza en <b>voluntarios sanos<\/b>; los pacientes con criterios de inclusión restringidos entran en la <b>fase II<\/b>. Fase III: eficacia y seguridad a corto y largo plazo, comparativa. Fase IV: farmacovigilancia. (Final ene-2024 Q32 usó exactamente esta trampa.)", "ns": false, "src": ["farma_T01_introduccion_v1|farma-3"]}, {"t": "T1 Introducción", "q": "¿En qué fase del desarrollo de un medicamento se establece la relación dosis/eficacia?", "o": ["Fase preclínica", "Fase I", "Fase II", "Fase III"], "c": 3, "e": "La <b>fase II<\/b> estudia la eficacia terapéutica y la relación dosis/eficacia en pequeños grupos de pacientes. En Final ene-2024 Q32 la opción \"en la fase III se establece la relación dosis/eficacia\" era falsa.", "ns": false, "src": ["farma_T01_introduccion_v1|farma-4"]}, {"t": "T1 Introducción", "q": "En un ensayo clínico con enmascaramiento de tipo simple ciego:", "o": ["El médico desconoce a qué grupo pertenece el paciente", "El paciente desconoce a qué grupo pertenece", "Ni el paciente ni el investigador conocen el grupo", "No existe grupo control"], "c": 2, "e": "<b>Simple ciego<\/b>: solo el <b>paciente<\/b> desconoce el tratamiento. Doble ciego: paciente e investigador. En el ensayo cruzado existe periodo de lavado. (Final ene-2024 Q32.)", "ns": false, "src": ["farma_T01_introduccion_v1|farma-5"]}, {"t": "T1 Introducción", "q": "La farmacovigilancia es la actividad de salud pública que tiene como objetivo identificar, cuantificar, evaluar y prevenir los riesgos asociados al uso de los medicamentos:", "o": ["Antes de su autorización", "Una vez comercializados", "Durante la fase preclínica", "Antes de autorizarlos y una vez comercializados"], "c": 2, "e": "Definición literal (RD 1344/2007): riesgos asociados al uso de los medicamentos <b>una vez comercializados<\/b>. Corresponde a la fase IV. (Final ene-2024 Q73, con las mismas opciones-trampa.)", "ns": false, "src": ["farma_T01_introduccion_v1|farma-6"]}, {"t": "T1 Introducción", "q": "¿Quién puede notificar una sospecha de reacción adversa a medicamentos al Sistema Español de Farmacovigilancia (SEFV-H)?", "o": ["Solo los médicos", "Solo los profesionales sanitarios", "Solo los ciudadanos", "Los ciudadanos y los profesionales sanitarios"], "c": 4, "e": "Desde 2012 pueden notificar tanto los <b>profesionales sanitarios como los ciudadanos<\/b> (tarjeta amarilla / notificaRAM). (Final ene-2024 Q5.)", "ns": false, "src": ["farma_T01_introduccion_v1|farma-7"]}, {"t": "T1 Introducción", "q": "En farmacovigilancia se consideran señales de alarma:", "o": ["La existencia de posibles riesgos no conocidos anteriormente", "Los cambios en la gravedad o frecuencia de riesgos ya conocidos", "Las respuestas a) y b) son correctas", "Ninguna es correcta"], "c": 3, "e": "Una <b>señal<\/b> es información sobre un riesgo nuevo o sobre un cambio en la gravedad/frecuencia de uno conocido. (Julio-2024 Q71, misma pregunta.)", "ns": false, "src": ["farma_T01_introduccion_v1|farma-8"]}, {"t": "T1 Introducción", "q": "Respecto a la revisión del tratamiento farmacológico, señale la respuesta CORRECTA:", "o": ["No es necesaria en pacientes crónicos polimedicados", "Permite detectar duplicidades pero no interacciones", "Tiene como objetivo favorecer la cascada terapéutica", "Tiene como objetivo diferenciar una RAM de una nueva patología para evitar la cascada terapéutica"], "c": 4, "e": "Objetivos de la revisión: optimizar el efecto, minimizar RAM, detectar <b>interacciones y duplicidades<\/b>, mejorar adherencia y eficiencia y <b>evitar la cascada terapéutica<\/b>. Es especialmente necesaria en crónicos polimedicados. (Final ene-2024 Q60.)", "ns": false, "src": ["farma_T01_introduccion_v1|farma-9"]}, {"t": "T1 Introducción", "q": "Señale la afirmación INCORRECTA sobre la deprescripción:", "o": ["Es la retirada supervisada por un médico de fármacos inapropiados", "Debe ser individualizada y gradual", "Puede incluir el ajuste de dosis", "Debe hacerse siempre de forma brusca para evitar interacciones"], "c": 4, "e": "La deprescripción es <b>gradual<\/b> porque algunos fármacos producen síndrome de retirada (benzodiazepinas) o efecto rebote. Herramientas: criterios Beers, STOPP/START, MAI, MARC, ES-PIA.", "ns": false, "src": ["farma_T01_introduccion_v1|farma-10"]}, {"t": "T1 Introducción", "q": "¿Cuál de las siguientes NO es una herramienta de ayuda a la deprescripción?", "o": ["Criterios AGS Beers", "Criterios STOPP/START", "Método MAI", "Clasificación ATC"], "c": 4, "e": "La <b>ATC<\/b> es una clasificación de medicamentos (anatómica, terapéutica, química), no una herramienta de deprescripción. Beers (americana), STOPP/START (europea) y MAI (medication appropriateness index) sí lo son.", "ns": false, "src": ["farma_T01_introduccion_v1|farma-11"]}, {"t": "T1 Introducción", "q": "Señale la relación INCORRECTA:", "o": ["Droga: materia prima, generalmente de origen vegetal, de la que se obtiene el principio activo", "Fármaco: sustancia química con actividad farmacológica, sinónimo de principio activo", "Excipiente: sustancia con efecto farmacológico que potencia al principio activo", "Forma farmacéutica: forma que se da a la mezcla de principios activos y excipientes para administrarlos"], "c": 3, "e": "El <b>excipiente<\/b> es una sustancia <b>inactiva<\/b>, sin efecto farmacológico, que sirve para dar la forma farmacéutica y facilitar preparación, conservación y administración. Puede causar alergias (lactosa).", "ns": false, "src": ["farma_T01_introduccion_v1|farma-12"]}, {"t": "T1 Introducción", "q": "¿Cuál de los siguientes fármacos es de origen natural obtenido a partir de un microorganismo?", "o": ["Morfina", "Penicilina", "Litio", "Procaína"], "c": 2, "e": "Naturales: morfina (vegetal), <b>penicilina (microbio)<\/b>, insulina (tejido animal / ADN recombinante), litio (mineral). Sintético: procaína. Semisintético: oxicodona a partir de morfina.", "ns": false, "src": ["farma_T01_introduccion_v1|farma-13"]}, {"t": "T1 Introducción", "q": "La denominación \"paracetamol\" corresponde al:", "o": ["Nombre químico", "Nombre genérico o DCI", "Nombre comercial", "Código ATC"], "c": 2, "e": "<b>Genérico / DCI<\/b> (denominación común internacional, INN): de propiedad pública, sin patente. Químico: N-(4-hidroxifenil)acetamida. Comercial: Efferalgan, Apiretal, Termalgin…", "ns": false, "src": ["farma_T01_introduccion_v1|farma-14"]}, {"t": "T1 Introducción", "q": "Señale la relación INCORRECTA entre grupo farmacológico y partícula común (stem) de su DCI:", "o": ["Bloqueantes beta-adrenérgicos: -olol", "IECA: -pril", "Benzodiazepinas: -sartán", "Tetraciclinas: -ciclina"], "c": 3, "e": "<b>-sartán<\/b> corresponde a los ARA-II (losartán, valsartán). Las benzodiazepinas terminan en <b>-azepam / -azolam<\/b>. Otros: -azosin (antagonistas α1), -statina, -cilina, cef-.", "ns": false, "src": ["farma_T01_introduccion_v1|farma-15"]}, {"t": "T1 Introducción", "q": "En la clasificación ATC, el código N02BA01 (ácido acetilsalicílico) tiene como primer nivel:", "o": ["El subgrupo químico", "El grupo anatómico principal (N = sistema nervioso)", "El grupo terapéutico principal", "La sustancia química"], "c": 2, "e": "ATC: 1º nivel <b>grupo anatómico<\/b> (1 letra), 2º grupo terapéutico (2 dígitos), 3º subgrupo terapéutico/farmacológico (letra), 4º subgrupo químico (letra), 5º sustancia (2 dígitos). Un mismo principio activo puede tener más de un código (AAS antiagregante = B01AC06).", "ns": false, "src": ["farma_T01_introduccion_v1|farma-16"]}, {"t": "T1 Introducción", "q": "¿Qué es cierto sobre la insulina \"Mixtard 30 innolet\"?", "o": ["El tipo de dispositivo viene indicado por el nombre \"Mixtard\"", "El tipo de dispositivo viene indicado por el nombre \"innolet\"", "El tipo de dispositivo no viene indicado en el nombre", "Ninguna es correcta"], "c": 2, "e": "En el nombre comercial, la <b>segunda palabra indica el dispositivo<\/b> (innolet = pluma precargada; accuhaler = inhalador de polvo seco). Ha caído en Final ene-2024 Q65, Julio-2024 Q72 (\"Anasma accuhaler\") y Final ene-2025 Q1.", "ns": false, "src": ["farma_T01_introduccion_v1|farma-17", "mir_farma_final_2024_v1|farma-65"]}, {"t": "T1 Introducción", "q": "Señale la afirmación CORRECTA sobre los medicamentos genéricos:", "o": ["Su biodisponibilidad es exactamente igual a la de la especialidad de referencia", "Su biodisponibilidad es análoga, dentro de unos límites aceptados, de modo que eficacia y seguridad se consideran esencialmente idénticas", "Siempre pueden intercambiarse en la farmacia por la marca, sin excepciones", "No necesitan demostrar bioequivalencia"], "c": 2, "e": "El genérico debe demostrar <b>bioequivalencia<\/b> (biodisponibilidad dentro de límites preestablecidos, habitualmente 80-125 %). Hay medicamentos no sustituibles, como los <b>inhaladores<\/b>. (Final ene-2024 Q67.)", "ns": false, "src": ["farma_T01_introduccion_v1|farma-18"]}, {"t": "T1 Introducción", "q": "Según el Real Decreto 1718/2010, pueden prescribir medicamentos mediante receta médica:", "o": ["Cualquier profesional sanitario", "Únicamente los médicos", "Médicos, odontólogos, podólogos y enfermeros legalmente facultados, en el ámbito de sus competencias", "Médicos y farmacéuticos"], "c": 3, "e": "La receta es el documento normalizado por el que <b>médicos, odontólogos, podólogos y enfermeros facultados<\/b> prescriben, para su dispensación por un farmacéutico. (Final ene-2024 Q71: \"cualquier profesional sanitario\" era falso.)", "ns": false, "src": ["farma_T01_introduccion_v1|farma-19"]}, {"t": "T1 Introducción", "q": "¿Qué es FALSO sobre los parches transdérmicos?", "o": ["El fármaco llega a la sangre y actúa de forma sistémica", "La velocidad de liberación del fármaco está controlada", "No deben cortarse", "Al cambiarlos no hace falta lavarse las manos porque no queda fármaco"], "c": 4, "e": "Tras manipular un parche <b>hay que lavarse las manos<\/b>: queda fármaco en el parche usado y en la piel. La liberación sí es controlada, no se cortan y la periodicidad puede ser 12/24/72 h. (Final ene-2024 Q66, Julio-2024 Q73.)", "ns": false, "src": ["farma_T01_introduccion_v1|farma-20"]}, {"t": "T1 Introducción", "q": "La forma farmacéutica formada por dos mitades de gelatina rígida encajadas que contienen el fármaco en polvo o granulado se denomina:", "o": ["Cápsula blanda", "Cápsula dura", "Comprimido", "Óvulo"], "c": 2, "e": "<b>Cápsula dura<\/b>: dos piezas (cuerpo y tapa). <b>Cápsula blanda<\/b>: una sola pieza de gelatina flexible con contenido líquido/oleoso. Óvulo: forma sólida para vía vaginal. Suele preguntarse con foto (Final ene-2025 Q2, Julio-2024 Q75).", "ns": false, "src": ["farma_T01_introduccion_v1|farma-21"]}, {"t": "T1 Introducción", "q": "Señale la afirmación FALSA:", "o": ["La farmacología clínica es una especialidad médica que evalúa los efectos de los fármacos en humanos", "La farmacoepidemiología estudia el impacto del fármaco en grandes poblaciones", "La farmacogenética estudia cómo los genes de una persona afectan a su respuesta a los medicamentos", "La farmacocinética estudia el efecto del fármaco sobre el organismo"], "c": 4, "e": "La farmacocinética estudia el efecto del <b>organismo sobre el fármaco<\/b> (LADME). El efecto del fármaco sobre el organismo es la <b>farmacodinamia<\/b>.", "ns": false, "src": ["farma_T01_introduccion_v1|farma-22"]}, {"t": "T1 Introducción", "q": "El uso racional del medicamento (OMS, 1985) implica que los pacientes reciban:", "o": ["El medicamento más nuevo disponible", "La medicación adecuada a sus necesidades clínicas, en las dosis correspondientes, durante un tiempo adecuado y al menor coste posible", "El mayor número de fármacos para cubrir todos los síntomas", "Siempre el medicamento de marca en lugar del genérico"], "c": 2, "e": "Definición literal de la OMS. A igualdad de efecto terapéutico y riesgo, se elige el <b>más barato<\/b> (farmacoeconomía).", "ns": false, "src": ["farma_T01_introduccion_v1|farma-23"]}, {"t": "T2 Farmacocinética", "q": "La biodisponibilidad de un fármaco se define como:", "o": ["La cantidad total de fármaco administrada por vía oral", "La fracción de la dosis administrada que accede a la circulación sistémica en su forma activa, y la velocidad con la que lo hace", "El volumen en el que se distribuye el fármaco en el organismo", "La fracción de fármaco unida a proteínas plasmáticas"], "c": 2, "e": "Definición literal de diapositiva. Se calcula como <b>AUC oral / AUC intravenosa<\/b>; por vía IV es del 100 %. (Julio-2024 Q16.)", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-1"]}, {"t": "T2 Farmacocinética", "q": "Señale la afirmación FALSA sobre la biodisponibilidad:", "o": ["Se ve afectada por el efecto de primer paso hepático", "No se ve afectada por la edad, el sexo ni las patologías del paciente", "Puede calcularse como el cociente AUC oral / AUC intravenosa", "Los fármacos administrados por vía intravenosa tienen una biodisponibilidad del 100 %"], "c": 2, "e": "La BD <b>sí<\/b> depende del tránsito intestinal, del primer paso hepático, de la <b>edad, sexo, fenotipo genético y enfermedades<\/b>. (Julio-2024 Q16 usó esta opción como falsa.)", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-2"]}, {"t": "T2 Farmacocinética", "q": "Un fármaco cuya cinética de absorción es de orden 1 se caracteriza por:", "o": ["Una velocidad de absorción constante e independiente de la cantidad que queda por absorberse", "Una velocidad de absorción proporcional a la cantidad de fármaco que queda por absorberse", "Seguir siempre una cinética de Michaelis-Menten", "No presentar semivida de absorción"], "c": 2, "e": "<b>Orden 1<\/b>: dc/dt = −Ka·A, la velocidad disminuye a medida que se absorbe. <b>Orden 0<\/b>: velocidad constante (perfusión IV continua, gases anestésicos, liberación retardada, etanol, intoxicación por AAS). Trampa de Julio-2024 Q16: \"orden uno = velocidad constante\".", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-3"]}, {"t": "T2 Farmacocinética", "q": "¿Cuál de los siguientes NO es un ejemplo de cinética de orden 0?", "o": ["Perfusión intravenosa continua", "Gases anestésicos", "Intoxicación por ácido acetilsalicílico", "Absorción oral de un comprimido convencional a dosis habituales"], "c": 4, "e": "La mayoría de los fármacos a dosis habituales siguen <b>orden 1<\/b>. El orden 0 aparece cuando la liberación es controlada o el metabolismo se satura (etanol, AAS en intoxicación, fenitoína a dosis altas).", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-4"]}, {"t": "T2 Farmacocinética", "q": "Respecto a la difusión pasiva de fármacos a través de membranas, señale la afirmación CORRECTA:", "o": ["Es un mecanismo saturable que requiere ATP", "Difunde preferentemente la forma ionizada del fármaco, que es la más hidrosoluble", "Difunde preferentemente la forma no ionizada del fármaco, que es la más liposoluble", "Se realiza en contra de gradiente de concentración"], "c": 3, "e": "La difusión pasiva es el mecanismo <b>más habitual<\/b>: a favor de gradiente, sin transportador ni energía, no saturable. Pasa la forma <b>no ionizada (liposoluble)<\/b>; por eso importan el pKa y el pH del medio.", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-5"]}, {"t": "T2 Farmacocinética", "q": "Un ácido débil como el ácido acetilsalicílico se absorberá mejor:", "o": ["En medio básico, porque estará ionizado", "En medio ácido, porque predominará la forma no ionizada", "Igual en cualquier pH", "Solo por transporte activo"], "c": 2, "e": "Henderson-Hasselbalch: los <b>ácidos débiles<\/b> están no ionizados (liposolubles) en <b>medio ácido<\/b> (estómago); las bases débiles atraviesan membranas en medio básico. La misma regla explica la excreción renal según el pH urinario.", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-6"]}, {"t": "T2 Farmacocinética", "q": "Señale la característica que diferencia el transporte activo de la difusión facilitada:", "o": ["Solo el transporte activo utiliza una proteína transportadora", "Solo el transporte activo es saturable", "El transporte activo se realiza en contra de gradiente y consume energía (ATP)", "La difusión facilitada es más rápida que la difusión pasiva y el transporte activo no"], "c": 3, "e": "Ambos usan transportador, son saturables e inhibibles. La diferencia: la difusión facilitada va <b>a favor de gradiente sin energía<\/b>; el transporte activo va <b>contra gradiente con ATP<\/b>.", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-7"]}, {"t": "T2 Farmacocinética", "q": "Ordene de mayor a menor velocidad de absorción las siguientes formas farmacéuticas orales:", "o": ["Comprimido > cápsula > solución", "Solución > cápsula > comprimido", "Cápsula > solución > comprimido", "Comprimido > solución > cápsula"], "c": 2, "e": "Las formas <b>líquidas<\/b> se absorben antes que las sólidas, y cuanto menor es el tamaño de partícula, más rápida la absorción: <b>solución > cápsula > comprimido<\/b>. Por vías: IV > IM > SC > oral > rectal > cutánea.", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-8"]}, {"t": "T2 Farmacocinética", "q": "¿Cuál de las siguientes vías de administración NO tiene proceso de absorción?", "o": ["Oral", "Sublingual", "Intravenosa", "Rectal"], "c": 3, "e": "Por vía <b>intravenosa<\/b> el fármaco entra directamente en el plasma: no hay liberación ni absorción (BD 100 %). La sublingual y la rectal evitan en gran parte el primer paso hepático, pero sí se absorben.", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-9"]}, {"t": "T2 Farmacocinética", "q": "Un paciente toma tetraciclina por vía oral junto con un vaso de leche. ¿Qué tipo de interacción se produce?", "o": ["No se produce ninguna interacción", "Interacción farmacodinámica", "Interacción farmacocinética en la absorción", "Interacción farmacocinética en el metabolismo"], "c": 3, "e": "Las tetraciclinas forman <b>quelatos insolubles con Ca2+<\/b> (leche, antiácidos), lo que reduce su absorción: interacción farmacocinética a nivel de <b>absorción<\/b>. (Julio-2024 Q45.)", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-10"]}, {"t": "T2 Farmacocinética", "q": "Respecto a la unión de los fármacos a proteínas plasmáticas, señale la respuesta CORRECTA:", "o": ["La proteína más importante es la gammaglobulina", "Los fármacos con bajo grado de unión a proteínas actúan como depósito transitorio en sangre", "Los fármacos con alto grado de unión a proteínas plasmáticas quedan limitados al compartimento vascular y la fracción unida actúa como depósito transitorio", "Solo la fracción unida a proteínas ejerce el efecto farmacológico"], "c": 3, "e": "La proteína clave es la <b>albúmina<\/b>. Solo el fármaco <b>libre<\/b> difunde, actúa y se elimina. <b>Alto<\/b> grado de unión → depósito transitorio y acción más prolongada. (Final ene-2024 Q10 usaba \"bajo grado de unión → depósito\" como falsa.)", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-11"]}, {"t": "T2 Farmacocinética", "q": "Las sulfamidas pueden producir ictericia en el recién nacido porque:", "o": ["Inducen el citocromo P-450", "Desplazan a la bilirrubina de su unión a la albúmina", "Inhiben la filtración glomerular", "Aumentan la síntesis hepática de bilirrubina"], "c": 2, "e": "Los sitios de unión a la albúmina son <b>saturables<\/b>: un fármaco con más afinidad desplaza a otro (o a la bilirrubina), aumentando su fracción libre. (Julio-2024 Q46.)", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-12"]}, {"t": "T2 Farmacocinética", "q": "Señale la afirmación CORRECTA sobre la distribución de los fármacos:", "o": ["Las regiones peor vascularizadas son las más accesibles para los fármacos", "Los fármacos liposolubles atraviesan mejor la barrera hematoencefálica", "La barrera hematoencefálica permite el paso libre de fármacos hidrosolubles", "Los fármacos hidrosolubles se acumulan en el tejido adiposo"], "c": 2, "e": "La BHE (sin poros, con membrana basal y pericitos) restringe a los <b>hidrófilos<\/b>; los <b>liposolubles<\/b> pasan por difusión pasiva. Los tejidos más irrigados (corazón, riñón, hígado, cerebro) reciben antes el fármaco. (Final ene-2024 Q10.)", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-13"]}, {"t": "T2 Farmacocinética", "q": "¿Qué fármaco es el ejemplo clásico de acumulación en la grasa y redistribución, con efecto anestésico de inicio inmediato y corta duración?", "o": ["Tiopental", "Amoxicilina", "Gentamicina", "Heparina"], "c": 1, "e": "El <b>tiopental<\/b> (barbitúrico muy liposoluble) llega primero al cerebro (muy irrigado) y luego se <b>redistribuye<\/b> a músculo y grasa, por lo que su efecto termina rápido aunque siga en el organismo.", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-14"]}, {"t": "T2 Farmacocinética", "q": "El volumen de distribución (Vd) de un fármaco en un modelo monocompartimental se calcula como:", "o": ["Concentración plasmática / dosis administrada", "Dosis administrada / concentración plasmática", "AUC oral / AUC intravenosa", "Dosis × semivida de eliminación"], "c": 2, "e": "<b>Vd = dosis / Cp<\/b>. Un Vd elevado indica concentración baja en plasma y alta en tejidos. Permite calcular la <b>dosis de carga<\/b> en urgencias. Lo modifican edemas/obesidad, unión a proteínas y unión a tejidos.", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-15"]}, {"t": "T2 Farmacocinética", "q": "¿Cuál es la principal enzima responsable de las reacciones de fase I del metabolismo hepático?", "o": ["Glucuroniltransferasa", "Citocromo P-450", "Acetiltransferasa", "Sulfotransferasa"], "c": 2, "e": "Fase I (oxidación, reducción, hidrólisis) = <b>citocromo P-450<\/b>, monooxigenasas del retículo endoplásmico liso (microsomal). Fase II = conjugación (glucuronidación, sulfatación, metilación, acetilación). (Final ene-2024 Q2.)", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-16"]}, {"t": "T2 Farmacocinética", "q": "¿Cuál de los siguientes fármacos NO presenta un efecto de primer paso hepático importante?", "o": ["Propranolol", "Levodopa", "Lidocaína", "Gentamicina"], "c": 4, "e": "Lista de la diapositiva: AAS, levodopa, lidocaína, metoprolol, propranolol, salbutamol, morfina, verapamilo. La <b>gentamicina<\/b> (aminoglucósido) ni siquiera se absorbe por vía oral; se administra parenteral y se elimina por vía renal sin metabolizar.", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-17"]}, {"t": "T2 Farmacocinética", "q": "Señale el fármaco INHIBIDOR enzimático:", "o": ["Rifampicina", "Carbamazepina", "Cimetidina", "Fenobarbital"], "c": 3, "e": "<b>Inhibidores<\/b>: cimetidina, fluconazol/ketoconazol, amiodarona, metronidazol, eritromicina, paroxetina/fluoxetina, zumo de pomelo. <b>Inductores<\/b>: rifampicina, carbamazepina, fenitoína, barbitúricos, etanol crónico, tabaco, hipérico. (Final ene-2025 Q28.)", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-18"]}, {"t": "T2 Farmacocinética", "q": "Un paciente anticoagulado con warfarina inicia tratamiento con metronidazol, un inhibidor de su metabolismo. ¿Qué cabe esperar?", "o": ["Disminución de los niveles de warfarina y pérdida de efecto anticoagulante", "Aumento de los niveles plasmáticos de warfarina con riesgo de hemorragia", "Una interacción farmacodinámica sin cambios en la concentración", "Ningún cambio"], "c": 2, "e": "La inhibición enzimática <b>aumenta la semivida y la concentración<\/b> del fármaco afectado → más efecto y más toxicidad (hemorragia). Un inductor haría lo contrario. (Final ene-2024 Q61.)", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-19"]}, {"t": "T2 Farmacocinética", "q": "El tabaco se comporta como inductor enzimático. En un fumador que toma un fármaco metabolizado por esa vía cabe esperar:", "o": ["Aumento de la semivida del fármaco", "Disminución de los niveles plasmáticos y de la intensidad del efecto", "Aumento de la biodisponibilidad oral", "Disminución de la excreción renal"], "c": 2, "e": "La <b>inducción<\/b> aumenta la actividad metabolizante: metabolito inactivo → menos intensidad y duración del efecto; metabolito activo/tóxico → más actividad o toxicidad. (Parcial nov-2024 Q25: el tabaco es inductor de haloperidol.)", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-20"]}, {"t": "T2 Farmacocinética", "q": "Respecto a la excreción renal de fármacos, señale la afirmación INCORRECTA:", "o": ["Es el resultado de la filtración glomerular más la secreción tubular menos la reabsorción tubular", "Por filtración glomerular pasan los fármacos hidrosolubles, pequeños y no unidos a proteínas plasmáticas", "La reabsorción tubular es una difusión pasiva que depende del pH de la orina", "La alcalinización de la orina aumenta la reabsorción de fármacos ácidos"], "c": 4, "e": "En orina <b>básica<\/b> los ácidos débiles se <b>ionizan<\/b>, no se reabsorben y se excretan más (barbitúricos, salicilatos, sulfamidas). Por eso se usa <b>bicarbonato<\/b> en la intoxicación por AAS.", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-21"]}, {"t": "T2 Farmacocinética", "q": "¿Qué medida aumenta la eliminación renal de un fármaco ácido débil como el ácido acetilsalicílico en una intoxicación?", "o": ["Acidificar la orina con cloruro amónico", "Alcalinizar la orina con bicarbonato", "Administrar un inductor enzimático", "Reducir la ingesta de líquidos"], "c": 2, "e": "Orina básica → el ácido queda ionizado en el filtrado → no se reabsorbe → más excreción. Orina ácida favorece la excreción de bases débiles (anfetaminas).", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-22"]}, {"t": "T2 Farmacocinética", "q": "La circulación enterohepática de un fármaco:", "o": ["Acorta su efecto", "Prolonga su efecto y puede bloquearse con carbón activo", "Solo ocurre con fármacos administrados por vía intravenosa", "Se produce por transporte activo en contra de gradiente"], "c": 2, "e": "Reabsorción de fármacos eliminados por la bilis o el epitelio intestinal (difusión pasiva) → <b>prolonga el efecto<\/b>. El <b>carbón activo<\/b> (adsorbente) la interrumpe, por eso es útil en intoxicaciones.", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-23"]}, {"t": "T2 Farmacocinética", "q": "La semivida de eliminación (t½) de un fármaco es:", "o": ["El volumen de plasma que queda libre de fármaco por unidad de tiempo", "El tiempo que tarda la concentración plasmática en reducirse a la mitad", "La probabilidad de que una molécula se elimine en la unidad de tiempo", "El tiempo que tarda en absorberse la mitad de la dosis"], "c": 2, "e": "t½ = tiempo en que Cp se reduce a la mitad. <b>Aclaramiento<\/b> = volumen de plasma liberado de fármaco por unidad de tiempo. <b>Ke<\/b> = probabilidad de eliminación por unidad de tiempo.", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-24"]}, {"t": "T2 Farmacocinética", "q": "Un fármaco de distribución monocompartimental con t½ = 8 h se administra en bolo IV y se alcanza una concentración de 40 mg/L. ¿Qué concentración habrá a las 24 horas?", "o": ["20 mg/L", "10 mg/L", "5 mg/L", "0 mg/L"], "c": 3, "e": "24 h = 3 semividas: 40 → 20 → 10 → <b>5 mg/L<\/b>. (Misma lógica que Final ene-2025 Q3: t½ 6 h, 50 mg/L, a las 12 h = 12,5 mg/L.)", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-25"]}, {"t": "T2 Farmacocinética", "q": "Un paciente en diálisis por enfermedad renal debe recibir un antibiótico cuya principal vía de excreción es la renal. ¿Qué cabe esperar?", "o": ["Disminución de la semivida; hay que aumentar la dosis", "Disminución de la semivida; hay que disminuir la dosis", "Aumento de la semivida; no hay que modificar la dosis", "Aumento de la semivida; debe considerarse disminuir la dosis"], "c": 4, "e": "Si falla la vía de eliminación, el fármaco se acumula: <b>↑ t½<\/b> → ajustar (<b>↓ dosis o ↑ intervalo<\/b>). (Julio-2024 Q21.)", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-26"]}, {"t": "T2 Farmacocinética", "q": "A un niño de 12 kg se le prescribe paracetamol 15 mg/kg por vía oral cada 6 horas. ¿Cuántos mg recibe al día?", "o": ["180 mg", "540 mg", "720 mg", "1.080 mg"], "c": 3, "e": "15 mg/kg × 12 kg = 180 mg por toma; cada 6 h = 4 tomas/día → 180 × 4 = <b>720 mg/día<\/b>. (Estilo Julio-2024 Q2.)", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-27"]}, {"t": "T2 Farmacocinética", "q": "Un vial de lidocaína al 2 % contiene 10 mL. ¿Cuántos mg de lidocaína hay en el vial?", "o": ["20 mg", "200 mg", "2 mg", "2.000 mg"], "c": 2, "e": "<b>X % = X g / 100 mL = 10·X mg/mL<\/b>. Al 2 % → 20 mg/mL × 10 mL = <b>200 mg<\/b>. (Estilo Julio-2024 Q3 y Final ene-2024 Q8.)", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-28"]}, {"t": "T2 Farmacocinética", "q": "Se desea preparar 100 mL de una solución de albúmina al 5 % a partir de la solución comercial al 20 %. ¿Cómo lo prepararía?", "o": ["25 mL de albúmina al 20 % + 75 mL de disolvente", "50 mL de albúmina al 20 % + 50 mL de disolvente", "20 mL de albúmina al 20 % + 80 mL de disolvente", "5 mL de albúmina al 20 % + 95 mL de disolvente"], "c": 1, "e": "C1·V1 = C2·V2 → 20 % × V1 = 5 % × 100 mL → V1 = <b>25 mL<\/b>, y se completa con 75 mL de disolvente. (Estilo Final ene-2025 Q8.)", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-29"]}, {"t": "T2 Farmacocinética", "q": "Adolonta® gotas orales contiene tramadol 100 mg/mL; 1 mL = 40 gotas y 1 pulsación = 5 gotas. ¿Cuántas pulsaciones se necesitan para administrar 50 mg?", "o": ["2 pulsaciones", "4 pulsaciones", "10 pulsaciones", "20 pulsaciones"], "c": 2, "e": "50 mg = 0,5 mL = 20 gotas = <b>4 pulsaciones<\/b>. (Estilo Final ene-2025 Q7.)", "ns": false, "src": ["farma_T02_farmacocinetica_v1|farma-30"]}, {"t": "T3 Farmacodinamia", "q": "¿Cuál de los siguientes fármacos actúa por un mecanismo de acción INESPECÍFICO?", "o": ["Propranolol", "Manitol", "Fluoxetina", "Alopurinol"], "c": 2, "e": "El <b>manitol<\/b> actúa por sus propiedades <b>osmóticas<\/b> (diurético), sin diana molecular precisa. Propranolol = receptor; fluoxetina = transportador; alopurinol = enzima (dianas específicas).", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-1"]}, {"t": "T3 Farmacodinamia", "q": "Señale la relación INCORRECTA entre acción inespecífica y fármaco:", "o": ["Propiedades osmóticas – lactitol, glicerina, manitol", "Actividad ácido-base – sales de aluminio, magnesio y calcio", "Precipitantes proteicos – carbón activo", "Adsorbentes – carbón activo"], "c": 3, "e": "Los <b>precipitantes proteicos<\/b> son los <b>taninos<\/b> (astringentes, desinfectantes). El carbón activo es el adsorbente (antidiarreico, intoxicaciones).", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-2"]}, {"t": "T3 Farmacodinamia", "q": "¿Cuál NO es una diana farmacológica de acción específica?", "o": ["Receptor", "Canal iónico", "Enzima", "Presión osmótica"], "c": 4, "e": "Dianas específicas: <b>receptor<\/b> (agonista/antagonista), <b>canal iónico<\/b> (bloqueo o modulación), <b>enzima<\/b> (inhibición, falso sustrato, profármaco) y <b>transportador<\/b> (inhibición, falso sustrato). Lo osmótico es inespecífico.", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-3"]}, {"t": "T3 Farmacodinamia", "q": "Señale la relación INCORRECTA entre fármaco y enzima que inhibe:", "o": ["Entacapona – catecol-O-metiltransferasa (COMT)", "Selegilina – monoaminooxidasa (MAO)", "Alopurinol – dihidrofolato reductasa", "Estatinas – HMG-CoA reductasa"], "c": 3, "e": "El <b>alopurinol<\/b> inhibe la <b>xantina oxidasa<\/b> (↓ síntesis de ácido úrico). La dihidrofolato reductasa es la diana del <b>metotrexato<\/b>. Los AINE inhiben la ciclooxigenasa.", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-4"]}, {"t": "T3 Farmacodinamia", "q": "La inhibición enzimática irreversible se caracteriza por:", "o": ["Unión no covalente que puede revertirse aumentando el sustrato", "Unión covalente a la enzima, que queda inactivada permanentemente", "Unirse siempre a un sitio distinto del catalítico", "No modificar la semivida del fármaco"], "c": 2, "e": "<b>Irreversible = covalente<\/b> (ejemplo: AAS sobre la COX plaquetaria). Reversible = no covalente; competitiva (sitio activo) o no competitiva (otro sitio).", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-5"]}, {"t": "T3 Farmacodinamia", "q": "La venlafaxina ejerce su efecto antidepresivo actuando sobre:", "o": ["Un canal iónico dependiente de voltaje", "Un transportador, inhibiendo la recaptación de noradrenalina y serotonina", "Un receptor nuclear", "La enzima monoaminooxidasa"], "c": 2, "e": "Diana = <b>transportador<\/b> (bloqueo de la recaptación de NT). Fluoxetina inhibe solo la recaptación de serotonina.", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-6"]}, {"t": "T3 Farmacodinamia", "q": "Señale la relación INCORRECTA entre canal iónico dependiente de voltaje y grupo farmacológico:", "o": ["Canal de Na+ – anestésicos locales", "Canal de Na+ – antiarrítmicos", "Canal de Ca2+ – antihipertensivos", "Canal de Cl- – hipoglucemiantes"], "c": 4, "e": "Los hipoglucemiantes (sulfonilureas) actúan sobre el canal de <b>K+<\/b> de la célula beta. El canal de Cl- es el del receptor <b>GABA-A<\/b> (asociado a receptor).", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-7"]}, {"t": "T3 Farmacodinamia", "q": "¿Cuál es el sistema efector del receptor 5-HT3?", "o": ["Proteína Gs", "Proteína Gi/o", "Receptor acoplado a un canal iónico (canal de Na+)", "Proteína Gq"], "c": 3, "e": "El <b>5-HT3<\/b> es el único receptor serotoninérgico <b>ionotrópico<\/b> (canal catiónico). Los demás 5-HT son metabotrópicos (proteína G). (Parcial nov-2024 Q19.)", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-8"]}, {"t": "T3 Farmacodinamia", "q": "Los receptores acoplados directamente a un canal iónico se denominan:", "o": ["Metabotrópicos", "Ionotrópicos", "Nucleares", "Receptores con actividad tirosina-cinasa"], "c": 2, "e": "<b>Ionotrópico<\/b> = canal iónico (respuesta en milisegundos: nicotínico, GABA-A, NMDA, 5-HT3). <b>Metabotrópico<\/b> = acoplado a proteína G.", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-9"]}, {"t": "T3 Farmacodinamia", "q": "Señale la afirmación FALSA sobre los receptores acoplados a proteínas G:", "o": ["Poseen 7 hélices transmembrana, 3 bucles extracelulares y 3 intracelulares", "La unión de un agonista puede producir inhibición de la adenilato ciclasa", "La unión de un antagonista al receptor produce una disminución de los niveles de AMPc", "La unión de un agonista puede producir un aumento de inositol trifosfato (IP3)"], "c": 3, "e": "El <b>antagonista<\/b> tiene afinidad pero <b>no actividad intrínseca<\/b>: no genera ninguna señal, solo impide la del agonista. (Julio-2024 Q26, misma pregunta.)", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-10"]}, {"t": "T3 Farmacodinamia", "q": "La proteína G heterotrimérica, en estado de reposo:", "o": ["Tiene GTP unido a la subunidad α", "Tiene GDP unido a la subunidad α y el dímero βγ inhibe a α", "Está disociada en α y βγ", "Se localiza en el núcleo celular"], "c": 2, "e": "En reposo α une <b>GDP<\/b>; al unirse el ligando se intercambia por <b>GTP<\/b>, α se separa de βγ y ambos pueden señalizar. 4 familias de α: αs, αi/o, αq, α12/13.", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-11"]}, {"t": "T3 Farmacodinamia", "q": "El mecanismo de acción de la subunidad αs de las proteínas G es:", "o": ["Inhibición de la adenilato ciclasa", "Estimulación de la adenilato ciclasa con aumento de AMPc", "Estimulación de la fosfolipasa C", "Apertura de canales de K+"], "c": 2, "e": "<b>αs<\/b> → ↑ adenilato ciclasa → ↑ AMPc → PKA (y activa canales de Ca2+). <b>αi/o<\/b> → ↓ AMPc, ↓ Ca2+, abre K+ (opioides, α2). <b>αq<\/b> → fosfolipasa C. (Parcial nov-2024 Q28 preguntó αq.)", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-12"]}, {"t": "T3 Farmacodinamia", "q": "La activación de la fosfolipasa C por la subunidad αq genera:", "o": ["AMPc, que activa la PKA", "GMPc, que produce vasodilatación", "IP3, que aumenta el Ca2+ citoplasmático, y DAG, que estimula la PKC", "ATP a partir de ADP"], "c": 3, "e": "PLC hidroliza PIP2 → <b>IP3<\/b> (libera Ca2+ del retículo) + <b>DAG<\/b> (activa proteína-cinasa C). (Parcial nov-2024 Q28.)", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-13"]}, {"t": "T3 Farmacodinamia", "q": "El óxido nítrico produce vasodilatación periférica actuando sobre un receptor con actividad:", "o": ["Tirosina-cinasa", "Guanilato ciclasa (generación de GMPc)", "Adenilato ciclasa", "Canal de Cl-"], "c": 2, "e": "Receptor con actividad enzimática propia tipo <b>guanilato ciclasa<\/b> (riñón, vasos): GTP → GMPc → relajación del músculo liso.", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-14"]}, {"t": "T3 Farmacodinamia", "q": "Los receptores de citocinas (IFN-γ), GH y prolactina:", "o": ["Son receptores nucleares de clase I", "Son receptores ionotrópicos", "Carecen de actividad enzimática intrínseca y se asocian a tirosina-cinasas citosólicas que fosforilan STATs", "Son receptores acoplados a proteína Gs"], "c": 3, "e": "Receptores unidos a cinasas con actividad enzimática <b>asociada<\/b> (vía JAK/STAT) → regulan la transcripción génica. Importantes en el sistema inmune.", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-15"]}, {"t": "T3 Farmacodinamia", "q": "Señale la relación INCORRECTA sobre los receptores nucleares:", "o": ["Clase I – presentes en el citoplasma como homodímeros y migran al núcleo con el ligando", "Clase I – ligandos esteroideos: estrógenos, andrógenos, corticoides", "Clase II – presentes en el núcleo", "Clase II – ligandos esteroideos: gestágenos"], "c": 4, "e": "Los ligandos de <b>clase II<\/b> son <b>no esteroideos<\/b>: ácidos grasos, vitamina D3, hormonas tiroideas. Los gestágenos son esteroides → clase I.", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-16"]}, {"t": "T3 Farmacodinamia", "q": "Respecto a los conceptos de potencia y eficacia, señale la afirmación INCORRECTA:", "o": ["La eficacia se relaciona con el efecto máximo de un fármaco", "La DE50 es una medida de la eficacia", "La potencia permite comparar la dosis necesaria de dos fármacos para alcanzar el mismo efecto", "La potencia de un fármaco no está relacionada con el efecto máximo"], "c": 2, "e": "La <b>DE50<\/b> (dosis que produce el 50 % del efecto máximo) mide la <b>potencia<\/b>. La eficacia se mide por el <b>Emax<\/b>. (Final ene-2024 Q17, misma pregunta.)", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-17"]}, {"t": "T3 Farmacodinamia", "q": "En una curva dosis-respuesta, el fármaco A alcanza el mismo efecto máximo que el fármaco B pero con dosis diez veces menores. Es correcto decir que:", "o": ["A es más eficaz que B", "A es más potente que B e igual de eficaz", "A y B tienen la misma potencia", "B es más potente que A"], "c": 2, "e": "Misma altura (Emax) = misma <b>eficacia<\/b>; curva desplazada a la izquierda (menor DE50) = mayor <b>potencia<\/b>. (Julio-2024 Q31.)", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-18"]}, {"t": "T3 Farmacodinamia", "q": "El índice terapéutico de un fármaco se define como:", "o": ["DE50 / DL50", "La relación entre la dosis que produce el efecto no deseado (DL50) y la dosis que produce el efecto deseado (DE50)", "La pendiente de la curva dosis-respuesta", "La dosis que produce el 50 % del efecto máximo"], "c": 2, "e": "IT = <b>DL50 / DE50<\/b>: cuanto mayor, más seguro. Además, a <b>mayor pendiente<\/b> de la curva, fármaco <b>menos seguro<\/b> (pequeñas variaciones de dosis cambian mucho la respuesta).", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-19"]}, {"t": "T3 Farmacodinamia", "q": "Un fármaco con afinidad por el receptor pero sin actividad intrínseca es un:", "o": ["Agonista puro", "Agonista parcial", "Antagonista", "Agonista inverso"], "c": 3, "e": "<b>Antagonista<\/b>: se une (afinidad) pero no activa (sin actividad intrínseca); solo bloquea. El agonista inverso sí tiene actividad intrínseca, de signo opuesto. (Final ene-2024 Q9 lo preguntó con curvas: el antagonista es la línea sin respuesta.)", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-20"]}, {"t": "T3 Farmacodinamia", "q": "Un agonista parcial se caracteriza por:", "o": ["Alcanzar siempre el efecto máximo si se aumenta la dosis", "No alcanzar el efecto máximo aunque ocupe todos los receptores", "Producir un efecto opuesto al del agonista puro", "Carecer de afinidad por el receptor"], "c": 2, "e": "<b>Agonista parcial<\/b>: baja eficacia, no llega al Emax. Ejemplo típico de examen: <b>buprenorfina<\/b> (opioide agonista parcial; Final ene-2024 Q20, Julio-2024 Q37).", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-21"]}, {"t": "T3 Farmacodinamia", "q": "Si se administra un agonista parcial junto con un agonista puro del mismo receptor, el agonista parcial:", "o": ["Potencia el efecto del agonista puro", "Se comporta como antagonista, compitiendo por el receptor y reduciendo la eficacia global", "No tiene ningún efecto", "Se convierte en agonista inverso"], "c": 2, "e": "Al competir por el receptor con menor eficacia, el parcial <b>reduce la respuesta<\/b> del agonista puro: comportamiento antagonista. Útil en deshabituación/intoxicaciones (buprenorfina).", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-22"]}, {"t": "T3 Farmacodinamia", "q": "Señale la característica del antagonista competitivo reversible:", "o": ["Se une a un sitio distinto al del agonista", "Reduce el efecto máximo del agonista", "Puede ser desplazado por dosis crecientes del agonista y desplaza la curva dosis-respuesta hacia la derecha sin alterar el efecto máximo", "Se une de forma covalente al receptor"], "c": 3, "e": "<b>Competitivo<\/b>: mismo sitio, reversible, curva a la derecha en paralelo, Emax alcanzable (no modifica la eficacia). <b>No competitivo<\/b>: sitio distinto, ↓ Emax. <b>Irreversible<\/b>: covalente, no desplazable, ↓ Emax.", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-23"]}, {"t": "T3 Farmacodinamia", "q": "¿Qué tipo de antagonista modifica la eficacia (efecto máximo) del agonista?", "o": ["Solo el competitivo reversible", "El no competitivo y el irreversible", "Ninguno; los antagonistas nunca modifican la eficacia", "Solo el agonista inverso"], "c": 2, "e": "Resumen de la diapositiva: el antagonista <b>puro competitivo NO modifica la eficacia<\/b>; el <b>no competitivo<\/b> (e irreversible) <b>sí<\/b> reducen el Emax.", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-24"]}, {"t": "T3 Farmacodinamia", "q": "La disminución rápida de la respuesta a un fármaco tras su administración repetida en un corto periodo de tiempo se denomina:", "o": ["Hipersensibilidad", "Taquifilaxia (tolerancia aguda)", "Tolerancia crónica", "Efecto rebote"], "c": 2, "e": "<b>Taquifilaxia<\/b> = tolerancia aguda, rápida (descongestivos nasales). Tolerancia crónica = lenta. Ambas son formas de <b>desensibilización<\/b> por acción de un agonista.", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-25"]}, {"t": "T3 Farmacodinamia", "q": "Respecto a la desensibilización de receptores, señale la afirmación INCORRECTA:", "o": ["Es un mecanismo de protección frente a la estimulación excesiva o prolongada", "Se produce por acción de un fármaco agonista", "En la desensibilización homóloga solo se afecta el receptor ocupado por el ligando", "En la desensibilización heteróloga solo se afecta el receptor ocupado por el ligando"], "c": 4, "e": "<b>Homóloga<\/b>: solo el receptor ocupado. <b>Heteróloga<\/b>: también receptores distintos al ocupado por el ligando.", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-26"]}, {"t": "T3 Farmacodinamia", "q": "La hipersensibilidad de receptores (aumento de su número o afinidad) se produce como consecuencia de:", "o": ["La administración crónica de un agonista", "La ausencia temporal de acción del ligando: denervación, fármacos antagonistas o depleción del neurotransmisor", "La estimulación excesiva y prolongada del receptor", "La saturación de las enzimas metabolizadoras"], "c": 2, "e": "<b>Up-regulation<\/b> por falta de estímulo. Explica el <b>efecto rebote<\/b> al suspender bruscamente antagonistas (β-bloqueantes, antipsicóticos).", "ns": false, "src": ["farma_T03_farmacodinamia_v1|farma-27"]}, {"t": "Final enero 2024", "q": "Señale la afirmación FALSA sobre la absorción de un fármaco:", "o": ["La liberación del fármaco de la forma farmacéutica no afecta a la absorción de dicho fármaco.", "Es el paso de un fármaco de su lugar de administración al plasma.", "Influye en la biodisponibilidad del fármaco.", "En la cinética de la absorción de orden cero la velocidad de absorción es constante e independiente de la concentración."], "c": 1, "e": "La <b>liberación del fármaco de la forma farmacéutica<\/b> es el primer paso y condiciona directamente la absorción: sin liberación no hay absorción. La forma farmacéutica (comprimido, cápsula, parche) determina la velocidad y cantidad de fármaco disponible para absorberse.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-1"]}, {"t": "Final enero 2024", "q": "¿Cuál es la principal molécula encargada de las reacciones de fase I hepática?", "o": ["P-450.", "Kinesina.", "K-Ras.", "P53."], "c": 1, "e": "El citocromo <b>P-450<\/b> (CYP) es el sistema enzimático clave en las reacciones de fase I (oxidación, reducción, hidrólisis). Kinesina es una proteína motora; K-Ras es un oncogén; P53 es un supresor tumoral. Ninguno interviene en el metabolismo hepático de fármacos.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-2"]}, {"t": "Final enero 2024", "q": "¿Qué fármaco inhibe el transportador NPC1L1?", "o": ["Ezetimiba.", "Gemfibrozilo.", "Fenofibrato.", "Colestiramina."], "c": 1, "e": "<b>Ezetimiba<\/b> inhibe el transportador intestinal <b>NPC1L1<\/b>, bloqueando la absorción de colesterol dietético y biliar en el enterocito. Gemfibrozilo y fenofibrato son fibratos (activan PPAR-α); colestiramina es una resina secuestradora de ácidos biliares.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-3"]}, {"t": "Final enero 2024", "q": "En un paciente con úlcera duodenal y alto riesgo cardiovascular por cardiopatía isquémica que requiere un AINE, ¿cuál elegiría como más seguro?", "o": ["Naproxeno.", "Ketoprofeno.", "Indometacina.", "Ibuprofeno."], "c": 1, "e": "<b>Naproxeno<\/b> es el AINE con menor riesgo cardiovascular trombótico (inhibe COX de forma equilibrada). En úlcera se asociaría a IBP. Los COXIB reducen riesgo gástrico pero aumentan riesgo CV. Ibuprofeno e indometacina tienen mayor riesgo CV que naproxeno.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-4"]}, {"t": "Final enero 2024", "q": "¿Quién puede notificar las sospechas de una RAM al SEFV-H?", "o": ["Solo los médicos.", "Solo los profesionales sanitarios.", "Solo los ciudadanos.", "Los ciudadanos y los profesionales sanitarios."], "c": 4, "e": "El Sistema Español de Farmacovigilancia (SEFV-H) acepta notificaciones de <b>tarjeta amarilla<\/b> tanto de <b>profesionales sanitarios<\/b> como de <b>ciudadanos/pacientes<\/b>. Desde 2013 la participación ciudadana está reconocida en la legislación española (RD 577/2013).", "ns": false, "src": ["mir_farma_final_2024_v1|farma-5"]}, {"t": "Final enero 2024", "q": "¿Qué estatina puede administrarse a cualquier hora del día?", "o": ["Atorvastatina.", "Simvastatina.", "Pravastatina.", "Lovastatina."], "c": 1, "e": "<b>Atorvastatina<\/b> tiene una semivida larga (~14h) y puede tomarse a cualquier hora. Simvastatina, pravastatina y lovastatina tienen semividas cortas y deben tomarse por la noche, ya que la síntesis hepática de colesterol es máxima durante el sueño.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-6"]}, {"t": "Final enero 2024", "q": "¿Cuál de los siguientes fármacos podría producir hipertermia maligna?", "o": ["Succinilcolina.", "Tubocurarina.", "Bloqueantes neuromusculares no despolarizantes.", "Edrofonio."], "c": 1, "e": "La <b>succinilcolina<\/b> (bloqueante despolarizante) puede desencadenar <b>hipertermia maligna<\/b> en individuos genéticamente susceptibles (mutación RYR1), con liberación masiva de Ca²⁺ del retículo sarcoplasmático. El tratamiento es dantroleno. Los no despolarizantes no producen este efecto.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-7"]}, {"t": "Final enero 2024", "q": "A un paciente se le administran 1000 ml/día de suero glucosado al 5%. ¿Cuántos mg de glucosa recibe al día?", "o": ["25.000 mg.", "50.000 mg.", "50 mg.", "10.000 mg."], "c": 2, "e": "Suero glucosado al <b>5%<\/b> = 5 g de glucosa por 100 ml = 50 g por 1000 ml = <b>50.000 mg<\/b>. Cálculo: 5 g/100 ml × 1000 ml = 50 g = 50.000 mg. Es el cálculo estándar de concentración porcentual (g/100 ml).", "ns": false, "src": ["mir_farma_final_2024_v1|farma-8"]}, {"t": "Final enero 2024", "q": "Teniendo en cuenta las curvas dosis-respuesta mostradas, ¿cuál correspondería a un antagonista?", "o": ["A.", "B.", "C.", "Ninguna de esas tres."], "c": 2, "e": "Un <b>antagonista puro<\/b> se une al receptor sin producir efecto (actividad intrínseca = 0), desplazando la curva dosis-respuesta del agonista hacia la derecha. La curva B muestra eficacia nula (línea plana en 0%), característica del antagonista competitivo.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-9"]}, {"t": "Final enero 2024", "q": "Respecto a la distribución de un fármaco por el organismo, señale la opción correcta:", "o": ["Las regiones peor vascularizadas son las más accesibles para los fármacos.", "Los fármacos liposolubles atraviesan mejor la barrera hematoencefálica.", "La barrera hematoencefálica es una barrera virtual, que permite el paso libre de fármacos.", "En fármacos con bajo grado de unión a proteínas plasmáticas tendremos un depósito transitorio del fármaco en sangre."], "c": 2, "e": "La <b>barrera hematoencefálica<\/b> está formada por uniones estrechas entre células endoteliales y astrocitos. Solo la cruzan fármacos <b>liposolubles<\/b>, no ionizados y de bajo peso molecular. Los hidrosolubles o muy ionizados no acceden al SNC.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-10"]}, {"t": "Final enero 2024", "q": "¿Qué inhibe al RANKL?", "o": ["Denosumab.", "Raloxifeno.", "Alendronato."], "c": 1, "e": "<b>Denosumab<\/b> es un anticuerpo monoclonal que inhibe <b>RANKL<\/b> (ligando del receptor activador del NF-κB), bloqueando la diferenciación y activación de osteoclastos. Raloxifeno es un SERM; alendronato es un bisfosfonato (inhibe la resorción pero no directamente RANKL).", "ns": false, "src": ["mir_farma_final_2024_v1|farma-11"]}, {"t": "Final enero 2024", "q": "Señale la relación correcta entre receptor adrenérgico y efecto:", "o": ["Receptores beta3 – músculo liso vascular.", "Receptores alfa1 – relajación músculo liso vascular.", "Receptores beta1 – bradicardia.", "Receptores alfa2 – control presináptico de la liberación de neurotransmisores."], "c": 4, "e": "Los <b>receptores alfa2<\/b> presinápticos son autorreceptores que inhiben la liberación de noradrenalina (retroalimentación negativa). β1 produce taquicardia (no bradicardia); α1 contrae el músculo liso vascular; β3 se localiza en tejido adiposo (lipólisis).", "ns": false, "src": ["mir_farma_final_2024_v1|farma-12"]}, {"t": "Final enero 2024", "q": "¿Qué fármaco empeora el ataque agudo de gota?", "o": ["Colchicina.", "Febuxostat.", "Probenecid.", "Benzbromarona."], "c": 2, "e": "<b>Febuxostat<\/b> (inhibidor de la xantina oxidasa) y alopurinol pueden desencadenar o empeorar el ataque agudo de gota al movilizar depósitos de urato. Se inician después del episodio agudo. Colchicina trata el ataque; probenecid y benzbromarona son uricosúricos crónicos.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-13"]}, {"t": "Final enero 2024", "q": "El cardiólogo prescribe furosemida 5 mg/8h por sonda nasogástrica a un niño de 5 meses. La farmacia tiene furosemida 2 mg/ml en jeringa oral. ¿Cuántos ml hay que administrar al día?", "o": ["2,5 ml.", "5 ml.", "3 ml.", "7,5 ml."], "c": 4, "e": "Dosis/toma: 5 mg. Tomas/día: 3 (cada 8h). Dosis total/día: 15 mg. Concentración: 2 mg/ml. <b>Volumen = 15 mg ÷ 2 mg/ml = 7,5 ml/día<\/b>. Verificación: 5 mg ÷ 2 mg/ml = 2,5 ml/toma × 3 tomas = 7,5 ml.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-14"]}, {"t": "Final enero 2024", "q": "El pizotifeno:", "o": ["Es antiemético.", "Es un antipsicótico atípico.", "Estimula el apetito.", "Es útil en el tratamiento sintomático de la migraña."], "c": 3, "e": "El <b>pizotifeno<\/b> es un antihistamínico/antiserotonérgico usado en la <b>profilaxis de la migraña<\/b>. Como efecto secundario produce <b>aumento del apetito<\/b> y ganancia de peso. No es antiemético ni antipsicótico. No trata el ataque agudo, sino que previene las crisis.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-15"]}, {"t": "Final enero 2024", "q": "Paciente con HTA y EPOC. ¿Cuál NO elegiría de primera elección para tratar su hipertensión?", "o": ["Losartán.", "Amlodipino.", "Nadolol.", "Enalapril."], "c": 3, "e": "<b>Nadolol<\/b> es un betabloqueante no selectivo que bloquea los receptores β2 bronquiales, provocando <b>broncoespasmo<\/b>. Está contraindicado en EPOC y asma. Losartán (ARA-II), amlodipino (calcioantagonista) y enalapril (IECA) son alternativas seguras en este contexto.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-16"]}, {"t": "Final enero 2024", "q": "Respecto a los conceptos de potencia y eficacia de un fármaco, las siguientes frases son correctas, EXCEPTO:", "o": ["La eficacia se relaciona con el efecto máximo de un fármaco.", "La DE50 (dosis eficaz 50) es una medida de la eficacia.", "La potencia permite comparar la dosis necesaria de 2 fármacos diferentes para alcanzar el mismo efecto.", "La potencia de un fármaco no está relacionada con el efecto máximo."], "c": 2, "e": "La <b>DE50<\/b> es una medida de <b>potencia<\/b> (cuánta dosis se necesita para el 50% del efecto máximo), no de eficacia. La <b>eficacia<\/b> es el efecto máximo alcanzable (Emax). Un fármaco muy potente tiene DE50 baja; un fármaco muy eficaz tiene Emax alto.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-17"]}, {"t": "Final enero 2024", "q": "La acción agonista serotoninérgica sobre receptores 5-HT4 es responsable de:", "o": ["Acción vasoconstrictora en vasos craneales.", "Acción procinética en la pared digestiva.", "Acción ansiolítica.", "Inhibición de la inflamación del árbol vascular."], "c": 2, "e": "Los receptores <b>5-HT4<\/b> en el plexo mientérico estimulan la motilidad gastrointestinal (efecto <b>procinético<\/b>). Los agonistas 5-HT4 como metoclopramida y cisaprida actúan por este mecanismo. Los 5-HT1B/1D median vasoconstricción craneal (triptanes); 5-HT1A, ansiólisis.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-18"]}, {"t": "Final enero 2024", "q": "La succinilcolina es un bloqueante neuromuscular que tiene como característica:", "o": ["Ser un antagonista irreversible de receptores muscarínicos.", "La inducción de fasciculaciones transitorias al inicio del tratamiento debido a su acción no despolarizante.", "Ser un antagonista competitivo y reversible de los receptores NM.", "De elección en ancianos y recién nacidos."], "c": 2, "e": "La <b>succinilcolina<\/b> es un bloqueante <b>despolarizante<\/b>: activa los receptores NM produciendo <b>fasciculaciones<\/b> transitorias antes de la parálisis flácida. No es antagonista irreversible ni muscarínico. Está contraindicada en ancianos y neonatos por mayor riesgo de hipertermia maligna e hiperpotasemia.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-19"]}, {"t": "Final enero 2024", "q": "Es un opioide agonista parcial:", "o": ["Morfina.", "Pentazocina.", "Buprenorfina.", "Naltrexona."], "c": 3, "e": "<b>Buprenorfina<\/b> es un <b>agonista parcial<\/b> del receptor μ (mu): produce efecto analgésico pero con techo terapéutico y menor dependencia. Morfina es agonista puro μ; pentazocina es agonista κ y antagonista parcial μ; naltrexona es antagonista puro.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-20"]}, {"t": "Final enero 2024", "q": "¿Qué corticoide es de uso tópico o inhalatorio exclusivamente?", "o": ["Clobetasol.", "Deflazacort.", "Prednisona.", "Fluprednisolona."], "c": 1, "e": "<b>Clobetasol<\/b> es un corticoide de muy alta potencia de uso <b>exclusivamente tópico<\/b> (cremas, ungüentos). No se usa sistémicamente. Deflazacort y prednisona son de uso sistémico oral. Budesonida y beclometasona son los inhalatorios de referencia.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-21"]}, {"t": "Final enero 2024", "q": "Indica la respuesta CORRECTA sobre farmacología tiroidea:", "o": ["La tiroperoxidasa es la responsable del almacenamiento de las hormonas tiroideas.", "El hipertiroidismo causa coma mixedematoso.", "La levotiroxina inhibe la yodación de los residuos de la tiroglobulina.", "El metimazol tiene un efecto clínico después de varias semanas debido a la prolongada semivida de la T4."], "c": 4, "e": "El <b>metimazol<\/b> inhibe la síntesis de nuevas hormonas tiroideas, pero el efecto clínico tarda semanas porque hay hormonas preformadas almacenadas y la T4 tiene una <b>semivida larga<\/b> (~7 días). La tiroperoxidasa sintetiza y yoda; el coma mixedematoso es del hipotiroidismo.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-22"]}, {"t": "Final enero 2024", "q": "Ante un paciente con dolor crónico no oncológico que no responde a un AINE, ¿qué fármaco puede añadir?", "o": ["Tramadol.", "Anticonvulsivante.", "Antidepresivo tricíclico.", "Metamizol."], "c": 1, "e": "Según la <b>escalera analgésica de la OMS<\/b>, si el AINE (escalón 1) es insuficiente, el siguiente paso es un <b>opioide débil<\/b> como tramadol (escalón 2). Los coadyuvantes (anticonvulsivantes, tricíclicos) se añaden en dolor neuropático. El metamizol es del mismo escalón.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-23"]}, {"t": "Final enero 2024", "q": "Indique la afirmación FALSA. Los antagonistas alfa1 se emplean en:", "o": ["Feocromocitoma.", "Depresión.", "Hipertrofia benigna de próstata.", "Enfermedades vasculares periféricas."], "c": 2, "e": "Los <b>antagonistas alfa1<\/b> (doxazosina, prazosina, tamsulosina) se usan en HTA, feocromocitoma, HBP y vasculopatías periféricas. <b>No tienen indicación en depresión<\/b>. Los antidepresivos con acción alfa1 antagonista (mirtazapina) se usan en depresión, pero no por esa vía.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-24"]}, {"t": "Final enero 2024", "q": "Es un opioide sin techo terapéutico:", "o": ["Oxicodona.", "Tramadol.", "Buprenorfina.", "Codeína."], "c": 1, "e": "<b>Oxicodona<\/b> es un opioide mayor (agonista puro μ) <b>sin techo terapéutico<\/b>: la dosis puede aumentarse indefinidamente para controlar el dolor. Tramadol, buprenorfina y codeína tienen techo terapéutico. La morfina también carece de techo analgésico.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-25"]}, {"t": "Final enero 2024", "q": "Indica la respuesta INCORRECTA:", "o": ["La furosemida aumenta la ototoxicidad de los aminoglucósidos.", "La eritromicina alcanza el tejido cerebral y es útil frente a toxoplasmosis cerebral.", "La vancomicina se usa cuando hay resistencias a penicilinas y cefalosporinas (MRSA).", "La clindamicina es una alternativa en alérgicos a penicilina."], "c": 2, "e": "La <b>eritromicina no atraviesa bien la BHE<\/b> y no es útil en toxoplasmosis cerebral. El tratamiento de elección es pirimetamina + sulfadiazina. La furosemida sí potencia la ototoxicidad de aminoglucósidos; la vancomicina sí cubre MRSA; la clindamicina sí es alternativa en alérgicos.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-26"]}, {"t": "Final enero 2024", "q": "Indica la relación INCORRECTA:", "o": ["Meloxicam – artritis reumatoide.", "Indometacina – artritis reumatoide.", "Salicilatos – bloqueo reversible de las dos isoformas de la COX.", "Paracetamol – niños con infección vírica."], "c": 3, "e": "Los <b>salicilatos<\/b> (aspirina) producen un bloqueo <b>irreversible<\/b> (acetilación covalente) de COX-1 y COX-2, no reversible. Los AINE clásicos (ibuprofeno, naproxeno) inhiben de forma reversible. El paracetamol es de elección en niños con fiebre vírica (evitar aspirina por riesgo de síndrome de Reye).", "ns": false, "src": ["mir_farma_final_2024_v1|farma-27"]}, {"t": "Final enero 2024", "q": "Indica el fármaco reactivador de la acetilcolinesterasa:", "o": ["Pralidoxima.", "Edrofonio.", "Atropina.", "Donepezilo."], "c": 1, "e": "<b>Pralidoxima<\/b> (2-PAM) es el único <b>reactivador de la acetilcolinesterasa<\/b>: desplaza el organofosforado del sitio activo de la enzima antes del envejecimiento. Atropina bloquea los efectos muscarínicos; edrofonio inhibe reversiblemente la AChE; donepezilo es inhibidor de AChE para Alzheimer.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-28"]}, {"t": "Final enero 2024", "q": "Indica la respuesta CORRECTA respecto a la terapia combinada TARGA:", "o": ["2 inhibidores de la TI no nucleosídicos + 1 inhibidor de la TI nucleosídico o 1-2 inhibidores de la proteasa.", "Inicio de la terapia cuando la inmunodeficiencia es evidente.", "Se basa en el recuento de CD4+.", "2 inhibidores de la TI nucleosídicos + 1 inhibidor de la TI no nucleosídico o imiquimod."], "c": 4, "e": "La <b>TARGA<\/b> estándar incluye <b>2 ITIAN + 1 ITINN o 1-2 inhibidores de la proteasa<\/b> (o inhibidor de integrasa). Se inicia precozmente independientemente de CD4+. Imiquimod es un inmunomodulador tópico, sin papel en TARGA.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-29"]}, {"t": "Final enero 2024", "q": "¿Qué fármacos están aconsejados en terapia inicial de angina inestable cuando los β-bloqueantes están contraindicados?", "o": ["Verapamilo o diltiazem.", "Ivabradina.", "Amlodipino.", "Nifedipino."], "c": 1, "e": "<b>Verapamilo o diltiazem<\/b> (calcioantagonistas no dihidropiridínicos) son la alternativa a los β-bloqueantes en angina inestable: reducen la frecuencia cardiaca y la contractilidad. Las dihidropiridinas (amlodipino, nifedipino) causan taquicardia refleja, contraindicadas en angina inestable sin β-bloqueante.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-30"]}, {"t": "Final enero 2024", "q": "¿Qué grupo de fármacos son de elección en el tratamiento de infecciones durante el embarazo?", "o": ["Metronidazol.", "Macrólidos.", "Tetraciclinas.", "Sulfamidas."], "c": 2, "e": "Los <b>macrólidos<\/b> (azitromicina, eritromicina) son seguros en el embarazo (categoría B). Tetraciclinas están contraindicadas (daño dental/óseo fetal); sulfamidas en el tercer trimestre (kernicterus); metronidazol se usa con precaución y no es de primera elección general.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-31"]}, {"t": "Final enero 2024", "q": "Con respecto a los ensayos clínicos:", "o": ["En un ensayo clínico aleatorizado cruzado existe período de lavado.", "En el enmascaramiento de tipo simple ciego, el médico desconoce a qué grupo pertenece el paciente.", "En la fase III se mide la eficacia terapéutica y se establece la relación dosis/eficacia.", "En la fase I se incluyen pacientes enfermos a tratar con el medicamento en estudio."], "c": 1, "e": "En los ensayos <b>cruzados<\/b> (crossover), cada sujeto recibe los dos tratamientos en secuencia, separados por un <b>período de lavado<\/b> para eliminar el efecto del tratamiento previo. Simple ciego: solo el paciente desconoce el grupo. Fase I: voluntarios sanos; Fase II: dosis/eficacia.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-32"]}, {"t": "Final enero 2024", "q": "En la meningitis causada por Neisseria meningitidis está recomendada la profilaxis con:", "o": ["Penicilina G.", "Ciprofloxacino.", "Amoxicilina.", "Vancomicina."], "c": 2, "e": "La profilaxis de contactos de meningitis meningocócica se realiza con <b>rifampicina<\/b> (de elección) o <b>ciprofloxacino<\/b> (dosis única, alternativa). No se usa penicilina G en profilaxis. La vacuna es el método preventivo principal a largo plazo.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-33"]}, {"t": "Final enero 2024", "q": "¿A qué fase del ciclo celular afecta el metotrexato?", "o": ["Fase G0.", "Fase M.", "Fase G1.", "Fase S."], "c": 4, "e": "<b>Metotrexato<\/b> inhibe la dihidrofolato reductasa, bloqueando la síntesis de purinas y timidilato necesarios para la replicación del ADN. Actúa en <b>fase S<\/b> (síntesis de ADN). Los alcaloides de la vinca (vincristina) actúan en M; los alquilantes en todas las fases.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-34"]}, {"t": "Final enero 2024", "q": "¿Qué asociación de fármacos potencia su acción combinada frente a Streptococos?", "o": ["Rifampicina + vancomicina.", "Cefalosporinas + aminoglucósidos.", "Penicilinas + aminoglucósidos.", "Penicilina G + gentamicina."], "c": 4, "e": "<b>Penicilina G + gentamicina<\/b> es la combinación sinérgica clásica frente a estreptococos: la penicilina daña la pared bacteriana facilitando la entrada del aminoglucósido al interior celular. Esta sinergia es la base del tratamiento de la endocarditis estreptocócica.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-35"]}, {"t": "Final enero 2024", "q": "Indica cuál de los siguientes efectos NO lo produciría un fármaco parasimpaticomimético:", "o": ["Incremento de la micción.", "Broncoconstricción.", "Estreñimiento.", "Miosis."], "c": 3, "e": "Los fármacos <b>parasimpaticomiméticos<\/b> (colinérgicos) aumentan la motilidad intestinal y producen <b>diarrea<\/b>, no estreñimiento. El estreñimiento es efecto de los anticolinérgicos (parasimpaticolíticos). También producen miosis, broncoconstricción y aumento de la micción (contracción del detrusor).", "ns": false, "src": ["mir_farma_final_2024_v1|farma-36"]}, {"t": "Final enero 2024", "q": "La inhibición selectiva de la COX-2 por parte de ciertos AINEs es responsable de su acción:", "o": ["No cardioprotectora.", "Aumentan los efectos secundarios de los AINEs clásicos.", "Eficaces uricosúricos.", "Potentes antiagregantes."], "c": 1, "e": "Los <b>inhibidores selectivos de COX-2<\/b> (coxibs) no inhiben la COX-1 plaquetaria, por lo que no generan TXA2 vasodilatador ni tienen efecto antiagregante. Esto los hace <b>no cardioprotectores<\/b> y aumenta el riesgo trombótico cardiovascular, a diferencia de la aspirina.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-37"]}, {"t": "Final enero 2024", "q": "En relación a los fármacos agonistas adrenérgicos, señale la relación FALSA:", "o": ["Dobutamina – efecto alfa1.", "Adrenalina – efecto alfa y beta.", "Salbutamol – broncodilatación.", "Agonistas alfa1 adrenérgicos vía tópica – descongestionantes nasales."], "c": 1, "e": "<b>Dobutamina<\/b> es principalmente un agonista <b>β1<\/b> (inotrópico positivo), con mínimo efecto alfa. No produce vasoconstricción significativa. La adrenalina tiene efectos α+β; salbutamol es β2 (broncodilatación); los α1 tópicos (oximetazolina) son descongestionantes.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-38"]}, {"t": "Final enero 2024", "q": "Señala la respuesta INCORRECTA sobre fármacos corticosuprarrenales:", "o": ["La mifepristona es un antagonista de receptores glucocorticoides indicada para el síndrome de Cushing.", "Los fármacos mineralcorticoides aumentan la reabsorción de Na+ en los túbulos distales.", "La aminoglutetimida inhibe la 11β-hidroxilasa.", "Los fármacos mineralcorticoides aumentan la excreción de K+ y H+."], "c": 3, "e": "La <b>aminoglutetimida<\/b> inhibe la <b>20,22-desmolasa<\/b> (colesterol → pregnenolona), bloqueando la esteroidogénesis en su primer paso. La <b>11β-hidroxilasa<\/b> es inhibida por el <b>metirapona<\/b>. La mifepristona sí antagoniza el receptor GC; los mineralcorticoides sí retienen Na+ y excretan K+/H+.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-39"]}, {"t": "Final enero 2024", "q": "La doxazosina:", "o": ["Está indicada en HTA en embarazadas.", "Se asocia con diuréticos para evitar la retención de Na+ y agua.", "Presenta como RAM asma y broncoespasmo.", "Provoca síndrome de abstinencia tras retirada brusca."], "c": 2, "e": "<b>Doxazosina<\/b> (antagonista α1) produce vasodilatación con retención refleja de sodio y agua, por lo que se asocia a <b>diuréticos<\/b> para contrarrestar este efecto. El broncoespasmo es RAM de β-bloqueantes, no de α1. No produce síndrome de abstinencia ni está de primera elección en embarazo.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-40"]}, {"t": "Final enero 2024", "q": "Marca la respuesta INCORRECTA respecto al peróxido de hidrógeno:", "o": ["Es de tipo oxidante.", "Es bactericida y fungicida.", "A dosis altas es esporicida.", "Pertenece a las biguanidas."], "c": 4, "e": "El <b>peróxido de hidrógeno<\/b> es un <b>oxidante<\/b>, no una biguanida. Las biguanidas incluyen la clorhexidina. El H₂O₂ es bactericida, fungicida y, a concentraciones elevadas, esporicida. Actúa liberando radicales libres de oxígeno que dañan membranas y proteínas bacterianas.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-41"]}, {"t": "Final enero 2024", "q": "Señala la relación INCORRECTA entre fármaco antiviral e indicación:", "o": ["Nevirapina – prevención transmisión VIH madre-hijo.", "Famciclovir – queratoconjuntivitis herpética.", "Oseltamivir – virus gripe A y B.", "Interferón α-2a – hepatitis B."], "c": 2, "e": "<b>Famciclovir<\/b> (y su metabolito activo penciclovir) es útil en herpes zóster y herpes genital, pero <b>no está indicado en queratoconjuntivitis herpética<\/b>. Esta se trata con trifluridina o aciclovir tópico oftálmico. Nevirapina sí reduce transmisión vertical VIH; oseltamivir cubre gripe A/B.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-42"]}, {"t": "Final enero 2024", "q": "El tratamiento de la intoxicación con agonistas colinérgicos indirectos (organofosforados) incluye:", "o": ["Administración de acetilcolina.", "Administración de atropina.", "Administración de inhibidores de la acetilcolinesterasa.", "Administración de neostigmina."], "c": 2, "e": "<b>Atropina<\/b> es el antídoto de los efectos muscarínicos de los organofosforados (broncoespasmo, bradicardia, hipersecreciones). Se combina con <b>pralidoxima<\/b> (reactivadora de AChE) para los efectos nicotínicos. Administrar más AChE o inhibidores agravaría la intoxicación.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-43"]}, {"t": "Final enero 2024", "q": "Marca la respuesta INCORRECTA sobre antibióticos β-lactámicos:", "o": ["Las cefalosporinas pueden causar hemorragias.", "La producción de β-lactamasas en Gram(+) es inducible por la presencia de antibióticos.", "Los β-lactámicos se unen a la PBP interfiriendo en la síntesis de peptidoglucano.", "La comida disminuye la absorción de cloxacilina."], "c": 4, "e": "La <b>cloxacilina<\/b> debe tomarse en <b>ayunas<\/b> (30-60 min antes de comer): la comida <b>reduce<\/b> su absorción oral. La afirmación de que la comida disminuye la absorción es correcta, no incorrecta. Las cefalosporinas sí pueden causar hemorragia (efecto antivitamina K); las PBP sí son la diana.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-44"]}, {"t": "Final enero 2024", "q": "¿Qué enzima altera el trimetoprima?", "o": ["Dihidrofolato reductasa.", "Dihidrofolato sintetasa.", "Transpeptidasa.", "Transglucosilasa."], "c": 1, "e": "<b>Trimetoprima<\/b> inhibe la <b>dihidrofolato reductasa<\/b> bacteriana (DHFR), bloqueando la reducción de dihidrofolato a tetrahidrofolato. Las sulfamidas inhiben la dihidrofolato sintetasa. La combinación cotrimoxazol (TMP+sulfametoxazol) bloquea dos pasos consecutivos de la síntesis de folato.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-45"]}, {"t": "Final enero 2024", "q": "Marca la respuesta INCORRECTA sobre moduladores hormonales:", "o": ["El raloxifeno puede bloquear la señal estrogénica a nivel hipotálamo-hipófisis.", "El etinilestradiol es un fármaco semisintético.", "La aromatización es la transformación de andrógenos en estrógenos.", "El tamoxifeno es agonista estrogénico sobre el hueso."], "c": 1, "e": "El <b>raloxifeno<\/b> es un SERM: <b>antagonista<\/b> estrogénico en mama y útero, pero <b>agonista<\/b> en hueso y con efecto neutro/leve en hipotálamo. No bloquea de forma significativa la señal hipotálamo-hipofisaria. El tamoxifeno sí tiene efecto agonista óseo. Etinilestradiol es semisintético.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-46"]}, {"t": "Final enero 2024", "q": "Señala la respuesta CORRECTA sobre el sistema renina-angiotensina:", "o": ["Los IECA disminuyen los niveles de bradicinina.", "El losartán presenta como efecto adverso tos irritativa.", "La unión de la angiotensina II al receptor RAT1 causa nefropatía diabética y aterosclerosis.", "El aliskirén interacciona con AINEs al inhibir la síntesis de prostaglandinas."], "c": 3, "e": "La activación del receptor <b>AT1<\/b> por angiotensina II produce vasoconstricción, inflamación endotelial, proliferación celular, fibrosis y retención de Na+, contribuyendo a la <b>nefropatía diabética y aterosclerosis<\/b>. Los IECA aumentan bradicinina (→ tos); losartán no produce tos.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-47"]}, {"t": "Final enero 2024", "q": "La ritodrina:", "o": ["Es un antagonista de receptores de la oxitocina.", "Se utiliza en la prevención del parto prematuro.", "Presenta menos efectos adversos cardiovasculares que los agonistas β2.", "Útil en la prevención de la preeclampsia y eclampsia."], "c": 2, "e": "<b>Ritodrina<\/b> es un <b>agonista β2<\/b> uterino utilizado como tocolítico en la <b>prevención del parto prematuro<\/b> (inhibe las contracciones uterinas). El antagonista de oxitocina es atosiban. Ritodrina tiene más efectos CV que otros tocolíticos. El sulfato de magnesio previene la eclampsia.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-48"]}, {"t": "Final enero 2024", "q": "¿Qué terapia antihipertensiva está indicada en la prevención de accidente cerebrovascular?", "o": ["IECA + ARA II.", "Diurético + IECA.", "Diurético + β-bloqueante + IECA + bloqueante canales de Ca²⁺.", "β-bloqueante + IECA + antagonista aldosterona."], "c": 2, "e": "La combinación <b>diurético + IECA<\/b> ha demostrado en grandes ensayos (PROGRESS) reducir la recurrencia de ACV. La asociación IECA + ARA-II está contraindicada (doble bloqueo SRAA). La triple/cuádruple terapia se reserva para HTA resistente.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-49"]}, {"t": "Final enero 2024", "q": "Señala la respuesta INCORRECTA acerca de la desmopresina:", "o": ["Indicada para la enuresis nocturna.", "Reduce la poliuria en diabetes insípida nefrogénica resistente a la vasopresina.", "Modifica acuaporinas que abre canales de agua.", "Tiene una alta actividad antidiurética y baja acción vasoconstrictora."], "c": 2, "e": "La <b>desmopresina<\/b> actúa sobre receptores V2 renales y es eficaz en la diabetes insípida <b>central<\/b>. En la diabetes insípida <b>nefrogénica<\/b>, el riñón no responde a la ADH/desmopresina, por lo que <b>no es útil<\/b>. Se trata con tiazidas y AINEs en este caso.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-50"]}, {"t": "Final enero 2024", "q": "Indica la respuesta INCORRECTA respecto a los antagonistas del Ca²⁺:", "o": ["Las dihidropiridinas causan taquicardias reflejas.", "El verapamilo tiene menor efecto antiarrítmico que diltiazem y dihidropiridinas.", "Provocan mayor bloqueo en canales más despolarizados.", "El nifedipino es un cronotropo positivo excepto en el sistema OROS."], "c": 2, "e": "<b>Verapamilo<\/b> es el calcioantagonista con <b>mayor efecto antiarrítmico<\/b> (nodo AV), más que diltiazem y mucho más que las dihidropiridinas (que apenas tienen efecto sobre el nodo). Verapamilo es de elección en TSV. Las dihidropiridinas sí causan taquicardia refleja.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-51"]}, {"t": "Final enero 2024", "q": "¿Cuál de las siguientes opciones NO es una RAM de los anestésicos inhalatorios?", "o": ["Toxicidad crónica del personal sanitario.", "Ataque de porfiria en individuos propensos.", "Hipertermia maligna.", "Hepatotoxicidad."], "c": 2, "e": "Los <b>ataques de porfiria<\/b> son RAM de barbitúricos (tiopental), no de los anestésicos inhalatorios. Los halogenados (halotano, sevoflurano) sí pueden causar hepatotoxicidad, hipertermia maligna y toxicidad crónica en personal expuesto. El propofol (IV) tampoco precipita porfiria.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-52"]}, {"t": "Final enero 2024", "q": "Sobre los fármacos que aumentan el AMPc:", "o": ["La dopamina causa menos taquicardia que la dobutamina.", "La milrinona es un agonista β-adrenérgico.", "La milrinona y enoximona están indicadas en insuficiencia cardiaca grave persistente tras tratamiento con diuréticos, vasodilatadores, dobutamina y/o β-bloqueantes.", "La dobutamina presenta toxicidad aumentada por interacción con diuréticos del asa y tiazidas."], "c": 3, "e": "<b>Milrinona y enoximona<\/b> son inhibidores de la <b>fosfodiesterasa III<\/b> (no agonistas β): aumentan AMPc en cardiomiocitos y músculo liso. Se reservan para IC grave refractaria a tratamiento convencional. La milrinona no interacciona con diuréticos del asa de forma clínicamente relevante.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-53"]}, {"t": "Final enero 2024", "q": "¿Qué anestésico se administra a pacientes con riesgo de hipotensión o isquemia miocárdica?", "o": ["Propofol.", "Etomidato.", "Fentanilo.", "Ketamina."], "c": 2, "e": "<b>Etomidato<\/b> es el anestésico IV de elección en pacientes hemodinámicamente inestables o con riesgo de isquemia miocárdica: mínimos efectos cardiovasculares, no produce hipotensión. Propofol produce vasodilatación e hipotensión; ketamina aumenta PA y FC; fentanilo es opioide analgésico.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-54"]}, {"t": "Final enero 2024", "q": "¿Qué fármaco emplearía para revertir la fibrilación auricular en las primeras 48h?", "o": ["Propranolol.", "Flecainida.", "Amiodarona.", "Quinina."], "c": 2, "e": "<b>Flecainida<\/b> (clase IC) es de elección para la cardioversión farmacológica de FA de inicio reciente (<48h) en pacientes sin cardiopatía estructural. En pacientes con cardiopatía, se prefiere amiodarona. Propranolol controla la frecuencia pero no convierte a ritmo sinusal.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-55"]}, {"t": "Final enero 2024", "q": "Indica la respuesta CORRECTA acerca de los fármacos diuréticos:", "o": ["Los diuréticos del asa causan tolerancia por la disminución de la filtración glomerular.", "Los inhibidores de la síntesis de prostaglandinas aumentan la acción de la furosemida.", "Los edemas y elevados niveles sanguíneos de compuestos nitrogenados causan tolerancia.", "Las tiazidas y diuréticos del asa provocan tolerancia por aparición de estasis en el túbulo proximal."], "c": 3, "e": "La tolerancia a los diuréticos del asa se produce por <b>edemas<\/b> (que reducen el volumen circulante efectivo y activan el SRAA) y por elevación de <b>compuestos nitrogenados<\/b> (uremia). Los AINEs <b>reducen<\/b> el efecto de la furosemida al inhibir prostaglandinas vasodilatadoras renales.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-56"]}, {"t": "Final enero 2024", "q": "Señala la respuesta CORRECTA sobre antibióticos:", "o": ["Las tetraciclinas antagonizan el efecto de los β-lactámicos.", "La tendinitis es una RAM propia de la sulfametazina.", "La doxiciclina y minociclina sufren inactivación enzimática y bombas de reflujo como mecanismo de resistencia.", "El cloranfenicol forma complejos insolubles con el Ca²⁺."], "c": 1, "e": "Las <b>tetraciclinas<\/b> son bacteriostáticas y pueden <b>antagonizar<\/b> el efecto de los β-lactámicos (bactericidas que necesitan bacterias en crecimiento activo). La tendinitis es RAM de <b>quinolonas<\/b>; el cloranfenicol no forma complejos con Ca²⁺ (eso es la tetraciclina con Ca, Mg, Fe).", "ns": false, "src": ["mir_farma_final_2024_v1|farma-57"]}, {"t": "Final enero 2024", "q": "Marca la relación INCORRECTA entre diurético y característica:", "o": ["Acetazolamida – útil en glaucoma.", "Furosemida – RAM: hiperpotasemia.", "Hidroclorotiazida – inhibición proteína cotransportadora de Na⁺-Cl⁻.", "Espironolactona – afinidad receptores androgénicos y gestagénicos."], "c": 2, "e": "<b>Furosemida<\/b> causa <b>hipopotasemia<\/b> (no hiperpotasemia), al aumentar la excreción de K+ en el túbulo colector. La hiperpotasemia es RAM de los ahorradores de potasio (espironolactona, amilorida). Acetazolamida sí reduce la producción de humor acuoso; espironolactona sí tiene afinidad androgénica (ginecomastia).", "ns": false, "src": ["mir_farma_final_2024_v1|farma-58"]}, {"t": "Final enero 2024", "q": "Marca la relación CORRECTA respecto a los mecanismos de acción de los antibióticos:", "o": ["Clindamicina – subunidad 50S.", "Cloranfenicol – subunidad 30S.", "Polimixinas – inhibición ácido fólico.", "Bacitracina – DNA girasa."], "c": 1, "e": "<b>Clindamicina<\/b> inhibe la síntesis proteica uniéndose a la subunidad <b>50S<\/b> ribosomal. El cloranfenicol también actúa en 50S (no 30S). Los aminoglucósidos y tetraciclinas actúan en 30S. Las polimixinas alteran la membrana celular; bacitracina inhibe la síntesis de pared (no DNA girasa).", "ns": false, "src": ["mir_farma_final_2024_v1|farma-59"]}, {"t": "Final enero 2024", "q": "La revisión del tratamiento farmacológico:", "o": ["No es necesaria realizarla en pacientes crónicos polimedicados.", "Permite detectar duplicidad de principios activos, pero no interacciones farmacológicas.", "Tiene como objetivo asegurar una utilización adecuada y segura de los medicamentos.", "Tiene como objetivo favorecer la cascada terapéutica."], "c": 3, "e": "La <b>revisión del tratamiento farmacológico<\/b> (conciliación, revisión de la medicación) tiene como objetivo garantizar una <b>farmacoterapia segura, efectiva y adecuada<\/b>. Detecta duplicidades, interacciones, errores de dosis e indicaciones incorrectas. Es especialmente importante en polimedicados.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-60"]}, {"t": "Final enero 2024", "q": "El metronidazol es un inhibidor del metabolismo de la warfarina. ¿Qué efecto tendría en un paciente anticoagulado con warfarina?", "o": ["Aumento de los niveles plasmáticos de warfarina con peligro de hemorragia.", "No habría ningún cambio en la concentración plasmática.", "Disminución de los niveles plasmáticos de warfarina con pérdida del efecto anticoagulante.", "Se produciría una interacción farmacodinámica."], "c": 1, "e": "El <b>metronidazol<\/b> inhibe el CYP2C9, enzima responsable del metabolismo de la <b>warfarina<\/b>. Al inhibir su metabolismo, los niveles de warfarina <b>aumentan<\/b>, potenciando el efecto anticoagulante con riesgo de <b>hemorragia<\/b>. Es una interacción farmacocinética (inhibición enzimática).", "ns": false, "src": ["mir_farma_final_2024_v1|farma-61"]}, {"t": "Final enero 2024", "q": "¿Con qué alimento y planta medicinal hay que tener cuidado por sus importantes interacciones con fármacos?", "o": ["Pomelo e hipérico (hierba de San Juan).", "Naranja y romero.", "Mandarina y tomillo.", "Arroz y hierbabuena."], "c": 1, "e": "El <b>pomelo<\/b> inhibe el CYP3A4 intestinal, aumentando la biodisponibilidad de estatinas, calcioantagonistas, etc. El <b>hipérico<\/b> (Hypericum perforatum) <b>induce<\/b> el CYP3A4, reduciendo niveles de ciclosporina, anticonceptivos, antivirales y warfarina. Ambas son interacciones clínicamente relevantes.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-62"]}, {"t": "Final enero 2024", "q": "Señala la respuesta INCORRECTA sobre el palivizumab:", "o": ["Es un anticuerpo monoclonal IgG1.", "Es un anticuerpo activo frente a una glucoproteína del virus sincitial respiratorio.", "Se utiliza como profilaxis después de un trasplante hepático debido a insuficiencia hepática inducida por el virus de la hepatitis B.", "Es una inmunoglobulina."], "c": 3, "e": "<b>Palivizumab<\/b> es un AcMo IgG1 humanizado que neutraliza la <b>proteína F del VRS<\/b>, usado en profilaxis del VRS en neonatos prematuros y cardiopatías congénitas. <b>No tiene indicación en hepatitis B<\/b> ni en trasplante hepático. Para eso se usa inmunoglobulina anti-HBs.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-63"]}, {"t": "Final enero 2024", "q": "Señale la afirmación correcta sobre las reacciones adversas de tipo A:", "o": ["No son predecibles.", "No dependen de la dosis.", "La incidencia es elevada pero la mortalidad baja.", "El tratamiento siempre es retirar el fármaco."], "c": 3, "e": "Las RAM <b>tipo A<\/b> (augmented) son predecibles, dosis-dependientes, frecuentes y con <b>mortalidad baja<\/b>. Son la consecuencia exagerada del efecto farmacológico. El tratamiento es reducir la dosis, no necesariamente retirar el fármaco. Las tipo B (bizarre) son impredecibles, raras y potencialmente graves.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-64"]}, {"t": "Final enero 2024", "q": "¿Qué es FALSO sobre los parches transdérmicos?", "o": ["Cuando se cambia un parche transdérmico no hace falta lavarse las manos porque no queda fármaco.", "Los parches transdérmicos son formas farmacéuticas que se aplican sobre la piel, pero la acción del fármaco tiene lugar a nivel sistémico.", "Los parches transdérmicos no se deben cortar.", "Existen parches cuyo efecto es tópico a nivel del lugar de la piel donde se colocan."], "c": 1, "e": "Al retirar o cambiar un parche transdérmico <b>siempre hay que lavarse las manos<\/b>, ya que queda fármaco residual en los dedos que puede absorberse o contaminar a otras personas. Esta es una recomendación de seguridad fundamental, especialmente con parches de opioides o fentanilo.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-66"]}, {"t": "Final enero 2024", "q": "¿Qué es cierto sobre el medicamento genérico?", "o": ["La biodisponibilidad con su especialidad registrada es exactamente igual.", "La biodisponibilidad es análoga, variando dentro de unos límites aceptados, de forma que su eficacia y seguridad son esencialmente idénticas.", "Siempre es posible intercambiar en la farmacia la marca por su genérico.", "Siempre es posible intercambiar en la farmacia la marca por su genérico a excepción de los inhaladores."], "c": 2, "e": "El <b>medicamento genérico<\/b> debe demostrar <b>bioequivalencia<\/b> con el original: la biodisponibilidad varía dentro de un margen aceptado (±20% en AUC/Cmax). No son idénticas, sino esencialmente equivalentes. Hay fármacos de estrecho margen terapéutico (antiepilépticos, anticoagulantes) donde la sustitución requiere precaución.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-67"]}, {"t": "Final enero 2024", "q": "Marca la respuesta INCORRECTA respecto al síndrome de Stevens-Johnson:", "o": ["Es una RAM ocasionada por ketoconazol y miconazol.", "Comienza con síntomas similares a la gripe seguidos de sarpullidos dolorosos.", "Es una RAM del itraconazol junto a la nefrotoxicidad.", "Está relacionada con los derivados azólicos."], "c": 3, "e": "El <b>síndrome de Stevens-Johnson<\/b> se asocia a azólicos, alopurinol, sulfamidas y antiepilépticos, pero la <b>nefrotoxicidad<\/b> es una RAM característica de la <b>anfotericina B<\/b>, no del itraconazol. El itraconazol se asocia a hepatotoxicidad e insuficiencia cardiaca.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-68"]}, {"t": "Final enero 2024", "q": "¿Cuál es la FALSA sobre formas farmacéuticas?", "o": ["Jarabe es cualquier forma farmacéutica líquida que se administre por vía oral.", "Inyectable es una forma farmacéutica líquida estéril y apirógena.", "Polvo y granulado pueden administrarse tal cual o añadiendo agua transformándola en forma líquida.", "Existen distintos tipos de comprimidos, como por ejemplo: masticables, multicapa, efervescentes."], "c": 1, "e": "El <b>jarabe<\/b> es una solución oral azucarada concentrada, no cualquier forma líquida oral. Existen otras formas líquidas orales como elixires, suspensiones, soluciones y emulsiones. Definir 'jarabe' como equivalente a cualquier forma líquida oral es incorrecto.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-69"]}, {"t": "Final enero 2024", "q": "Señala la relación CORRECTA entre antifúngico e indicación:", "o": ["Nistatina – vía sistémica.", "Flucitosina – muguet.", "Anfotericina B – afinidad células precursoras de queratina.", "Griseofulvina – dermatofitosis."], "c": 4, "e": "<b>Griseofulvina<\/b> tiene alta afinidad por las células precursoras de queratina y se concentra en piel, uñas y pelo, siendo de elección en <b>dermatofitosis<\/b> (tiñas). Nistatina es solo tópica; flucitosina trata infecciones sistémicas por Candida/Cryptococcus; anfotericina B es sistémica.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-70"]}, {"t": "Final enero 2024", "q": "Señala la afirmación CORRECTA sobre prescripción farmacéutica:", "o": ["Toda receta médica da derecho a descuento en el precio del fármaco.", "Los pacientes en la seguridad social se incluyen en un TSI u otro en función de su edad.", "Cualquier profesional sanitario puede prescribir medicamentos.", "Ninguna es correcta."], "c": 4, "e": "Ninguna es correcta: la receta no siempre genera descuento (depende de la financiación pública); el TSI se asigna según la <b>renta<\/b>, no la edad; y solo los <b>médicos, dentistas y podólogos<\/b> (en su ámbito) pueden prescribir medicamentos. Las enfermeras pueden prescribir productos de enfermería con protocolos.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-71"]}, {"t": "Final enero 2024", "q": "El mebendazol:", "o": ["Se asocia al praziquantel en infestaciones por tenias.", "Facilita la entrada de Ca²⁺ y provoca la parálisis del parásito.", "Inhibe la función de los microtúbulos del parásito.", "Abre los canales de cloro dependientes de glutamato del parásito, como la ivermectina."], "c": 3, "e": "<b>Mebendazol<\/b> (benzimidazol) inhibe la polimerización de la <b>tubulina<\/b> del parásito, bloqueando la formación de microtúbulos y alterando su metabolismo glucídico. El praziquantel facilita la entrada de Ca²⁺ en platelmintos. Mebendazol se usa en oxiuros, áscaris y tricocefalos.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-72"]}, {"t": "Final enero 2024", "q": "Señale la opción CORRECTA sobre farmacovigilancia:", "o": ["La farmacovigilancia es la actividad de salud pública que tiene como objetivo identificar, cuantificar, evaluar y prevenir los riesgos asociados al uso de los medicamentos una vez comercializados.", "La farmacovigilancia tiene como objetivo identificar los riesgos antes de autorizar los medicamentos para su uso.", "La farmacovigilancia tiene como objetivo identificar los riesgos antes y después de la autorización.", "Ninguna es cierta."], "c": 1, "e": "La <b>farmacovigilancia<\/b> (definición OMS) es la ciencia que monitoriza los efectos de los medicamentos <b>una vez comercializados<\/b> en condiciones reales de uso. La evaluación previa a la comercialización corresponde a los ensayos clínicos y el proceso de autorización regulatoria.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-73"]}, {"t": "Final enero 2024", "q": "Señale la afirmación CORRECTA sobre nutrición y dietoterapia:", "o": ["Tanto la alimentación como la nutrición son actos voluntarios.", "La dietoterapia es el establecimiento de unas pautas alimentarias con el fin de mejorar o prevenir ciertas enfermedades.", "Tanto la alimentación como la nutrición son actos involuntarios.", "La dietoterapia tiene como fin mejorar o prevenir solo enfermedades relacionadas con el aparato digestivo."], "c": 2, "e": "La <b>dietoterapia<\/b> es la aplicación terapéutica de la alimentación para <b>prevenir o tratar enfermedades<\/b> de cualquier tipo (cardiovasculares, diabetes, renal, oncológica, etc.), no solo digestivas. La alimentación es un acto voluntario; la nutrición es el proceso metabólico (involuntario).", "ns": false, "src": ["mir_farma_final_2024_v1|farma-74"]}, {"t": "Final enero 2024", "q": "¿Cuál es la preferencia de tratamiento en hepatitis crónica por VHC?", "o": ["IFNα-2b.", "IFNα pegilado + ribavirina.", "IFNα.", "Ribavirina."], "c": 2, "e": "El estándar histórico del tratamiento de la hepatitis C crónica fue <b>IFNα pegilado + ribavirina<\/b> (antes de la era de los antivirales de acción directa). El IFNα pegilado tiene mayor semivida y eficacia que el no pegilado. Actualmente los AAD (sofosbuvir, etc.) han sustituido este esquema.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-R1"]}, {"t": "Final enero 2024", "q": "La cimetidina NO puede incrementar la actividad de:", "o": ["Benzodiacepinas.", "Propranolol.", "Fenitoína.", "Ácido nicotínico."], "c": 4, "e": "La <b>cimetidina<\/b> es inhibidor del CYP450 y aumenta los niveles de fármacos metabolizados por él (benzodiacepinas, propranolol, fenitoína, warfarina). El <b>ácido nicotínico<\/b> (vitamina B3/niacina) no se metaboliza significativamente por el CYP450, por lo que cimetidina no incrementa su actividad.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-R2"]}, {"t": "Final enero 2024", "q": "Señala la relación INCORRECTA entre antiepiléptico y mecanismo de acción:", "o": ["Primidona – canales gabaérgicos.", "Fenobarbital – canales de sodio voltaje-dependientes.", "Etosuximida – canales de calcio voltaje-dependientes.", "Fenitoína – canales de sodio voltaje-dependientes."], "c": 2, "e": "<b>Fenobarbital<\/b> actúa potenciando los receptores <b>GABA-A<\/b> (no canales de sodio). Los canales de sodio son la diana de fenitoína, carbamazepina y lamotrigina. Etosuximida bloquea canales de Ca²⁺ tipo T (ausencias); primidona se metaboliza a fenobarbital, con mecanismo gabaérgico.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-R3"]}, {"t": "Final enero 2024", "q": "Las siguientes características: involuntario, inerva corazón/músculo liso/glándulas, consta de fibra preganglionar y postganglionar, neurotransmisor preganglionar = acetilcolina. Se corresponde con:", "o": ["Sistema nervioso simpático.", "Sistema nervioso somático.", "Sistema nervioso parasimpático.", "Sistema nervioso simpático y parasimpático."], "c": 4, "e": "Todas las características descritas son comunes al <b>sistema nervioso autónomo<\/b> en general (tanto simpático como parasimpático): involuntario, inerva vísceras, tiene ganglio con fibra pre y postganglionar, y la acetilcolina es el neurotransmisor preganglionar en ambos. La diferencia está en la postganglionar.", "ns": true, "src": ["mir_farma_final_2024_v1|farma-R4"]}, {"t": "Final enero 2024", "q": "Indica la afirmación CORRECTA sobre tipos de fármacos según su actividad intrínseca:", "o": ["Un antagonista se une al receptor, pero no produce ningún cambio al no poseer actividad intrínseca.", "Un agonista inverso da lugar al efecto máximo y presenta elevada eficiencia.", "Un agonista parcial produce un efecto farmacológico opuesto al generado por el agonista puro.", "Un agonista incrementa la concentración de otra sustancia por lo que aumenta el efecto de esa otra sustancia."], "c": 1, "e": "Un <b>antagonista<\/b> tiene afinidad por el receptor pero <b>actividad intrínseca = 0<\/b>: se une sin producir efecto propio, bloqueando la acción del agonista. El agonista inverso produce efecto opuesto al agonista; el agonista parcial produce efecto submáximo; la definición de agonista en d) es incorrecta.", "ns": false, "src": ["mir_farma_final_2024_v1|farma-R5"]}, {"t": "Final julio 2024", "q": "El uso de antibióticos en una infección es un tratamiento de tipo:", "o": ["Curativo", "Profiláctico", "Patogénico", "Sintomático"], "c": 1, "e": "El tratamiento <b>curativo<\/b> (etiológico) elimina la causa de la enfermedad; el antibiótico erradica el microorganismo. El profiláctico previene, el sintomático alivia síntomas y el patogénico actúa sobre el mecanismo fisiopatológico.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|gen-1"]}, {"t": "Final julio 2024", "q": "A un niño de 10 kg se le prescriben 15 mg/kg de paracetamol vía oral cada 8 horas. ¿Cuántos mg de paracetamol se le administran al día?", "o": ["1500 mg", "50 mg", "150 mg", "450 mg"], "c": 4, "e": "Dosis por toma: <b>15 mg/kg × 10 kg = 150 mg<\/b>. Cada 8 horas equivale a <b>3 tomas/día<\/b>: 150 × 3 = <b>450 mg/día<\/b>.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|gen-2"]}, {"t": "Final julio 2024", "q": "En la farmacia del hospital proporcionan un vial de morfina al 2%. ¿Cuántos mg hay en 6 ml y cuántos ml deben extraerse para obtener 100 mg de morfina?", "o": ["75 mg / 0,5 ml", "120 mg / 5 ml", "2,5 mg / 50 ml", "120 mg / 1 ml"], "c": 2, "e": "Una solución al <b>2%<\/b> contiene 20 mg/ml. En 6 ml hay <b>120 mg<\/b>. Para obtener 100 mg: 100 ÷ 20 mg/ml = <b>5 ml<\/b>.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|gen-3"]}, {"t": "Final julio 2024", "q": "En una curva plasmática concentración-tiempo, el parámetro que mide la flecha (distancia entre la concentración alcanzada y la concentración mínima eficaz) indica:", "o": ["Duración del efecto", "Margen terapéutico", "Intensidad del efecto", "Periodo de latencia"], "c": 3, "e": "La <b>intensidad del efecto<\/b> se relaciona con cuánto supera la concentración plasmática la <b>concentración mínima eficaz<\/b>. La duración es el tiempo sobre la CME y el periodo de latencia, el tiempo hasta alcanzarla.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|gen-12"]}, {"t": "Final julio 2024", "q": "Señale la afirmación correcta:", "o": ["La biodisponibilidad es la fracción de la dosis administrada que accede a la circulación sistémica en su forma activa", "La biodisponibilidad no se ve afectada por la edad, el sexo o las patologías", "La forma no ionizada de los ácidos y bases débiles es la liposoluble y, por tanto, la que atraviesa membranas por difusión pasiva", "Una cinética de absorción de orden uno significa que la velocidad de absorción es constante e independiente de la concentración"], "c": 3, "e": "La <b>forma no ionizada<\/b> es liposoluble y difunde pasivamente. La cinética de <b>orden uno<\/b> es dependiente de la concentración (la de orden cero es constante). La biodisponibilidad sí varía con edad, sexo y patología.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|gen-16"]}, {"t": "Final julio 2024", "q": "Paciente de 60 años con neumonía en programa de diálisis. El antibiótico de elección se excreta principalmente por vía renal. ¿Qué consideraciones sobre la semivida de eliminación y la dosis?", "o": ["Disminuirá la semivida y se debe aumentar la dosis", "Disminuirá la semivida y se debe disminuir la dosis", "Aumentará la semivida y no será necesario modificar la dosis", "Aumentará la semivida y debe considerarse disminuir la dosis"], "c": 4, "e": "En insuficiencia renal con eliminación renal del fármaco, el aclaramiento cae y la <b>semivida aumenta<\/b>, con riesgo de acumulación. Procede <b>ajustar (reducir) la dosis<\/b> o espaciar intervalos.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|gen-21"]}, {"t": "Final julio 2024", "q": "Indique la afirmación FALSA sobre los receptores acoplados a proteínas G:", "o": ["Poseen 7 hélices transmembrana, con 3 bucles extracelulares y 3 intracelulares", "La unión del agonista puede producir inhibición de la adenilato ciclasa", "La unión de un antagonista produce una disminución de los niveles de AMP cíclico", "La unión del agonista puede producir aumento de inositol trifosfato (IP3)"], "c": 3, "e": "El <b>antagonista carece de actividad intrínseca<\/b>: ocupa el receptor sin modificar por sí mismo el AMPc, solo bloquea al agonista. Quien modifica el AMPc o el IP3 es el agonista según la proteína G acoplada.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|gen-26"]}, {"t": "Final julio 2024", "q": "Curva dosis-respuesta de los fármacos A y B, con DE50 de A igual a la DE50 de B. Es correcto decir:", "o": ["A y B presentan la misma eficacia y potencia", "A presenta mayor eficacia y potencia que B", "B presenta la misma potencia que A pero menor eficacia", "A presenta mayor potencia que B e igual eficacia"], "c": 3, "e": "Igual <b>DE50<\/b> implica misma <b>potencia<\/b>. Si el efecto máximo (techo) de B es inferior, su <b>eficacia es menor<\/b>. Potencia y eficacia son propiedades independientes.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|gen-31"]}, {"t": "Final julio 2024", "q": "Señale la afirmación FALSA respecto a las reacciones alérgicas:", "o": ["Es una reacción adversa de tipo B", "No se recomienda retirar el fármaco; basta con disminuir la dosis", "Las de tipo II (citotóxicas) se deben al complejo membrana-fármaco-anticuerpo con activación del complemento y lisis celular", "Es una reacción adversa no relacionada con la dosis"], "c": 2, "e": "Las reacciones alérgicas (tipo B, idiosincrásicas, <b>independientes de la dosis<\/b>) obligan a <b>retirar el fármaco<\/b>; reducir la dosis no las controla y pueden recurrir con cualquier reexposición.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|gen-35"]}, {"t": "Final julio 2024", "q": "Las tetraciclinas forman complejos insolubles con cationes como el calcio. ¿Qué interacción se produce si se toma tetraciclina oral con un vaso de leche?", "o": ["No se produce ninguna interacción", "Interacción de tipo farmacodinámico", "Interacción de tipo farmacocinético en la absorción", "Interacción de tipo farmacocinético en el metabolismo"], "c": 3, "e": "El calcio <b>quela la tetraciclina<\/b> formando complejos insolubles no absorbibles: interacción <b>farmacocinética en la absorción<\/b> que reduce su biodisponibilidad. Por eso se separan de lácteos y antiácidos.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|gen-45"]}, {"t": "Final julio 2024", "q": "Señale la afirmación FALSA sobre interacciones farmacológicas:", "o": ["Las interacciones solo se producen entre fármacos; los alimentos no interaccionan con los fármacos", "En las interacciones farmacodinámicas el fármaco B modifica la actividad de A sin modificar su concentración en la biofase", "Las interacciones farmacocinéticas pueden producirse en cualquier proceso LADME", "Las interacciones farmacológicas pueden ser beneficiosas"], "c": 1, "e": "Es falsa: los <b>alimentos sí interaccionan<\/b> con fármacos (p. ej., lácteos-tetraciclinas, zumo de pomelo-CYP3A4). Existen interacciones fármaco-alimento relevantes.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|gen-70"]}, {"t": "Final julio 2024", "q": "En farmacovigilancia se consideran señales de alarma:", "o": ["La existencia de posibles riesgos no conocidos anteriormente", "Cambios en la gravedad o frecuencia de riesgos ya conocidos", "Las respuestas a) y b) son correctas", "Ninguna es correcta"], "c": 3, "e": "Una <b>señal<\/b> en farmacovigilancia es información sobre una posible asociación causal nueva o un <b>cambio en la gravedad/frecuencia<\/b> de un riesgo ya conocido. Ambas situaciones lo son.", "ns": true, "src": ["mir_farmacologia_jul2024_v1|gen-71"]}, {"t": "Final julio 2024", "q": "¿Qué es cierto sobre el inhalador \"Anasma Accuhaler\"?", "o": ["El tipo de dispositivo viene indicado por el nombre \"Anasma\"", "El tipo de dispositivo viene indicado por el nombre \"Accuhaler\"", "El tipo de dispositivo no viene indicado en el nombre", "Podría ser sustituido por otro de igual composición y dispositivo"], "c": 2, "e": "\"Anasma\" es el nombre comercial; <b>\"Accuhaler\"<\/b> identifica el <b>tipo de dispositivo<\/b> (inhalador de polvo seco). No es intercambiable por otro dispositivo distinto sin prescripción.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|gen-72"]}, {"t": "Final julio 2024", "q": "¿Qué afirmación es FALSA sobre los parches transdérmicos?", "o": ["Se formulan para que el fármaco llegue a sangre y actúe de forma sistémica", "Son formas farmacéuticas que se adhieren a la piel", "En los parches transdérmicos no se controla la velocidad de liberación del fármaco, es decir, no es siempre la misma", "La periodicidad de cambio puede ser de 12 h, 24 h, 72 h..."], "c": 3, "e": "Es falsa: el parche transdérmico es un sistema de <b>liberación controlada<\/b> que mantiene una velocidad de cesión <b>constante y predecible<\/b> durante el periodo de aplicación.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|gen-73"]}, {"t": "Final julio 2024", "q": "Señale la afirmación correcta:", "o": ["El paciente con ileostomía debe tomar mucha agua para evitar deshidratarse", "La consistencia del efluyente es igual en todos los tipos de ostomías digestivas", "La consistencia del efluyente de las urostomías es igual al de las ostomías digestivas", "El paciente con ileostomía debe tomar mucha agua para evitar infecciones de orina"], "c": 1, "e": "El efluyente de la <b>ileostomía es líquido<\/b> y rico en electrolitos, con riesgo de <b>deshidratación<\/b>; precisa buena ingesta hídrica. La consistencia varía según el tramo (colostomía más sólida).", "ns": false, "src": ["mir_farmacologia_jul2024_v1|gen-74"]}, {"t": "Final julio 2024", "q": "El nombre de la forma farmacéutica mostrada (cubierta gelatinosa única que contiene un líquido o pasta oleosa) es:", "o": ["Óvulos", "Comprimidos", "Cápsulas duras", "Cápsulas blandas"], "c": 4, "e": "Las <b>cápsulas blandas<\/b> tienen una cubierta de gelatina elástica de una sola pieza que alberga contenido líquido o semisólido (oleoso). Las duras constan de dos mitades encajables.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|gen-75"]}, {"t": "Final julio 2024", "q": "¿Qué es cierto sobre el dispositivo mostrado (sistema de ostomía de una sola pieza, sin orificio de vaciado)?", "o": ["Es una bolsa de 2 piezas", "Es una bolsa cerrada de una pieza", "Es una bolsa abierta de una pieza", "Es una bolsa de urostomía de 1 pieza"], "c": 2, "e": "Una <b>bolsa cerrada de una pieza<\/b> integra adhesivo y bolsa sin posibilidad de vaciado; se desecha completa. Es típica de colostomías con efluyente formado. Las abiertas llevan pinza/cierre vaciable.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|gen-77"]}, {"t": "Final julio 2024", "q": "Señale la afirmación correcta:", "o": ["Tanto la alimentación como la nutrición son actos voluntarios", "La dietoterapia es el establecimiento de pautas alimentarias para mejorar o prevenir ciertas enfermedades", "Tanto la alimentación como la nutrición son actos involuntarios", "La dietoterapia establece pautas solo para enfermedades del aparato digestivo"], "c": 2, "e": "La <b>dietoterapia<\/b> adapta la alimentación con fines preventivos o terapéuticos en <b>diversas enfermedades<\/b>. La alimentación es voluntaria, pero la nutrición (procesos metabólicos) es involuntaria.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|gen-79"]}, {"t": "Final julio 2024", "q": "Las características «voluntario · inerva músculo esquelético · neurotransmisor acetilcolina · receptor colinérgico nicotínico» se corresponden con:", "o": ["Sistema nervioso simpático", "Sistema nervioso somático", "Sistema nervioso parasimpático", "Sistema nervioso simpático y parasimpático"], "c": 2, "e": "El <b>sistema nervioso somático<\/b> es voluntario, inerva músculo esquelético y emplea <b>acetilcolina sobre receptores nicotínicos<\/b> en la placa motora.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|sna-5"]}, {"t": "Final julio 2024", "q": "Señale la afirmación correcta:", "o": ["Pilocarpina es un agonista colinérgico de acción directa y bisoprolol un antagonista selectivo beta-1, por lo que es cardioselectivo", "Pilocarpina es un agonista colinérgico de acción indirecta y bisoprolol un agonista selectivo beta-1", "Pilocarpina es un antagonista colinérgico y bisoprolol un antagonista selectivo", "Pilocarpina es un agonista colinérgico directo y bisoprolol un antagonista beta-1 que actúa sobre los vasos sanguíneos"], "c": 1, "e": "La <b>pilocarpina<\/b> es un agonista muscarínico de <b>acción directa<\/b>. El <b>bisoprolol<\/b> bloquea selectivamente receptores <b>beta-1<\/b> cardiacos: es cardioselectivo.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|sna-6"]}, {"t": "Final julio 2024", "q": "NO es una acción de los antagonistas alfa-adrenérgicos:", "o": ["Facilitar la micción", "Disminuir la presión arterial", "Aumentar la liberación central de adrenalina y serotonina", "Broncodilatación"], "c": 4, "e": "Los bloqueantes alfa relajan el músculo liso vascular (hipotensión) y el del cuello vesical (facilitan la micción). La <b>broncodilatación<\/b> es un efecto <b>beta-2 adrenérgico<\/b>, no alfa.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|sna-8"]}, {"t": "Final julio 2024", "q": "Señale la relación «fármaco - reacción adversa» FALSA:", "o": ["Succinilcolina - hipertermia maligna", "Propranolol - broncoconstricción", "Atropina - salivación y diarrea", "Neostigmina - broncoconstricción y sudoración"], "c": 3, "e": "La <b>atropina<\/b> es antimuscarínica: produce <b>sequedad de boca, estreñimiento<\/b> y retención, no salivación ni diarrea (efectos colinérgicos opuestos).", "ns": false, "src": ["mir_farmacologia_jul2024_v1|sna-22"]}, {"t": "Final julio 2024", "q": "Señale la relación «fármaco - indicación terapéutica» CORRECTA:", "o": ["Adrenalina - hipertensión", "Clonidina - síndrome de abstinencia a opioides", "Propranolol - asma", "Escopolamina - miastenia gravis"], "c": 2, "e": "La <b>clonidina<\/b> (agonista alfa-2 central) atenúa la hiperactividad simpática de la <b>abstinencia a opioides<\/b>. El propranolol está contraindicado en asma y la escopolamina no trata la miastenia.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|sna-32"]}, {"t": "Final julio 2024", "q": "Sobre la sinapsis preganglionar del sistema nervioso simpático es cierto:", "o": ["Neurotransmisor acetilcolina - receptor nicotínico", "Neurotransmisor acetilcolina - receptor muscarínico", "Neurotransmisor noradrenalina - receptor adrenérgico", "Neurotransmisor noradrenalina - receptor nicotínico"], "c": 1, "e": "Todas las fibras <b>preganglionares<\/b> (simpáticas y parasimpáticas) liberan <b>acetilcolina<\/b> sobre receptores <b>nicotínicos<\/b> ganglionares. La noradrenalina aparece en la fibra posganglionar simpática.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|sna-50"]}, {"t": "Final julio 2024", "q": "Señale la afirmación correcta sobre los bloqueantes neuromusculares:", "o": ["Todos son antagonistas de los receptores nicotínicos del músculo esquelético", "Los despolarizantes actúan como antagonistas de los receptores nicotínicos produciendo una despolarización prolongada", "Los no despolarizantes actúan como antagonistas de los receptores nicotínicos del músculo esquelético, produciendo menor despolarización de la membrana", "Se administran solo por vía oral"], "c": 3, "e": "Los <b>no despolarizantes<\/b> (curarizantes) son <b>antagonistas competitivos<\/b> del receptor nicotínico: impiden la despolarización. Los despolarizantes (succinilcolina) son agonistas que despolarizan de forma mantenida.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|sna-54"]}, {"t": "Final julio 2024", "q": "¿Por qué la tamsulosina no se utiliza para tratar la hipertensión arterial?", "o": ["Porque es un agonista alfa-1", "Porque no es un antagonista alfa-1", "Porque es antagonista selectivo alfa-1A, siendo un fármaco uroselectivo", "Porque es un antagonista colinérgico"], "c": 3, "e": "La <b>tamsulosina<\/b> bloquea selectivamente el subtipo <b>alfa-1A<\/b> (predominante en próstata y cuello vesical): es <b>uroselectiva<\/b> y apenas afecta a los alfa-1B vasculares, por lo que no es antihipertensiva.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|sna-55"]}, {"t": "Final julio 2024", "q": "Indique la relación FALSA:", "o": ["Fisostigmina - inhibidor de la acetilcolinesterasa", "Carvedilol - bloqueo beta-1 selectivo y agonista beta-2 selectivo", "Adrenalina - agonista alfa y beta adrenérgico", "Ipratropio - antagonista de los receptores muscarínicos"], "c": 2, "e": "El <b>carvedilol<\/b> es un <b>betabloqueante no selectivo<\/b> (beta-1 y beta-2) con bloqueo alfa-1 adicional; no es beta-1 selectivo ni agonista beta-2.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|sna-66"]}, {"t": "Final julio 2024", "q": "Los agonistas colinérgicos pueden emplearse en los siguientes casos, EXCEPTO:", "o": ["Tratamiento del glaucoma", "Síndrome de Sjögren", "Tratamiento del íleo paralítico no obstructivo", "Tratamiento del EPOC y el asma"], "c": 4, "e": "Los colinérgicos provocan <b>broncoconstricción<\/b>, por lo que están <b>contraindicados en EPOC y asma<\/b>. Sí se usan en glaucoma, xerostomía (Sjögren) e íleo/atonía vesical.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|sna-69"]}, {"t": "Final julio 2024", "q": "Indique la respuesta FALSA:", "o": ["Bisoprolol + verapamilo favorecen bradicardia, hipotensión e insuficiencia cardiaca", "El amlodipino tiene un efecto vasodilatador inferior al verapamilo", "El diltiazem tiene un efecto antiarrítmico superior a las dihidropiridinas", "El losartán no afecta a la bradicinina"], "c": 2, "e": "Es falsa: las <b>dihidropiridinas como el amlodipino<\/b> son potentes <b>vasodilatadores<\/b>, superiores en este efecto al verapamilo, que actúa más sobre el corazón (cronotropo/dromotropo negativo).", "ns": false, "src": ["mir_farmacologia_jul2024_v1|cv-7"]}, {"t": "Final julio 2024", "q": "Ante un paciente con angina de reposo (vasoespástica), ¿qué tratamiento de primera línea instauraría?", "o": ["5-mononitrato de isosorbida + propranolol", "Bisoprolol + amlodipino", "Dinitrato de isosorbida + nifedipino", "Nitroglicerina + propranolol"], "c": 3, "e": "En la angina de reposo (Prinzmetal) por <b>vasoespasmo<\/b> se usan <b>nitratos + calcioantagonistas (nifedipino)<\/b>. Los <b>betabloqueantes están desaconsejados<\/b> porque favorecen el espasmo coronario.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|cv-15"]}, {"t": "Final julio 2024", "q": "Paciente con hipertrigliceridemia que ya ha fracasado con dieta + fibratos. ¿Qué estrategia aplicaría?", "o": ["Dieta + fibratos + estatinas", "Dieta + fibratos + colestiramina", "Dieta + fibratos + ezetimiba", "Dieta + fibratos + ácido nicotínico"], "c": 4, "e": "El <b>ácido nicotínico (niacina)<\/b> reduce eficazmente los triglicéridos y eleva el HDL, complementando a los fibratos. Las resinas pueden incluso aumentar los triglicéridos.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|cv-17"]}, {"t": "Final julio 2024", "q": "Marque la relación INCORRECTA:", "o": ["Espironolactona / antagonista de la aldosterona", "Amilorida / bloqueante de los canales de Na+", "Torasemida / acción en el asa de Henle", "Hidroclorotiazida / inhibición de la proteína cotransportadora Na-K-2Cl"], "c": 4, "e": "Es incorrecta: la <b>hidroclorotiazida<\/b> inhibe el cotransportador <b>Na-Cl del túbulo distal<\/b>. El cotransportador <b>Na-K-2Cl<\/b> es la diana de los diuréticos de asa (furosemida).", "ns": false, "src": ["mir_farmacologia_jul2024_v1|cv-18"]}, {"t": "Final julio 2024", "q": "¿Qué fármaco causa ototoxicidad cuando se asocia a aminoglucósidos?", "o": ["Furosemida", "Hidroclorotiazida", "Triamtereno", "Acetazolamida"], "c": 1, "e": "La <b>furosemida<\/b> es ototóxica y su asociación con aminoglucósidos <b>potencia el daño coclear<\/b>, aumentando el riesgo de sordera. Conviene evitar la combinación.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|cv-20"]}, {"t": "Final julio 2024", "q": "Varón de 70 años hipertenso con insuficiencia cardiaca que consulta por tos seca persistente (picor faríngeo) e hiperpotasemia analítica. ¿Cuál es el fármaco sospechoso?", "o": ["Hidralazina", "Enalapril", "Hidroclorotiazida", "Bisoprolol"], "c": 2, "e": "El <b>enalapril (IECA)<\/b> produce <b>tos seca<\/b> por acumulación de bradicinina e <b>hiperpotasemia<\/b> al reducir la aldosterona. Es la causa típica de esta combinación clínica.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|cv-60"]}, {"t": "Final julio 2024", "q": "Indique una contraindicación de la dopamina:", "o": ["Insuficiencia cardiaca aguda con hipotensión", "A dosis altas en estados de choque", "Arritmia ventricular", "Insuficiencia renal"], "c": 3, "e": "La dopamina es proarritmógena; está <b>contraindicada en arritmias ventriculares<\/b> (taquicardia/fibrilación ventricular). Sí se emplea en shock e IC aguda con hipotensión.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|cv-61"]}, {"t": "Final julio 2024", "q": "Señale la relación INCORRECTA:", "o": ["Levosimendán / troponina C", "Flecainida / unión al estado inactivo del canal de Na+", "Dinitrato de isosorbida / reduce la precarga", "Amiodarona / taquicardia asociada al síndrome de Wolff-Parkinson-White"], "c": 2, "e": "Es incorrecta: la <b>flecainida<\/b> (antiarrítmico clase IC) se une preferentemente al canal de sodio en estado <b>activado/abierto<\/b>, con disociación lenta, no al estado inactivo.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|cv-68"]}, {"t": "Final julio 2024", "q": "Indique la relación INCORRECTA:", "o": ["Levetiracetam / fijación a la proteína SV2A de las vesículas presinápticas", "Topiramato / inhibición de canales de Na+ dependientes de voltaje", "Lamotrigina / eficaz en episodios depresivos del trastorno bipolar", "Ácido valproico / disminuye el ácido fólico"], "c": 4, "e": "Es incorrecta esa relación: el <b>ácido valproico<\/b> es <b>antagonista del ácido fólico<\/b> (interfiere en su metabolismo), por lo que es teratógeno (defectos del tubo neural), no lo «disminuye» como mecanismo de acción atribuido erróneamente.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|snc-14"]}, {"t": "Final julio 2024", "q": "Señale la respuesta INCORRECTA:", "o": ["El muscimol es análogo natural del GABA y tiene alta afinidad por su receptor", "La pérdida de funciones del sistema noradrenérgico se relaciona con la depresión", "El baclofeno es un análogo sintético de la glicina que causa relajación muscular", "La pérdida de función del sistema colinérgico se relaciona con el Alzheimer"], "c": 3, "e": "Es incorrecta: el <b>baclofeno<\/b> es un agonista del receptor <b>GABA-B<\/b> (análogo del GABA), no de la glicina, y produce relajación muscular espinal.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|snc-19"]}, {"t": "Final julio 2024", "q": "¿Qué fármaco es apropiado para el trastorno de ansiedad ligado a estrés postraumático?", "o": ["Paroxetina", "Fluoxetina", "Bupropión", "Amitriptilina"], "c": 1, "e": "La <b>paroxetina<\/b> (ISRS) está específicamente aprobada para el <b>trastorno de estrés postraumático<\/b>, además de otros trastornos de ansiedad.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|snc-23"]}, {"t": "Final julio 2024", "q": "¿Qué fármaco presenta buena correlación entre concentración plasmática y grado de sedación, permitiendo diferenciar sedación de anestesia?", "o": ["Propofol", "Midazolam", "Fentanilo", "Ketamina"], "c": 1, "e": "El <b>propofol<\/b> tiene una relación concentración-efecto predecible y de inicio/recuperación rápidos, lo que permite titular con precisión desde la <b>sedación hasta la anestesia<\/b>.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|snc-24"]}, {"t": "Final julio 2024", "q": "¿Qué medicamento se emplea en anestesia epidural?", "o": ["Mepivacaína", "Bupivacaína", "Benzocaína", "Tetracaína"], "c": 2, "e": "La <b>bupivacaína<\/b> es un anestésico local de larga duración ampliamente utilizado en <b>anestesia epidural y raquídea<\/b> por su potencia y duración.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|snc-27"]}, {"t": "Final julio 2024", "q": "Fármaco utilizado en el delirium tremens (abstinencia alcohólica) y en estados de confusión y agitación del anciano:", "o": ["Hidroxicina", "Clometiazol", "Gabapentina", "Propranolol"], "c": 2, "e": "El <b>clometiazol<\/b> es un sedante-hipnótico empleado en el <b>delirium tremens<\/b> y en la agitación/confusión del anciano, con efecto anticonvulsivante.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|snc-30"]}, {"t": "Final julio 2024", "q": "Indique la respuesta INCORRECTA sobre la serotonina:", "o": ["Actúa sobre receptores 5-HT2 aumentando la agregación plaquetaria", "La metisergida tiene acción agonista parcial sobre receptores 5-HT1A", "El receptor 5-HT4 es responsable de la acción procinética", "Los agonistas de receptores 5-HT1B/1D provocan vasoconstricción e inhibición neuronal"], "c": 2, "e": "Es incorrecta: la <b>metisergida<\/b> es un <b>antagonista 5-HT2<\/b> (profilaxis de la migraña), no un agonista parcial 5-HT1A.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|snc-34"]}, {"t": "Final julio 2024", "q": "Marque el opioide que se comporta como agonista parcial:", "o": ["Tramadol", "Buprenorfina", "Pentazocina", "Oxicodona"], "c": 2, "e": "La <b>buprenorfina<\/b> es un <b>agonista parcial<\/b> del receptor mu (con efecto techo), de alta afinidad; útil en dolor y en deshabituación a opioides. La pentazocina es agonista-antagonista.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|snc-37"]}, {"t": "Final julio 2024", "q": "¿Qué fármaco se administra junto a levodopa y carbidopa aumentando la biodisponibilidad de la levodopa?", "o": ["Entacapona", "Rasagilina", "Cabergolida", "Pramipexol"], "c": 1, "e": "La <b>entacapona<\/b> inhibe la <b>COMT<\/b> periférica, frena la degradación de la levodopa y prolonga su disponibilidad, reduciendo las fluctuaciones motoras.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|snc-38"]}, {"t": "Final julio 2024", "q": "¿Qué es cierto sobre el potencial de reforzamiento o de adictividad de un fármaco?", "o": ["Solo depende de la farmacodinamia del fármaco", "Solo depende de la farmacocinética del fármaco", "La probabilidad de adicción es inversamente proporcional a su liposolubilidad", "Los fármacos que alteran la neurotransmisión dopaminérgica pueden producir adictividad"], "c": 4, "e": "El refuerzo adictivo se vincula a la activación de la vía <b>dopaminérgica mesolímbica<\/b> (núcleo accumbens). Mayor liposolubilidad y rapidez de acción aumentan el potencial adictivo.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|snc-39"]}, {"t": "Final julio 2024", "q": "Indique la respuesta INCORRECTA:", "o": ["Los salicilatos inhiben la COX-1 disminuyendo la producción de TXA2", "La agranulocitosis es la principal RAM del diclofenaco", "El paracetamol es de elección en la infección vírica en niños", "El meloxicam bloquea preferentemente la COX-2"], "c": 2, "e": "Es incorrecta: la <b>agranulocitosis<\/b> es una reacción característica del <b>metamizol<\/b>, no del diclofenaco. El paracetamol se prefiere en niños por el riesgo de Reye con AAS.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|snc-42"]}, {"t": "Final julio 2024", "q": "¿Cuál NO es una característica de la clozapina?", "o": ["Mayor efectividad en síntomas negativos", "Baja incidencia de reacciones extrapiramidales", "Agranulocitosis", "Hiperprolactinemia"], "c": 4, "e": "La <b>clozapina<\/b> apenas eleva la prolactina (baja afinidad D2): la <b>hiperprolactinemia no es típica<\/b>. Sí destaca por su eficacia, escasos extrapiramidalismos y riesgo de agranulocitosis.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|snc-43"]}, {"t": "Final julio 2024", "q": "Señale la relación INCORRECTA:", "o": ["Donepezilo / tratamiento de elección en Alzheimer de leve a moderado", "Rivastigmina / demencia leve a moderadamente grave con enfermedad de Parkinson", "Memantina / antagonista no competitivo del receptor NMDA", "Galantamina / inhibición selectiva reversible de la AChE"], "c": 3, "e": "Según la clave del examen, la relación señalada es esta. La <b>memantina<\/b> es un antagonista no competitivo del NMDA, pero indicada en fases <b>moderada-grave<\/b>, no en las leves que tratan los anticolinesterásicos.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|snc-47"]}, {"t": "Final julio 2024", "q": "Señale el fármaco de primera elección en infecciones por Chlamydia:", "o": ["Tetraciclina", "Ampicilina", "Estreptomicina", "Amoxicilina + ácido clavulánico"], "c": 1, "e": "Las <b>tetraciclinas (doxiciclina)<\/b> son de elección frente a <b>Chlamydia<\/b>, microorganismo intracelular; los macrólidos (azitromicina) son la alternativa. Los betalactámicos son ineficaces.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|inf-10"]}, {"t": "Final julio 2024", "q": "¿Qué antibiótico aumenta el vaciado gástrico y resulta eficaz contra la gastroparesia?", "o": ["Eritromicina", "Amoxicilina", "Neomicina", "Cotrimoxazol"], "c": 1, "e": "La <b>eritromicina<\/b> es <b>agonista del receptor de motilina<\/b>, estimula la motilidad gástrica y se usa como procinético en la gastroparesia.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|inf-13"]}, {"t": "Final julio 2024", "q": "Señale la relación CORRECTA sobre los mecanismos de acción de los antibióticos:", "o": ["Vancomicina / inhibición de la síntesis de proteínas", "Trimetoprim / bloqueo de la síntesis de ácido fólico", "Cloranfenicol / inhibición de la topoisomerasa II", "Sulfamidas / alteración de la membrana citoplasmática"], "c": 2, "e": "El <b>trimetoprim<\/b> inhibe la <b>dihidrofolato reductasa<\/b>, bloqueando la síntesis de folato. La vancomicina actúa sobre la pared, el cloranfenicol sobre el ribosoma 50S y las sulfamidas inhiben la dihidropteroato sintetasa.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|inf-29"]}, {"t": "Final julio 2024", "q": "¿Qué fármaco bactericida es muy tóxico, por lo que su uso se limita a la aplicación tópica?", "o": ["Fosfomicina", "Cicloserina", "Cloxacilina", "Bacitracina"], "c": 4, "e": "La <b>bacitracina<\/b> es muy nefrotóxica por vía sistémica; inhibe la síntesis de la pared bacteriana y se reserva para <b>uso tópico<\/b>.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|inf-33"]}, {"t": "Final julio 2024", "q": "Ante una infección intrahospitalaria por Pseudomonas aeruginosa, ¿qué cefalosporina propondría?", "o": ["Ceftazidima", "Cefuroxima", "Cefazolina", "Cefotaxima"], "c": 1, "e": "La <b>ceftazidima<\/b> (cefalosporina de 3.ª generación) posee <b>actividad antipseudomónica<\/b>, a diferencia de cefuroxima, cefazolina o cefotaxima.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|inf-36"]}, {"t": "Final julio 2024", "q": "¿Cuál es la acción terapéutica de la mefloquina?", "o": ["Antiarrítmica", "Antiemética", "Antihipertensiva", "Antipalúdica"], "c": 4, "e": "La <b>mefloquina<\/b> es un <b>antipalúdico<\/b> empleado en profilaxis y tratamiento de la malaria, incluyendo cepas resistentes a la cloroquina.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|inf-40"]}, {"t": "Final julio 2024", "q": "Ante un alérgico a la penicilina con infección por estreptococos, ¿qué fármaco elegiría?", "o": ["Eritromicina", "Claritromicina", "Azitromicina", "Gentamicina"], "c": 1, "e": "En alérgicos a betalactámicos, los <b>macrólidos como la eritromicina<\/b> son alternativa frente a estreptococos. La gentamicina (aminoglucósido) carece de actividad fiable frente a estreptococos en monoterapia.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|inf-41"]}, {"t": "Final julio 2024", "q": "Desplazan a la bilirrubina de su unión a la albúmina provocando ictericia (kernícterus en el neonato):", "o": ["Sulfamidas", "Polimixinas", "Quinolonas", "Fluoroquinolonas"], "c": 1, "e": "Las <b>sulfamidas<\/b> desplazan la bilirrubina de la albúmina; en el neonato aumentan la bilirrubina libre con riesgo de <b>kernícterus<\/b>, por lo que se evitan en el embarazo a término y lactantes.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|inf-46"]}, {"t": "Final julio 2024", "q": "Señale una RAM del cloranfenicol:", "o": ["Síndrome del cuello o del hombre rojo", "Síndrome de Stevens-Johnson", "Síndrome gris del recién nacido", "Hipertermia maligna"], "c": 3, "e": "El <b>cloranfenicol<\/b> produce el <b>síndrome gris del recién nacido<\/b> (cianosis, hipotensión y colapso) por inmadurez de la glucuronoconjugación. El «hombre rojo» corresponde a la vancomicina.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|inf-49"]}, {"t": "Final julio 2024", "q": "¿Qué antifúngico inhibe la timidilato sintasa?", "o": ["Nistatina", "Flucitosina", "Griseofulvina", "Anfotericina B"], "c": 2, "e": "La <b>flucitosina<\/b> se convierte en 5-fluorouracilo, que inhibe la <b>timidilato sintasa<\/b> y altera la síntesis de ADN/ARN fúngico. Suele asociarse a anfotericina B.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|inf-52"]}, {"t": "Final julio 2024", "q": "Señale el fármaco con acción microfilaricida:", "o": ["Mebendazol", "Praziquantel", "Ivermectina", "Niclosamida"], "c": 3, "e": "La <b>ivermectina<\/b> es <b>microfilaricida<\/b>; tratamiento de la oncocercosis y otras filariasis y de la estrongiloidiasis. Actúa sobre los canales de cloro glutamato-dependientes del parásito.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|inf-56"]}, {"t": "Final julio 2024", "q": "¿Qué fármaco es útil por vía tópica para tratar la candidiasis bucofaríngea?", "o": ["Ketoconazol", "Fluconazol", "Itraconazol", "Miconazol"], "c": 4, "e": "El <b>miconazol<\/b> (gel oral) es un azol de uso <b>tópico<\/b> eficaz en la candidiasis orofaríngea. Los demás se usan habitualmente por vía sistémica.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|inf-57"]}, {"t": "Final julio 2024", "q": "¿Cuál fue el primer fármaco empleado en el tratamiento del VIH?", "o": ["Lamivudina", "Zidovudina", "Nevirapina", "Inhibidores de la proteasa"], "c": 2, "e": "La <b>zidovudina (AZT)<\/b>, análogo de nucleósido inhibidor de la transcriptasa inversa, fue el <b>primer antirretroviral<\/b> aprobado frente al VIH (1987).", "ns": false, "src": ["mir_farmacologia_jul2024_v1|inf-63"]}, {"t": "Final julio 2024", "q": "Es un antivírico análogo de la guanosina:", "o": ["Foscarnet", "Zanamivir", "Oseltamivir", "Aciclovir"], "c": 4, "e": "El <b>aciclovir<\/b> es un análogo de la <b>guanosina<\/b> que, fosforilado por la timidina cinasa viral, inhibe la ADN polimerasa del virus herpes.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|inf-65"]}, {"t": "Final julio 2024", "q": "Indique el fármaco oral usado en profilaxis y tratamiento de las infecciones por virus influenza tipo A:", "o": ["Amantadina", "Imiquimod", "Valaciclovir", "Palivizumab"], "c": 1, "e": "La <b>amantadina<\/b> bloquea la proteína M2 del <b>virus influenza A<\/b>; se usa por vía oral en profilaxis y tratamiento (también en Parkinson).", "ns": false, "src": ["mir_farmacologia_jul2024_v1|inf-67"]}, {"t": "Final julio 2024", "q": "Marque la afirmación INCORRECTA:", "o": ["Los alérgicos a penicilinas pueden tener hipersensibilidad cruzada con cefalosporinas", "Algunas cefalosporinas pueden producir hemorragias", "Algunas cefalosporinas pueden causar convulsiones y mioclonías cuando hay fallo renal", "Algunas penicilinas pueden causar alteraciones hematológicas como anemia"], "c": 3, "e": "Según la clave del examen se marca esta opción, aunque las cuatro afirmaciones son clínicamente correctas (la acumulación de betalactámicos en insuficiencia renal puede causar neurotoxicidad). Es una pregunta discutible.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|inf-78"]}, {"t": "Final julio 2024", "q": "¿Qué es FALSO del octreotido?", "o": ["Indicado para la prevención y el tratamiento de fístulas pancreáticas", "Indicado para tumores del tubo digestivo", "Es un inhibidor de la liberación de hormonas prosecretoras", "Se utiliza para adsorber sustancias tóxicas e impedir que actúen sobre la mucosa"], "c": 4, "e": "Es falso: el <b>octreotido<\/b> es un <b>análogo de la somatostatina<\/b> que inhibe la secreción hormonal (GH, hormonas gastrointestinales); no es un adsorbente de tóxicos.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|endo-4"]}, {"t": "Final julio 2024", "q": "¿Cuál es un requisito para la politerapia antineoplásica?", "o": ["Toxicidad diferente", "Mecanismos de acción iguales", "Mecanismos que actúen sobre las mismas fases del ciclo celular", "No es necesario que sean sinérgicos"], "c": 1, "e": "En quimioterapia combinada se eligen fármacos con <b>toxicidades no solapadas<\/b>, mecanismos distintos, sin resistencia cruzada y preferiblemente sinérgicos, para maximizar eficacia y minimizar la toxicidad acumulada.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|endo-9"]}, {"t": "Final julio 2024", "q": "¿Qué fármaco cataliza la oxidación de ácido úrico a alantoína?", "o": ["Rasburicasa", "Colchicina", "Alopurinol", "Febuxostat"], "c": 1, "e": "La <b>rasburicasa<\/b> es una urato oxidasa recombinante que <b>degrada el ácido úrico a alantoína<\/b> (más soluble); se usa en el síndrome de lisis tumoral. Alopurinol y febuxostat inhiben la xantina oxidasa.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|endo-11"]}, {"t": "Final julio 2024", "q": "Mujer de 55 años con osteonecrosis mandibular detectada en el dentista. ¿Qué fármaco lleva consumiendo a largo plazo?", "o": ["Alendronato", "Raloxifeno", "Teriparatida", "Calcitonina"], "c": 1, "e": "Los <b>bisfosfonatos como el alendronato<\/b> se asocian a <b>osteonecrosis de los maxilares<\/b>, sobre todo tras procedimientos dentales y uso prolongado.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|endo-25"]}, {"t": "Final julio 2024", "q": "¿Cuál NO es una aplicación de los corticoides?", "o": ["Enfermedades alérgicas", "Síndrome de Cushing", "Dermatitis atópica y psoriasis", "Shock anafiláctico"], "c": 2, "e": "El <b>síndrome de Cushing<\/b> es precisamente un cuadro de <b>exceso de glucocorticoides<\/b>; los corticoides no lo tratan, lo causan (Cushing iatrogénico). Sí se usan en alergia, dermatosis y shock.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|endo-44"]}, {"t": "Final julio 2024", "q": "¿Qué fármaco ve modificada su absorción por el café, la fibra y la soja, y debe tomarse 1 h antes de las comidas?", "o": ["Levotiroxina (T4)", "Metimazol", "Yodo radiactivo", "Sales de yoduro"], "c": 1, "e": "La <b>levotiroxina<\/b> tiene absorción muy sensible a alimentos (café, fibra, soja, calcio, hierro); debe tomarse en <b>ayunas<\/b>, separada de las comidas, para garantizar una dosis estable.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|endo-48"]}, {"t": "Final julio 2024", "q": "Señale la respuesta INCORRECTA sobre la finasterida:", "o": ["Bloquea la formación de la DHT (dihidrotestosterona)", "Indicada en el cáncer de próstata", "Inhibe la 5-alfa-reductasa", "Indicada en la hiperplasia benigna de próstata"], "c": 2, "e": "Es incorrecta: la <b>finasterida<\/b> inhibe la 5-alfa-reductasa reduciendo la DHT y se indica en la <b>hiperplasia benigna de próstata<\/b> y la alopecia, no como tratamiento del cáncer de próstata.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|endo-51"]}, {"t": "Final julio 2024", "q": "Señale la relación INCORRECTA:", "o": ["Difenhidramina / antagonista H1 de 1.ª generación", "Ebastina / efecto sedante", "Loratadina / antagonista H1 de 2.ª generación", "Hidroxicina / sequedad de boca y mucosas"], "c": 2, "e": "Es incorrecta: la <b>ebastina<\/b> es un antihistamínico H1 de <b>2.ª generación<\/b>, no atraviesa apenas la barrera hematoencefálica y <b>carece de efecto sedante<\/b> relevante.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|rdg-28"]}, {"t": "Final julio 2024", "q": "Indique la respuesta INCORRECTA:", "o": ["El formoterol es un agonista beta-2 adrenérgico de acción prolongada", "Los glucocorticoides revierten el broncoespasmo", "El bromuro de ipratropio no es de 1.ª elección en EPOC", "La teofilina se usa por vía intravenosa en casos graves de asma"], "c": 2, "e": "Es incorrecta: los <b>glucocorticoides son antiinflamatorios<\/b>, no broncodilatadores; <b>no revierten el broncoespasmo agudo<\/b>. Para ello se emplean beta-2 agonistas de acción rápida.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|rdg-53"]}, {"t": "Final julio 2024", "q": "¿Cuál es el fármaco de elección IV para la prevención de la preeclampsia/eclampsia, incluso por delante de antihipertensivos y anticonvulsivantes?", "o": ["Sulfato de magnesio", "Ritodrina", "Atosibán", "Terbutalina"], "c": 1, "e": "El <b>sulfato de magnesio<\/b> intravenoso es de elección para <b>prevenir y tratar las convulsiones eclámpsicas<\/b> y como neuroprotector. Los demás son tocolíticos.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|rdg-58"]}, {"t": "Final julio 2024", "q": "¿Qué fármaco NO aumenta la actividad de la proteína CFTR en la fibrosis quística?", "o": ["Elexacaftor", "Ivacaftor", "Tezacaftor", "Guaifenesina"], "c": 4, "e": "La <b>guaifenesina<\/b> es un mucolítico/expectorante sin efecto sobre la CFTR. Ivacaftor (potenciador), elexacaftor y tezacaftor (correctores) sí modulan directamente la proteína.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|rdg-59"]}, {"t": "Final julio 2024", "q": "¿Qué fármaco está contraindicado en el embarazo por riesgo de aborto?", "o": ["Misoprostol", "Hidróxido de aluminio", "Derivados de magnesio", "Sucralfato"], "c": 1, "e": "El <b>misoprostol<\/b> (análogo de prostaglandina E1) provoca <b>contracciones uterinas<\/b> y aborto; está contraindicado en el embarazo (se usa, de hecho, para inducir parto/aborto).", "ns": false, "src": ["mir_farmacologia_jul2024_v1|rdg-62"]}, {"t": "Final julio 2024", "q": "Indique la relación INCORRECTA:", "o": ["Cinetosis / escopolamina", "Lorazepam / vómitos inducidos por antineoplásicos", "Dexametasona / vómitos graves del embarazo", "Doxilamina / antihistamínico H1"], "c": 3, "e": "Es incorrecta: en los <b>vómitos del embarazo<\/b> se emplean doxilamina con piridoxina; la <b>dexametasona<\/b> se usa como antiemético en la quimioterapia, no en la hiperémesis gravídica.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|rdg-64"]}, {"t": "Final julio 2024", "q": "¿Qué fármaco es útil para la colitis ulcerosa?", "o": ["Sulfametoxazol", "Sulfasalazina", "Sulfadiazina argéntica", "Sulfatiazol"], "c": 2, "e": "La <b>sulfasalazina<\/b> (5-ASA unido a sulfapiridina) es un antiinflamatorio intestinal de uso clásico en la <b>colitis ulcerosa<\/b> y la enfermedad inflamatoria intestinal.", "ns": false, "src": ["mir_farmacologia_jul2024_v1|rdg-76"]}];
+/* ═══ Generador de simulacros sin repetidas (QRecall) ═══
+   Cada simulacro se monta en el momento: primero preguntas que este navegador nunca ha respondido
+   (en ningún banco de la asignatura ni en simulacros anteriores), luego las falladas, y solo al final las ya acertadas. */
+var GEN=(function(){
+  var GK='farma_simnuevo_v1';
+  function lsGet(k){try{return JSON.parse(localStorage.getItem(k)||'null');}catch(e){return null;}}
+  function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+  function lsDel(k){try{localStorage.removeItem(k);}catch(e){}}
+  function shuffle(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=b[i];b[i]=b[j];b[j]=t;}return b;}
+  var G=lsGet(GK)||{};G.hist=G.hist||{};   // hist: {idx: 'ok'|'ko'|'vista'} de simulacros anteriores
+  var TEMAS=[];POOL.forEach(function(p){if(TEMAS.indexOf(p.t)<0)TEMAS.push(p.t);});
+  function drawKey(id){return 'farma_simnuevo_'+id;}
+  /* estado de cada pregunta: 0 nunca respondida · 1 vista sin responder · 2 acertada · 3 fallada */
+  function estados(){
+    var cache={},out=[];
+    POOL.forEach(function(p,i){
+      var st=0;
+      p.src.forEach(function(s){
+        var k=s.split('|')[0],qid=s.split('|')[1];
+        if(!(k in cache))cache[k]=lsGet(k)||{};
+        var d=cache[k],a=d.state&&d.state[qid];
+        if(a)st=Math.max(st,a.r?2:3);
+        if(d.failHist&&d.failHist[qid])st=3;
+      });
+      var h=G.hist[i];
+      if(h==='ko')st=3;else if(h==='ok')st=Math.max(st,2);else if(h==='vista')st=Math.max(st,1);
+      out.push(st);
+    });
+    return out;
+  }
+  /* guarda en el historial lo respondido en el simulacro actual */
+  function archivar(){
+    var c=G.cur;if(!c)return;
+    var d=lsGet(drawKey(c.id))||{},s=d.state||{};
+    c.ids.forEach(function(idx,k){
+      var a=s['sim-'+(k+1)];
+      if(a)G.hist[idx]=a.r?'ok':'ko';
+      else if(c.vistas&&!G.hist[idx])G.hist[idx]='vista';
+    });
+    lsDel(drawKey(c.id));
+  }
+  function generar(temas,n){
+    var est=estados(),cand=[];
+    POOL.forEach(function(p,i){if(temas.indexOf(p.t)>=0)cand.push(i);});
+    /* prioridad: 0 nunca vista → 3 fallada → 1 vista sin responder → 2 acertada */
+    var orden=[0,3,1,2],sel=[],stats={nueva:0,fallada:0,vista:0,acertada:0};
+    var nom={0:'nueva',3:'fallada',1:'vista',2:'acertada'};
+    orden.forEach(function(b){
+      if(sel.length>=n)return;
+      var porTema={};
+      shuffle(cand.filter(function(i){return est[i]===b;})).forEach(function(i){(porTema[POOL[i].t]=porTema[POOL[i].t]||[]).push(i);});
+      var ts=shuffle(Object.keys(porTema)),alguna=true;
+      while(sel.length<n&&alguna){
+        alguna=false;
+        ts.forEach(function(t){if(sel.length<n&&porTema[t].length){sel.push(porTema[t].shift());stats[nom[b]]++;alguna=true;}});
+      }
+    });
+    var id=Date.now().toString(36);
+    G.cur={id:id,ids:shuffle(sel),temas:temas,n:n,fecha:new Date().toISOString().slice(0,10),stats:stats,vistas:false};
+    lsSet(GK,G);
+    lsSet(drawKey(id),{timerSec:Math.round(n*72)});   /* 50 preguntas → 60 min */
+  }
+  if(!G.cur)generar(TEMAS,50);
+  var c=G.cur,qs=c.ids.map(function(idx,k){var p=POOL[idx];return {n:String(k+1),noShuffle:p.ns,img:null,q:p.q,o:p.o,c:p.c,e:p.e+' <i style="opacity:.6">['+p.t+']</i>'};});
+  c.vistas=true;lsSet(GK,G);
+  function nuevo(temas,n){archivar();delete G.cur;generar(temas,n);location.reload();}
+  function resumen(){
+    var est=estados(),tot={},nunca={};
+    POOL.forEach(function(p,i){tot[p.t]=(tot[p.t]||0)+1;if(est[i]===0)nunca[p.t]=(nunca[p.t]||0)+1;});
+    return {tot:tot,nunca:nunca};
+  }
+  return {key:drawKey(c.id),cur:c,temas:TEMAS,nuevo:nuevo,resumen:resumen,
+    meta:{titulo:'Farmacología · Simulacro nuevo',subtitulo:c.n+' preguntas montadas el '+c.fecha.split('-').reverse().join('/')+' · prioriza las que nunca has respondido',
+      examen:'Simulacro · la nota resta 1/3 por fallo · temporizador 72 s por pregunta',
+      secciones:{sim:{label:'Simulacro · '+c.n+' preguntas',emoji:'⏱️',color:'#0f766e',colorDim:'#ccfbf1',desc:'Temas mezclados · pulsa «Calcular nota» al terminar'}}},
+    d:{sim:qs}};
+})();
+</script>
+
+<header>
+  <h1 id="h-tit">Banco MIR</h1>
+  <div class="hright">
+    <span class="hmeta" id="h-meta"></span>
+    <!-- Temporizador -->
+    <div id="timer-wrap" title="Haz clic en el tiempo para editar">
+      <span id="timer-display">0:00:00</span>
+      <button id="btn-tplay" onclick="timerToggle()" title="Play/Pausa">▶</button>
+      <button onclick="timerReset()" title="Reset">↺</button>
+    </div>
+    <button class="hbtn" id="btn-dark" onclick="toggleDark()" title="Modo oscuro">🌙</button>
+    <span id="save-badge" class="sbadge"></span>
+  </div>
+</header>
+<div id="prog-wrap"><div id="prog-bar"></div></div>
+
+<div class="container" id="main-cont" data-tab="all">
+<div id="gen-panel" style="background:var(--surf);border:1.5px solid #0f766e;border-radius:12px;padding:14px 16px;margin:0 0 14px">
+  <div style="font-weight:700;font-size:15px;margin-bottom:4px">🎲 Simulacro nuevo cada vez</div>
+  <div id="gen-info" style="font-size:13px;color:var(--txt2);line-height:1.5"></div>
+  <details style="margin-top:8px;font-size:13px">
+    <summary style="cursor:pointer;font-weight:600;color:#0f766e">Montar otro simulacro</summary>
+    <div id="gen-temas" style="display:flex;flex-wrap:wrap;gap:6px 14px;margin:10px 0"></div>
+    <label>Preguntas: <select id="gen-n" style="font-size:13px;padding:3px;border-radius:6px;background:var(--surf);color:var(--txt);border:1px solid var(--bd2)"><option>25</option><option selected>50</option></select></label>
+    <button id="gen-btn" type="button" style="margin-left:10px;padding:7px 14px;border-radius:8px;border:none;background:#0f766e;color:#fff;font-weight:600;cursor:pointer">Montar simulacro nuevo</button>
+    <div style="font-size:12px;color:var(--txt3);margin-top:8px">Lo que hayas contestado en este se guarda en tu historial: el siguiente empezará por preguntas que no hayas visto, luego las falladas y al final las acertadas. Todo se queda en este navegador.</div>
+  </details>
+</div>
+<script>
+(function(){
+  var c=GEN.cur,s=c.stats,r=GEN.resumen();
+  var totNunca=0,tot=0;GEN.temas.forEach(function(t){tot+=r.tot[t];totNunca+=(r.nunca[t]||0);});
+  document.getElementById('gen-info').innerHTML='<b>'+s.nueva+'</b> de '+c.n+' son preguntas que no habías respondido nunca'
+    +(s.fallada?' · <b>'+s.fallada+'</b> falladas antes':'')+(s.vista+s.acertada?' · '+(s.vista+s.acertada)+' ya vistas (no quedaban nuevas suficientes)':'')
+    +'<br>Te quedan <b>'+totNunca+'</b> de '+tot+' preguntas de Farma que aún no has visto (cuentan también las de los demás bancos de la asignatura).';
+  var box=document.getElementById('gen-temas');
+  GEN.temas.forEach(function(t){
+    var l=document.createElement('label');l.style.whiteSpace='nowrap';
+    var cb=document.createElement('input');cb.type='checkbox';cb.value=t;cb.checked=c.temas.indexOf(t)>=0;
+    l.appendChild(cb);l.appendChild(document.createTextNode(' '+t+' ('+(r.nunca[t]||0)+' nuevas)'));box.appendChild(l);
+  });
+  var b=document.getElementById('gen-btn'),armed=false;
+  b.addEventListener('click',function(){
+    var ts=[].slice.call(box.querySelectorAll('input:checked')).map(function(x){return x.value;});
+    if(!ts.length){b.textContent='Marca al menos un tema';return;}
+    if(!armed){armed=true;b.textContent='¿Seguro? Pulsa otra vez';b.style.background='#b45309';return;}
+    GEN.nuevo(ts,parseInt(document.getElementById('gen-n').value,10));
+  });
+})();
+</script>
+
+  <!-- Buscador -->
+  <div class="search-wrap">
+    <input type="text" id="search-input" placeholder="🔍 Buscar en enunciados..." oninput="onSearch(this.value)">
+    <button class="search-clear" id="search-clear" onclick="clearSearch()">✕</button>
+  </div>
+  <div id="search-count"></div>
+
+  <!-- Modo -->
+  <div class="mode-bar">
+    <span style="font-size:11.5px;color:var(--txt3);font-weight:600">MODO:</span>
+    <button class="mode-btn on" id="mode-test" onclick="setMode('test')">📝 Test</button>
+    <button class="mode-btn" id="mode-quick" onclick="setMode('quick')">⚡ Repaso rápido</button>
+    <button class="mode-btn" id="btn-stars" onclick="filterStarred()" style="margin-left:auto;border-color:#f59e0b;color:#b45309">⭐ Marcadas</button>
+    <button class="mode-btn" id="btn-stats" onclick="toggleStats()">📊 Errores</button>
+  </div>
+
+  <!-- Stats globales -->
+  <div class="stats-box" id="stats-global"></div>
+
+  <!-- Tabs -->
+  <div class="tabs" id="tabs-wrap"></div>
+
+  <!-- Score global -->
+  <div class="ph-global">
+    <div class="ph-left">
+      <span class="ph-desc" id="ph-gdesc"></span>
+      <div class="score-row">
+        <span class="sc ok" id="sc-ok-all">✓ 0</span>
+        <span class="sc ko" id="sc-ko-all">✗ 0</span>
+        <span class="sc rem" id="sc-rem-all">○ 0</span>
+      </div>
+    </div>
+  </div>
+  <div class="global-actions">
+    <button class="reset-btn" onclick="resetAll()">↺ Reiniciar y mezclar</button>
+    <button class="nota-btn" onclick="calcNotaAll()">✎ Calcular nota global</button>
+  </div>
+  <div class="global-nota-box" id="nota-all"></div>
+  <p class="hint">💡 <b>1–5</b> responde · <b>↑↓</b> navega · <b>S</b> marca ⭐ · Progreso guardado automáticamente</p>
+
+  <div id="panels-wrap"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════ MOTOR v10 ═══════════════════════════════════════ */
+
+var KEY=/*__KEY__*/GEN.key;
+var META=/*__META_JSON__*/GEN.meta;
+var D=/*__D_JSON__*/GEN.d;
+var IMGS=/*__IMGS_JSON__*/{};
+
+/* ── Estado ── */
+var canSave=typeof localStorage!=='undefined';
+var saved={};try{saved=JSON.parse(localStorage.getItem(KEY)||'null')||{};}catch(e){}
+var state   =saved.state   ||{};
+var qOrd    =saved.qOrd    ||{};
+var oOrd    =saved.oOrd    ||{};
+var starred =saved.starred ||{};
+var failHist=saved.failHist||{};  // {qid: count} entre sesiones
+var darkMode=saved.dark    ||false;
+var timerSec=saved.timerSec||0;   // segundos configurados
+var SECS=Object.keys(META.secciones||{});
+var fFailed={};
+var qIdx={};           // {sec: {n: q}}
+var qNums={};          // {sec: {n: numero_correlativo}}
+var allOrder=null;     // orden mezclado inter-secciones para pestaña Todos
+var activeCid=null;
+var currentTab='all';
+var currentMode='test';
+var saveTimer=null;
+var starsFilter=false;
+var statsVisible=false;
+var timerRunning=false;
+var timerRemaining=timerSec;
+var timerInterval=null;
+
+/* ── INIT ── */
+(function init(){
+  SECS.forEach(function(s){fFailed[s]=false;});
+  injectSecCSS();
+  buildHeader();
+  buildTabs();
+  buildPanels();
+  buildIdx();
+  buildNums();
+  buildAllOrder();
+  SECS.forEach(render);
+  renderAll();
+  updateScores();
+  updateProg();
+  applyTheme();
+  initTimer();
+  setBadge(canSave?'Guardado':'Sin guardado',canSave?'ok':'warn');
+  document.addEventListener('keydown',handleKey);
+  var si=document.getElementById('search-input');
+  if(si)si.addEventListener('keydown',function(e){if(e.key==='Escape'){clearSearch();}});
+})();
+
+/* ── CSS dinámico ── */
+function injectSecCSS(){
+  var css='';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{};
+    var c=m.color||'#1a56db',cd=m.colorDim||'#e8f0fe';
+    css+='.tab.t-'+s+'.on{background:'+cd+';color:'+c+';border-color:'+c+'}\n';
+    css+='.ph.s-'+s+'{border-left:4px solid '+c+'}\n';
+    // Variables CSS por sección para el badge coloreado
+    css+='#panel-'+s+' .qnum.sec-colored{background:'+cd+';color:'+c+'}\n';
+  });
+  var st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+}
+
+/* ── Header ── */
+function buildHeader(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var t=document.getElementById('h-tit');if(t)t.textContent=META.titulo||'Banco MIR';
+  var pt=document.getElementById('page-title');if(pt)pt.textContent=META.titulo||'Banco MIR';
+  var m=document.getElementById('h-meta');
+  if(m){var p=[];if(total)p.push(total+' preguntas');if(META.examen)p.push(META.examen);m.textContent=p.join(' · ');}
+  var d=document.getElementById('ph-gdesc');if(d)d.textContent=META.subtitulo||'';
+  var r=document.getElementById('sc-rem-all');if(r)r.textContent='○ '+total;
+}
+
+/* ── Tabs ── */
+function buildTabs(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var h='<button class="tab t-all on" onclick="showTab(\'all\')">📋 Todos ('+total+')</button>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<button class="tab t-'+s+'" onclick="showTab(\''+s+'\')">'+(m.emoji?m.emoji+' ':'')+escH(m.label||s)+' ('+cnt+')</button>';
+  });
+  var w=document.getElementById('tabs-wrap');if(w)w.innerHTML=h;
+}
+
+/* ── Paneles ── */
+function buildPanels(){
+  var h='<div id="panel-all" class="sec-panel visible"><div id="qs-all"></div><div class="no-results" id="nr-all">No se encontraron preguntas</div></div>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<div id="panel-'+s+'" class="sec-panel">';
+    h+='<div class="ph s-'+s+'">';
+    h+='<div class="ph-left">';
+    h+='<span class="ph-label">'+(m.emoji?m.emoji+'&nbsp;':'')+escH(m.label||s)+'</span>';
+    if(m.desc)h+='<span class="ph-desc">'+escH(m.desc)+'</span>';
+    h+='<div class="score-row">';
+    h+='<span class="sc ok" id="sc-ok-'+s+'">✓ 0</span>';
+    h+='<span class="sc ko" id="sc-ko-'+s+'">✗ 0</span>';
+    h+='<span class="sc rem" id="sc-rem-'+s+'">○ '+cnt+'</span>';
+    h+='</div></div>';
+    h+='<button class="fbtn" id="fb-'+s+'" onclick="toggleFail(\''+s+'\')">Solo falladas</button>';
+    h+='</div>';
+    h+='<div id="qs-'+s+'"></div>';
+    h+='<div class="no-failed" id="nf-'+s+'">Aún no has fallado ninguna 🎉</div>';
+    h+='<div class="no-results" id="nr-'+s+'">No se encontraron preguntas</div>';
+    h+='<div class="sec-actions">';
+    h+='<button class="reset-btn" onclick="resetSec(\''+s+'\')">↺ Reiniciar</button>';
+    h+='<button class="nota-btn" onclick="calcNota(\''+s+'\')">✎ Calcular nota</button>';
+    h+='</div>';
+    h+='<div class="nota-box" id="nota-'+s+'"></div>';
+    h+='</div>';
+  });
+  var pw=document.getElementById('panels-wrap');if(pw)pw.innerHTML=h;
+}
+
+/* ── Índice O(1) + numeración fija ── */
+function buildIdx(){
+  SECS.forEach(function(s){
+    qIdx[s]={};
+    if(D[s])D[s].forEach(function(q){qIdx[s][q.n]=q;});
+  });
+}
+function buildNums(){
+  // Numeración correlativa fija: 1, 2, 3... por sección
+  SECS.forEach(function(s){
+    qNums[s]={};
+    if(D[s])D[s].forEach(function(q,i){qNums[s][q.n]=i+1;});
+  });
+}
+function getNum(sec,n){return qNums[sec]?qNums[sec][n]||n:n;}
+function findQ(qid){
+  var d=qid.indexOf('-'),s=qid.substring(0,d),n=qid.substring(d+1);
+  return(qIdx[s]&&qIdx[s][n])||null;
+}
+function getSecFromQid(qid){return qid.substring(0,qid.indexOf('-'));}
+function getNFromQid(qid){return qid.substring(qid.indexOf('-')+1);}
+
+/* ── Orden inter-secciones para Todos ── */
+function buildAllOrder(){
+  var all=[];
+  SECS.forEach(function(s){if(D[s])D[s].forEach(function(q){all.push({sec:s,n:q.n});});});
+  if(!qOrd['__all__'])qOrd['__all__']=shuffle(all.map(function(x){return x.sec+'|'+x.n;}));
+  allOrder=qOrd['__all__'].map(function(key){
+    var p=key.indexOf('|'),sec=key.substring(0,p),n=key.substring(p+1);
+    return{sec:sec,n:n,q:qIdx[sec]&&qIdx[sec][n]};
+  }).filter(function(x){return x.q;});
+}
+
+/* ── Utilidades ── */
+function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function shuffle(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=b[i];b[i]=b[j];b[j]=t;}return b;}
+function getQOrd(s,qs){if(!qOrd[s])qOrd[s]=shuffle(qs.map(function(q){return q.n;}));return qOrd[s];}
+function getOOrd(qid){
+  var q=findQ(qid);var n=q&&q.o?q.o.length:4;
+  if(q&&q.noShuffle){var a=[];for(var i=0;i<n;i++)a.push(i);return a;}
+  if(!oOrd[qid]){var a=[];for(var i=0;i<n;i++)a.push(i);oOrd[qid]=shuffle(a);}
+  return oOrd[qid];
+}
+function imgHtml(key){
+  if(!IMGS[key]){console.warn('IMGS: clave no encontrada →',key);return'';}
+  return'<div class="clinimg-wrap"><img src="'+IMGS[key]+'" class="clinimg" alt="Imagen clínica" loading="lazy"><div class="clinimg-cap">Imagen clínica</div></div>';
+}
+
+/* ── localStorage debounce ── */
+function saveLocal(){
+  if(!canSave)return;
+  if(saveTimer)clearTimeout(saveTimer);
+  saveTimer=setTimeout(function(){
+    try{
+      localStorage.setItem(KEY,JSON.stringify({state:state,qOrd:qOrd,oOrd:oOrd,starred:starred,failHist:failHist,dark:darkMode,timerSec:timerSec}));
+      setBadge('Guardado','ok');
+    }catch(e){setBadge('Sin guardado','warn');}
+  },300);
+}
+function setBadge(t,c){var b=document.getElementById('save-badge');if(b){b.textContent=t;b.className='sbadge '+c;}}
+
+/* ── Construcción de tarjeta ── */
+function buildCard(q,sec,inAll,allPos){
+  var qid=sec+'-'+q.n;
+  var cid=(inAll?'A-':'S-')+qid;
+  var num=inAll?(allPos+1):getNum(sec,q.n);
+  var oo=getOOrd(qid);
+  var sOpts=oo.map(function(i){return q.o[i];});
+  var nc=oo.indexOf(q.c-1)+1;
+  var ans=state[qid];
+  var cc=ans?(ans.r?' answered-ok':' answered-wrong'):'';
+  var badgeCls='qnum'+(inAll?'':' sec-colored');
+  var h='<div class="qcard s-'+sec+cc+'" id="card-'+cid+'">';
+  h+='<div class="qhead" id="h-'+cid+'" data-cid="'+cid+'" data-qid="'+qid+'" data-sec="'+sec+'" onclick="tog(this.dataset.cid)">';
+  h+='<span class="'+badgeCls+'">'+num+'</span>';
+  h+='<span class="qtxt">'+q.q+(ans?'<span class="atag '+(ans.r?'ok':'ko')+'">'+(ans.r?'✓ acertada':'✗ fallada')+'</span>':'')+'</span>';
+  h+='<button class="star-btn'+(starred[qid]?' on':'')+'\" id="star-'+cid+'" onclick="event.stopPropagation();toggleStar(\''+qid+'\')" title="Marcar (S)"><span class="si">\u2606</span><span class="sf">\u2605</span></button>';
+  h+='<span class="chev">▾</span>';
+  h+='</div>';
+  h+='<div class="qbody" id="b-'+cid+'">';
+  if(q.img)h+=imgHtml(q.img);
+  if(currentMode==='quick'){
+    h+='<div class="quick-card"><div class="quick-rc">✓ Respuesta correcta: opción '+nc+' — '+escH(q.o[q.c-1])+'</div><div class="expbox">'+q.e+'</div></div>';
+  } else {
+    h+='<ul class="opts" id="opts-'+cid+'">';
+    h+=sOpts.map(function(o,i){
+      var p=i+1,oc='opt';
+      if(ans){oc+=' done';if(p===nc)oc+=' correct';else if(p===ans.c&&!ans.r)oc+=' wrong';}
+      return'<li class="'+oc+'" data-qid="'+qid+'" data-pos="'+p+'" data-sec="'+sec+'" onclick="answer(this.dataset.qid,+this.dataset.pos,this.dataset.sec)"><span class="onum">'+p+'.</span><span>'+o+'</span></li>';
+    }).join('');
+    h+='</ul>';
+    if(ans){h+='<div class="expbox"><span class="et">'+(ans.r?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e+'</div>';}
+  }
+  h+='</div></div>';
+  return h;
+}
+
+/* ── Render sección ── */
+function render(sec){
+  var qs=D[sec];if(!qs)return;
+  var ord=getQOrd(sec,qs);
+  var sorted=ord.map(function(n){return qIdx[sec]&&qIdx[sec][n];}).filter(Boolean);
+  var el=document.getElementById('qs-'+sec);
+  if(el)el.innerHTML=sorted.map(function(q){return buildCard(q,sec,false,0);}).join('');
+}
+
+/* ── Render Todos (mezcla inter-secciones) ── */
+function renderAll(){
+  if(!allOrder)buildAllOrder();
+  var el=document.getElementById('qs-all');
+  if(el)el.innerHTML=allOrder.map(function(x,i){return buildCard(x.q,x.sec,true,i);}).join('');
+}
+
+/* ── Toggle open/close ── */
+function tog(cid){
+  var b=document.getElementById('b-'+cid),h=document.getElementById('h-'+cid);
+  if(!b||!h)return;
+  var opening=!b.classList.contains('open');
+  b.classList.toggle('open');h.classList.toggle('open');
+  if(opening){
+    if(activeCid&&activeCid!==cid){var pc=document.getElementById('card-'+activeCid);if(pc)pc.classList.remove('kb-focus');}
+    activeCid=cid;
+    var card=document.getElementById('card-'+cid);if(card)card.classList.add('kb-focus');
+  }else{
+    if(activeCid===cid){activeCid=null;var card=document.getElementById('card-'+cid);if(card)card.classList.remove('kb-focus');}
+  }
+}
+
+/* ── Responder ── */
+function answer(qid,pos,sec){
+  if(state[qid])return;
+  var q=findQ(qid);if(!q)return;
+  var oo=getOOrd(qid);
+  var nc=oo.indexOf(q.c-1)+1;
+  var isRight=pos===nc;
+  state[qid]={c:pos,r:isRight};
+  // Registro de errores
+  if(!isRight){failHist[qid]=(failHist[qid]||0)+1;}
+  saveLocal();
+  // Actualizar todas las instancias del card (panel sección + panel all)
+  // Actualizar opciones en todas las instancias del card
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var optsEl=document.querySelectorAll('#opts-'+cid+' .opt');
+    optsEl.forEach(function(el,i){
+      el.classList.add('done');
+      if(i+1===nc)el.classList.add('correct');
+      else if(i+1===pos&&!isRight)el.classList.add('wrong');
+    });
+    var bdy=document.getElementById('b-'+cid);
+    if(bdy){
+      var eb=bdy.querySelector('.expbox');
+      if(!eb){eb=document.createElement('div');eb.className='expbox';bdy.appendChild(eb);}
+      eb.innerHTML='<span class="et">'+(isRight?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e;
+    }
+    var hd=document.getElementById('h-'+cid);
+    if(hd){var qt=hd.querySelector('.qtxt');if(qt&&!qt.querySelector('.atag')){var at=document.createElement('span');at.className='atag '+(isRight?'ok':'ko');at.innerHTML=isRight?'✓ acertada':'✗ fallada';qt.appendChild(at);}}
+    var card=document.getElementById('card-'+cid);
+    if(card)card.classList.add(isRight?'answered-ok':'answered-wrong');
+  });
+  updateScores();updateProg();
+  if(fFailed[sec]&&isRight){
+    var fcard=document.getElementById('card-S-'+qid);
+    if(fcard)fcard.style.display='none';
+    refreshNF(sec);
+  }
+}
+
+/* ── Estrella ── */
+function toggleStar(qid){
+  starred[qid]=!starred[qid];
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var btn=document.getElementById('star-'+cid);
+    if(btn)btn.classList.toggle('on',starred[qid]);
+  });
+  saveLocal();
+}
+function filterStarred(){
+  starsFilter=!starsFilter;
+  var btn=document.getElementById('btn-stars');
+  if(btn){btn.style.background=starsFilter?'#fef3c7':'';btn.style.fontWeight=starsFilter?'700':'';}
+  document.querySelectorAll('.qcard').forEach(function(card){
+    if(starsFilter){
+      var hd=card.querySelector('.qhead');
+      var qid=hd?hd.dataset.qid:'';
+      card.style.display=starred[qid]?'':'none';
+    }else{card.style.display='';}
+  });
+}
+
+/* ── Filtro falladas ── */
+function refreshNF(sec){
+  var c=document.getElementById('qs-'+sec);if(!c||!fFailed[sec])return;
+  var n=c.querySelectorAll('.qcard.answered-wrong').length;
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',n===0);
+}
+function toggleFail(sec){
+  fFailed[sec]=!fFailed[sec];
+  var btn=document.getElementById('fb-'+sec);
+  if(btn){btn.classList.toggle('on',fFailed[sec]);btn.textContent=fFailed[sec]?'← Ver todas':'Solo falladas';}
+  var c=document.getElementById('qs-'+sec);if(!c)return;
+  var nf=0;
+  c.querySelectorAll('.qcard').forEach(function(card){
+    if(fFailed[sec]){var show=card.classList.contains('answered-wrong');card.style.display=show?'':'none';if(show)nf++;}
+    else{card.style.display='';}
+  });
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',fFailed[sec]&&nf===0);
+}
+
+/* ── Scores y progreso ── */
+function updateScores(){
+  var tok=0,tok2=0,tok3=0;
+  SECS.forEach(function(sec){
+    var ok=0,ko=0;
+    if(D[sec])D[sec].forEach(function(q){var a=state[sec+'-'+q.n];if(a){if(a.r)ok++;else ko++;}});
+    var tot=D[sec]?D[sec].length:0,rem=tot-ok-ko;
+    tok+=ok;tok2+=ko;tok3+=rem;
+    var eok=document.getElementById('sc-ok-'+sec),eko=document.getElementById('sc-ko-'+sec),erm=document.getElementById('sc-rem-'+sec);
+    if(eok)eok.textContent='✓ '+ok;if(eko)eko.textContent='✗ '+ko;if(erm)erm.textContent='○ '+rem;
+  });
+  var eok=document.getElementById('sc-ok-all'),eko=document.getElementById('sc-ko-all'),erm=document.getElementById('sc-rem-all');
+  if(eok)eok.textContent='✓ '+tok;if(eko)eko.textContent='✗ '+tok2;if(erm)erm.textContent='○ '+tok3;
+}
+function updateProg(){
+  var total=0,done=Object.keys(state).length;
+  SECS.forEach(function(s){if(D[s])total+=D[s].length;});
+  var pct=total>0?Math.round(done/total*100):0;
+  var bar=document.getElementById('prog-bar');if(bar)bar.style.width=pct+'%';
+}
+
+/* ── Tabs ── */
+function showTab(t){
+  currentTab=t;
+  document.querySelectorAll('.tab').forEach(function(b){b.classList.remove('on');});
+  var tb=document.querySelector('.tab.t-'+t);if(tb)tb.classList.add('on');
+  var mc=document.getElementById('main-cont');if(mc)mc.setAttribute('data-tab',t);
+  var panelAll=document.getElementById('panel-all');
+  if(panelAll)panelAll.classList.toggle('visible',t==='all');
+  SECS.forEach(function(s){
+    var p=document.getElementById('panel-'+s);
+    if(p)p.classList.toggle('visible',t===s);
+  });
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  clearSearch();
+}
+
+/* ── Reset ── */
+function resetSec(sec){
+  if(D[sec])D[sec].forEach(function(q){var qid=sec+'-'+q.n;delete state[qid];delete oOrd[qid];});
+  delete qOrd[sec];fFailed[sec]=false;activeCid=null;
+  var btn=document.getElementById('fb-'+sec);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+  var nb=document.getElementById('nota-'+sec);if(nb){nb.style.display='none';nb.className='nota-box';}
+  saveLocal();render(sec);
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.remove('show');
+  updateScores();updateProg();
+  // Reconstruir panel all para reflejar cambios
+  buildAllOrder();renderAll();
+}
+function resetAll(){
+  Object.keys(state).forEach(function(k){delete state[k];});
+  Object.keys(oOrd).forEach(function(k){delete oOrd[k];});
+  Object.keys(qOrd).forEach(function(k){delete qOrd[k];});
+  activeCid=null;starsFilter=false;allOrder=null;
+  var bs=document.getElementById('btn-stars');if(bs){bs.style.background='';bs.style.fontWeight='';}
+  SECS.forEach(function(s){
+    fFailed[s]=false;
+    var btn=document.getElementById('fb-'+s);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+    var nb=document.getElementById('nota-'+s);if(nb){nb.style.display='none';nb.className='nota-box';}
+  });
+  saveLocal();
+  SECS.forEach(render);
+  buildAllOrder();renderAll();
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  updateScores();updateProg();
+}
+
+/* ── Nota y revisión ── */
+function buildRevList(sec){
+  var qs=D[sec];if(!qs)return'';
+  var failed=qs.filter(function(q){var a=state[sec+'-'+q.n];return a&&!a.r;});
+  if(!failed.length)return'';
+  var html='<div class="review-list"><div class="review-title">📋 '+failed.length+' pregunta'+(failed.length>1?'s':'')+' fallada'+(failed.length>1?'s':'')+' — repasa aquí:</div>';
+  failed.forEach(function(q){
+    var qid=sec+'-'+q.n;var oo=getOOrd(qid);var nc=oo.indexOf(q.c-1)+1;
+    html+='<details class="review-item"><summary><span><b>'+getNum(sec,q.n)+'.</b> '+q.q+'</span></summary>';
+    html+='<div class="review-body"><div class="review-ans">✓ Opción '+nc+': '+escH(q.o[q.c-1]||'')+'</div>';
+    html+='<div class="expbox">'+q.e+'</div></div></details>';
+  });
+  return html+'</div>';
+}
+function calcNota(sec){
+  var qs=D[sec];if(!qs)return;
+  var total=qs.length,ok=0,ko=0,skip=0;
+  qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-'+sec);if(!box)return;
+  box.className='nota-box '+(pass?'pass':'fail');
+  box.innerHTML='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>'
+    +buildRevList(sec);
+  box.style.display='block';
+}
+function calcNotaAll(){
+  var total=0,ok=0,ko=0,skip=0;
+  SECS.forEach(function(sec){
+    var qs=D[sec];if(!qs)return;
+    total+=qs.length;
+    qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  });
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-all');if(!box)return;
+  box.className='global-nota-box '+(pass?'pass':'fail');
+  var html='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10 (global)</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>';
+  SECS.forEach(function(sec){
+    var rv=buildRevList(sec);
+    if(rv){var m=META.secciones[sec]||{};html+='<div class="review-sec-label">'+(m.emoji?m.emoji+' ':'')+escH(m.label||sec)+'</div>'+rv;}
+  });
+  box.innerHTML=html;box.style.display='block';
+}
+
+/* ── Estadísticas de errores ── */
+function toggleStats(){
+  statsVisible=!statsVisible;
+  var btn=document.getElementById('btn-stats');
+  if(btn){btn.style.background=statsVisible?'var(--ko-bg)':'';btn.style.color=statsVisible?'var(--ko-t)':'';}
+  var box=document.getElementById('stats-global');
+  if(!box)return;
+  if(!statsVisible){box.classList.remove('show');return;}
+  var entries=Object.entries(failHist).filter(function(e){return e[1]>0;});
+  if(!entries.length){box.innerHTML='<div class="stats-title">📊 Sin errores registrados todavía</div>';box.classList.add('show');return;}
+  entries.sort(function(a,b){return b[1]-a[1];});
+  var top=entries.slice(0,10);
+  var maxV=top[0][1];
+  var html='<div class="stats-title">📊 Preguntas más falladas (acumulado entre sesiones)</div>';
+  top.forEach(function(e,i){
+    var qid=e[0],count=e[1];
+    var q=findQ(qid);if(!q)return;
+    var sec=getSecFromQid(qid),n=getNFromQid(qid);
+    var m=META.secciones[sec]||{};
+    var pct=Math.round(count/maxV*100);
+    html+='<div class="stats-item">';
+    html+='<span class="stats-n" style="min-width:18px;color:var(--ko-t);font-weight:700">'+(i+1)+'.</span>';
+    html+='<span class="stats-q">'+(m.emoji?m.emoji+' ':'')+getNum(sec,n)+'. '+q.q.substring(0,60)+(q.q.length>60?'…':'')+'</span>';
+    html+='<div class="stats-bar-wrap"><div class="stats-bar" style="width:'+pct+'%"></div></div>';
+    html+='<span class="stats-n">'+count+'✗</span>';
+    html+='</div>';
+  });
+  box.innerHTML=html;box.classList.add('show');
+}
+
+/* ── Buscador ── */
+function onSearch(val){
+  var v=val.trim().toLowerCase();
+  var clr=document.getElementById('search-clear');
+  var cnt=document.getElementById('search-count');
+  if(clr)clr.style.display=v?'block':'none';
+  var found=0,total=0;
+  document.querySelectorAll('.qcard').forEach(function(card){
+    total++;
+    if(!v){card.classList.remove('search-hidden');found++;}
+    else{
+      var qtxt=card.querySelector('.qtxt');
+      var match=qtxt&&qtxt.textContent.toLowerCase().indexOf(v)!==-1;
+      card.classList.toggle('search-hidden',!match);
+      if(match)found++;
+    }
+  });
+  if(cnt){
+    if(v){cnt.textContent=found+' de '+total+' preguntas';cnt.style.display='block';}
+    else{cnt.style.display='none';}
+  }
+  // Mostrar "sin resultados" por panel
+  ['all'].concat(SECS).forEach(function(s){
+    var panel=document.getElementById('panel-'+s);if(!panel||!panel.classList.contains('visible'))return;
+    var cards=panel.querySelectorAll('.qcard:not(.search-hidden)');
+    var nr=document.getElementById('nr-'+s);if(nr)nr.style.display=cards.length===0&&v?'block':'none';
+  });
+}
+function clearSearch(){
+  var si=document.getElementById('search-input');if(si)si.value='';
+  onSearch('');
+}
+
+/* ── Modo ── */
+function setMode(mode){
+  currentMode=mode;
+  document.getElementById('mode-test').classList.toggle('on',mode==='test');
+  document.getElementById('mode-quick').classList.toggle('on',mode==='quick');
+  // Rerenderizar todo
+  SECS.forEach(render);renderAll();
+}
+
+/* ── Modo oscuro ── */
+function applyTheme(){
+  document.documentElement.setAttribute('data-theme',darkMode?'dark':'light');
+  var btn=document.getElementById('btn-dark');if(btn)btn.textContent=darkMode?'☀️':'🌙';
+}
+function toggleDark(){darkMode=!darkMode;applyTheme();saveLocal();}
+
+/* ── Temporizador ── */
+function initTimer(){
+  timerRemaining=timerSec;
+  renderTimer();
+  var disp=document.getElementById('timer-display');
+  if(disp){
+    disp.addEventListener('click',function(){startEditTimer();});
+  }
+}
+function fmtTime(s){
+  var h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60;
+  return h+':'+(m<10?'0':'')+m+':'+(ss<10?'0':'')+ss;
+}
+function renderTimer(){
+  var disp=document.getElementById('timer-display');
+  if(!disp)return;
+  disp.textContent=fmtTime(timerRemaining);
+  disp.classList.toggle('danger',timerSec>0&&timerRemaining===0);
+}
+function timerToggle(){
+  if(timerRunning){
+    clearInterval(timerInterval);timerRunning=false;
+    document.getElementById('btn-tplay').textContent='▶';
+  }else{
+    if(timerRemaining<=0&&timerSec>0)timerRemaining=timerSec;
+    timerRunning=true;
+    document.getElementById('btn-tplay').textContent='⏸';
+    timerInterval=setInterval(function(){
+      if(timerRemaining>0){timerRemaining--;renderTimer();}
+      else{clearInterval(timerInterval);timerRunning=false;document.getElementById('btn-tplay').textContent='▶';renderTimer();}
+    },1000);
+  }
+}
+function timerReset(){
+  clearInterval(timerInterval);timerRunning=false;
+  timerRemaining=timerSec;
+  document.getElementById('btn-tplay').textContent='▶';
+  renderTimer();
+}
+function startEditTimer(){
+  var disp=document.getElementById('timer-display');if(!disp)return;
+  if(timerRunning){timerToggle();}
+  var old=fmtTime(timerRemaining);
+  disp.contentEditable='true';disp.classList.add('editing');
+  disp.textContent=old;
+  disp.focus();
+  var range=document.createRange();range.selectNodeContents(disp);
+  var sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
+  function commit(){
+    disp.contentEditable='false';disp.classList.remove('editing');
+    var txt=disp.textContent.trim();
+    var parts=txt.split(':').map(Number);
+    var secs=0;
+    if(parts.length===3)secs=parts[0]*3600+parts[1]*60+parts[2];
+    else if(parts.length===2)secs=parts[0]*60+parts[1];
+    else if(parts.length===1)secs=parts[0]*60;
+    if(!isNaN(secs)&&secs>=0){timerSec=secs;timerRemaining=secs;saveLocal();}
+    renderTimer();
+  }
+  disp.addEventListener('blur',commit,{once:true});
+  disp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();disp.blur();}});
+}
+
+/* ── Helpers cid ── */
+function cidToQid(cid){return cid.replace(/^[AS]-/,'');}
+
+/* ── Teclado ── */
+function handleKey(e){
+  var tg=e.target.tagName;
+  if(tg==='INPUT'||tg==='TEXTAREA'||e.target.contentEditable==='true')return;
+  var k=e.key;
+  if(k>='1'&&k<='5'){
+    if(activeCid&&!state[cidToQid(activeCid)]){
+      var aqid=cidToQid(activeCid);
+      var pos=parseInt(k),q=findQ(aqid);
+      if(q&&pos<=q.o.length){e.preventDefault();answer(aqid,pos,getSecFromQid(aqid));}
+    }
+  }else if(k==='ArrowDown'||k==='ArrowUp'){
+    e.preventDefault();navigateQ(k==='ArrowDown'?1:-1);
+  }else if(k==='s'||k==='S'){
+    if(activeCid)toggleStar(cidToQid(activeCid));
+  }
+}
+function navigateQ(dir){
+  var cards=Array.from(document.querySelectorAll('.sec-panel.visible .qcard')).filter(function(c){return c.style.display!=='none'&&!c.classList.contains('search-hidden');});
+  var cids=cards.map(function(c){return c.id.replace('card-','');});
+  if(!cids.length)return;
+  var idx=activeCid?cids.indexOf(activeCid):-1;
+  var nidx=Math.max(0,Math.min(cids.length-1,idx+dir));
+  var ncid=cids[nidx];if(!ncid||ncid===activeCid)return;
+  if(activeCid){var ob=document.getElementById('b-'+activeCid);var oh=document.getElementById('h-'+activeCid);if(ob)ob.classList.remove('open');if(oh)oh.classList.remove('open');var oc=document.getElementById('card-'+activeCid);if(oc)oc.classList.remove('kb-focus');}
+  activeCid=ncid;
+  var nb=document.getElementById('b-'+ncid);var nh=document.getElementById('h-'+ncid);
+  if(nb)nb.classList.add('open');if(nh)nh.classList.add('open');
+  var nc2=document.getElementById('card-'+ncid);if(nc2){nc2.classList.add('kb-focus');nc2.scrollIntoView({behavior:'smooth',block:'nearest'});}
+}
+</script>
+<!-- QRecall · medición anónima del sprint (sin nombre, sin email, sin IP guardada) -->
+<script>
+(function(){
+  var ENDPOINT='https://script.google.com/macros/s/AKfycbzDOUNVlK0wD1y0Xc4V0efc2asUI2-x0OlNbDzd6stsaLNz5avSIn1o1whusnkNC5I/exec'; // URL del Web App de Google Apps Script
+  if(!ENDPOINT||ENDPOINT.indexOf('http')!==0)return;
+  var ls;try{ls=window.localStorage;if(!ls)return;}catch(e){return;}
+  var banco='farma_simulacro_nuevo'||location.pathname.split('/').pop()||'desconocido';
+  var today=new Date().toISOString().slice(0,10);
+  function get(k){try{return ls.getItem(k);}catch(e){return null;}}
+  function set(k,v){try{ls.setItem(k,v);}catch(e){}}
+  var SRC=(function(){var m=location.search.match(/[?&]src=([A-Za-z0-9_-]+)/);if(m){set('qr_src',m[1]);return m[1];}return get('qr_src')||'';})();
+  var uid=get('qr_uid');
+  if(!uid){uid=Math.random().toString(36).slice(2,10)+Date.now().toString(36);set('qr_uid',uid);}
+  var first=get('qr_first');
+  if(!first){first=today;set('qr_first',first);}
+  var sentKey='qr_sent_'+banco;
+  var sent={};try{sent=JSON.parse(get(sentKey)||'{}')||{};}catch(e){}
+  function send(ev){
+    var q='uid='+encodeURIComponent(uid)+'&banco='+encodeURIComponent(banco)+'&ev='+encodeURIComponent(ev)+'&d='+today+'&t='+encodeURIComponent(new Date().toISOString())+'&p='+encodeURIComponent(location.pathname+(SRC?'?src='+SRC:''))+'&_='+Date.now();
+    var url=ENDPOINT+'?'+q;
+    try{fetch(url,{method:'GET',mode:'no-cors',keepalive:true,cache:'no-store'}).catch(function(){});}
+    catch(e){try{var im=new Image();im.src=url;}catch(e2){}}
+  }
+  function once(ev){if(sent[ev])return;sent[ev]=today;set(sentKey,JSON.stringify(sent));send(ev);}
+  // 1) abre: cada carga
+  send('abre');
+  // 2) vuelve: carga en un día distinto al de la primera visita (una vez)
+  if(first!==today)once('vuelve');
+  // 3) respuestas: se cuentan tarjetas contestadas en el DOM (dedupe por pregunta)
+  function answered(){
+    var seen={},n=0;
+    var cards=document.querySelectorAll('[id^="card-"].answered-ok,[id^="card-"].answered-wrong');
+    for(var i=0;i<cards.length;i++){
+      var qid=cards[i].id.replace(/^card-[AS]-/,'');
+      if(!seen[qid]){seen[qid]=1;n++;}
+    }
+    return n;
+  }
+  function check(){
+    var n=answered();
+    if(n>=1)once('primera_respuesta');
+    if(n>=10)once('10_respuestas');
+  }
+  document.addEventListener('click',function(e){
+    var t=e.target;
+    while(t&&t!==document){if(t.classList&&t.classList.contains('opt')){setTimeout(check,50);break;}t=t.parentNode;}
+  },true);
+  document.addEventListener('keydown',function(e){if(/^[1-5]$/.test(e.key))setTimeout(check,50);},true);
+  setTimeout(check,1500); // por si ya había respuestas guardadas de otra sesión
+})();
+</script>
+</body>
+</html>
