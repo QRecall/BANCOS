@@ -73,8 +73,9 @@ async function fetchText(p){var r=await fetch(p,{cache:'no-store'});if(!r.ok)thr
 async function collect(){
   var R={},F={},keys=lsKeys();
   Object.keys(IDX).forEach(function(k){var d=lsGet(k);if(!d)return;var st=d.state||{},fh=d.failHist||{};
-    Object.keys(st).forEach(function(q){if(st[q]&&typeof st[q].r==='boolean')R[k+'|'+q]=st[q].r});
-    Object.keys(fh).forEach(function(q){if(fh[q]>0&&!((k+'|'+q) in R))R[k+'|'+q]=false})});
+    /* «Extra · fuera de las diapositivas 2026» (28-10): no cuenta ni se exporta como fallada */
+    Object.keys(st).forEach(function(q){if(q.indexOf('extra-')===0)return;if(st[q]&&typeof st[q].r==='boolean')R[k+'|'+q]=st[q].r});
+    Object.keys(fh).forEach(function(q){if(q.indexOf('extra-')===0)return;if(fh[q]>0&&!((k+'|'+q) in R))R[k+'|'+q]=false})});
   for(var slug in SIMS){var g=lsGet(slug+'_simnuevo_v1');if(!g)continue;var pool=null,mig=null;
     try{var tx=await fetchText(SIMS[slug]);pool=grab(tx,'var POOL=');mig=grab(tx,'var MIG=')}catch(e){}
     if(!pool)continue;var hist=g.hist||{};
