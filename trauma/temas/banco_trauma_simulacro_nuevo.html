@@ -219,6 +219,13 @@ details[open] summary::before{transform:rotate(90deg)}
 .container[data-tab="all"] .nota-box{display:none!important}
 .container:not([data-tab="all"]) .global-nota-box{display:none!important}
 .container:not([data-tab="all"]) #stats-global{display:none!important}
+
+/* ── Botón gris ○: solo las que quedan ── */
+.sc.rem{cursor:pointer;user-select:none;-webkit-user-select:none;transition:box-shadow .15s}
+.sc.rem:hover{box-shadow:0 0 0 1px var(--bd2)}
+.sc.rem.on{box-shadow:0 0 0 1.5px var(--sc-rem-t)}
+.qcard.rem-hidden{display:none!important}
+.no-rem{display:none;text-align:center;padding:16px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin-top:4px}
 </style>
 </head>
 <body>
@@ -1051,7 +1058,7 @@ function handleKey(e){
   }
 }
 function navigateQ(dir){
-  var cards=Array.from(document.querySelectorAll('.sec-panel.visible .qcard')).filter(function(c){return c.style.display!=='none'&&!c.classList.contains('search-hidden');});
+  var cards=Array.from(document.querySelectorAll('.sec-panel.visible .qcard')).filter(function(c){return c.style.display!=='none'&&!c.classList.contains('search-hidden')&&!c.classList.contains('rem-hidden');});
   var cids=cards.map(function(c){return c.id.replace('card-','');});
   if(!cids.length)return;
   var idx=activeCid?cids.indexOf(activeCid):-1;
@@ -1063,6 +1070,46 @@ function navigateQ(dir){
   if(nb)nb.classList.add('open');if(nh)nh.classList.add('open');
   var nc2=document.getElementById('card-'+ncid);if(nc2){nc2.classList.add('kb-focus');nc2.scrollIntoView({behavior:'smooth',block:'nearest'});}
 }
+/*REM_FILTER_v1*/
+/* ── Filtro «solo las que quedan» (botón gris ○) ── */
+var remOn={};
+function remApply(p){
+  var on=!!remOn[p],vis=0,qs=document.getElementById('qs-'+p);
+  if(qs)Array.prototype.forEach.call(qs.querySelectorAll('.qcard'),function(card){
+    var hd=card.querySelector('.qhead'),qid=hd?hd.dataset.qid:'',hide=on&&!!state[qid];
+    card.classList.toggle('rem-hidden',hide);if(on&&!hide)vis++;
+  });
+  var chip=document.getElementById('sc-rem-'+p);if(chip)chip.classList.toggle('on',on);
+  var msg=document.getElementById('nrem-'+p);
+  if(on&&!msg&&qs){msg=document.createElement('div');msg.id='nrem-'+p;msg.className='no-rem';msg.textContent='No te queda ninguna por contestar 🎉';qs.parentNode.insertBefore(msg,qs.nextSibling);}
+  if(msg)msg.style.display=on&&vis===0?'block':'none';
+}
+function remToggle(p){
+  if(p==='all'){
+    var v=!remOn.all;remOn.all=v;
+    SECS.forEach(function(s){if(v&&fFailed[s])toggleFail(s);remOn[s]=v;remApply(s);});
+    remApply('all');return;
+  }
+  if(SECS.indexOf(p)<0)return;
+  var w=!remOn[p];if(w&&fFailed[p])toggleFail(p);
+  remOn[p]=w;remApply(p);
+}
+function remDecorate(){
+  document.querySelectorAll('.sc.rem').forEach(function(c){if(!c.title)c.title='Pulsa para ver solo las que te quedan por contestar';});
+}
+(function(){
+  var _tf=toggleFail;toggleFail=function(sec){if(!fFailed[sec]&&remOn[sec]){remOn[sec]=false;remApply(sec);}_tf(sec);};
+  var _r=render;render=function(sec){_r(sec);if(remOn[sec])remApply(sec);};
+  var _ra=renderAll;renderAll=function(){_ra();if(remOn.all)remApply('all');};
+  var _st=showTab;showTab=function(t){_st(t);['all'].concat(SECS).forEach(function(p){if(remOn[p])remApply(p);});};
+  var _us=updateScores;updateScores=function(){_us();remDecorate();};
+  document.addEventListener('click',function(e){
+    var c=e.target&&e.target.closest?e.target.closest('.sc.rem'):null;
+    if(!c||!c.id||c.id.indexOf('sc-rem-')!==0)return;
+    remToggle(c.id.slice(7));
+  });
+  remDecorate();
+})();
 </script>
 <!-- QRecall · medición anónima del sprint (sin nombre, sin email, sin IP guardada) -->
 <script>
