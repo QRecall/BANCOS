@@ -220,9 +220,11 @@ details[open] summary::before{transform:rotate(90deg)}
 .container:not([data-tab="all"]) .global-nota-box{display:none!important}
 .container:not([data-tab="all"]) #stats-global{display:none!important}
 
-/* ── Botón gris ○: solo las que quedan ── */
-.sc.rem{cursor:pointer;user-select:none;-webkit-user-select:none;transition:box-shadow .15s}
-.sc.rem:hover{box-shadow:0 0 0 1px var(--bd2)}
+/* ── Contadores ✓ ✗ ○ pulsables: filtran las preguntas ── */
+.sc.ok,.sc.ko,.sc.rem{cursor:pointer;user-select:none;-webkit-user-select:none;transition:box-shadow .15s}
+.sc.ok:hover,.sc.ko:hover,.sc.rem:hover{box-shadow:0 0 0 1px var(--bd2)}
+.sc.ok.on{box-shadow:0 0 0 1.5px var(--ok-t)}
+.sc.ko.on{box-shadow:0 0 0 1.5px var(--ko-t)}
 .sc.rem.on{box-shadow:0 0 0 1.5px var(--sc-rem-t)}
 .qcard.rem-hidden{display:none!important}
 .no-rem{display:none;text-align:center;padding:16px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin-top:4px}
@@ -923,45 +925,43 @@ function navigateQ(dir){
   if(nb)nb.classList.add('open');if(nh)nh.classList.add('open');
   var nc2=document.getElementById('card-'+ncid);if(nc2){nc2.classList.add('kb-focus');nc2.scrollIntoView({behavior:'smooth',block:'nearest'});}
 }
-/*REM_FILTER_v1*/
-/* ── Filtro «solo las que quedan» (botón gris ○) ── */
-var remOn={};
-function remApply(p){
-  var on=!!remOn[p],vis=0,qs=document.getElementById('qs-'+p);
+/*REM_FILTER_v2*/
+/* ── Filtros por contador: ✓ acertadas · ✗ falladas · ○ sin contestar ── */
+var scF={};
+var SC_EMPTY={rem:'No te queda ninguna por contestar 🎉',ok:'Aún no has acertado ninguna',ko:'Aún no has fallado ninguna 🎉'};
+function scMatch(mode,qid){var a=state[qid];return mode==='rem'?!a:(mode==='ok'?!!(a&&a.r):!!(a&&!a.r));}
+function scApply(p){
+  var mode=scF[p]||null,vis=0,qs=document.getElementById('qs-'+p);
   if(qs)Array.prototype.forEach.call(qs.querySelectorAll('.qcard'),function(card){
-    var hd=card.querySelector('.qhead'),qid=hd?hd.dataset.qid:'',hide=on&&!!state[qid];
-    card.classList.toggle('rem-hidden',hide);if(on&&!hide)vis++;
+    var hd=card.querySelector('.qhead'),qid=hd?hd.dataset.qid:'',hide=!!mode&&!scMatch(mode,qid);
+    card.classList.toggle('rem-hidden',hide);if(mode&&!hide)vis++;
   });
-  var chip=document.getElementById('sc-rem-'+p);if(chip)chip.classList.toggle('on',on);
+  ['ok','ko','rem'].forEach(function(k){var c=document.getElementById('sc-'+k+'-'+p);if(c)c.classList.toggle('on',mode===k);});
   var msg=document.getElementById('nrem-'+p);
-  if(on&&!msg&&qs){msg=document.createElement('div');msg.id='nrem-'+p;msg.className='no-rem';msg.textContent='No te queda ninguna por contestar 🎉';qs.parentNode.insertBefore(msg,qs.nextSibling);}
-  if(msg)msg.style.display=on&&vis===0?'block':'none';
+  if(mode&&!msg&&qs){msg=document.createElement('div');msg.id='nrem-'+p;msg.className='no-rem';qs.parentNode.insertBefore(msg,qs.nextSibling);}
+  if(msg){msg.textContent=SC_EMPTY[mode]||'';msg.style.display=mode&&vis===0?'block':'none';}
 }
-function remToggle(p){
-  if(p==='all'){
-    var v=!remOn.all;remOn.all=v;
-    SECS.forEach(function(s){if(v&&fFailed[s])toggleFail(s);remOn[s]=v;remApply(s);});
-    remApply('all');return;
-  }
-  if(SECS.indexOf(p)<0)return;
-  var w=!remOn[p];if(w&&fFailed[p])toggleFail(p);
-  remOn[p]=w;remApply(p);
+function scToggle(p,k){
+  if(p!=='all'&&SECS.indexOf(p)<0)return;
+  var next=scF[p]===k?null:k,targets=p==='all'?['all'].concat(SECS):[p];
+  targets.forEach(function(t){if(next&&t!=='all'&&fFailed[t])toggleFail(t);scF[t]=next;scApply(t);});
 }
-function remDecorate(){
-  document.querySelectorAll('.sc.rem').forEach(function(c){if(!c.title)c.title='Pulsa para ver solo las que te quedan por contestar';});
+function scDecorate(){
+  var T={ok:'Pulsa para ver solo las acertadas',ko:'Pulsa para ver solo las falladas',rem:'Pulsa para ver solo las que te quedan por contestar'};
+  document.querySelectorAll('.sc').forEach(function(c){var m=/^sc-(ok|ko|rem)-/.exec(c.id||'');if(m&&!c.title)c.title=T[m[1]];});
 }
 (function(){
-  var _tf=toggleFail;toggleFail=function(sec){if(!fFailed[sec]&&remOn[sec]){remOn[sec]=false;remApply(sec);}_tf(sec);};
-  var _r=render;render=function(sec){_r(sec);if(remOn[sec])remApply(sec);};
-  var _ra=renderAll;renderAll=function(){_ra();if(remOn.all)remApply('all');};
-  var _st=showTab;showTab=function(t){_st(t);['all'].concat(SECS).forEach(function(p){if(remOn[p])remApply(p);});};
-  var _us=updateScores;updateScores=function(){_us();remDecorate();};
+  var _tf=toggleFail;toggleFail=function(sec){if(!fFailed[sec]&&scF[sec]){scF[sec]=null;scApply(sec);}_tf(sec);};
+  var _r=render;render=function(sec){_r(sec);if(scF[sec])scApply(sec);};
+  var _ra=renderAll;renderAll=function(){_ra();if(scF.all)scApply('all');};
+  var _st=showTab;showTab=function(t){_st(t);['all'].concat(SECS).forEach(function(p){if(scF[p])scApply(p);});};
+  var _us=updateScores;updateScores=function(){_us();scDecorate();};
   document.addEventListener('click',function(e){
-    var c=e.target&&e.target.closest?e.target.closest('.sc.rem'):null;
-    if(!c||!c.id||c.id.indexOf('sc-rem-')!==0)return;
-    remToggle(c.id.slice(7));
+    var c=e.target&&e.target.closest?e.target.closest('.sc'):null;
+    var m=c&&c.id?/^sc-(ok|ko|rem)-(.+)$/.exec(c.id):null;if(!m)return;
+    scToggle(m[2],m[1]);
   });
-  remDecorate();
+  scDecorate();
 })();
 </script>
 <style>.gchips{display:flex;gap:8px;margin:4px 0 12px;flex-wrap:wrap}.gchip{padding:6px 15px;border-radius:18px;border:1px solid #2e333b;background:transparent;color:inherit;cursor:pointer;font-weight:800;font-size:13px;opacity:.5}.gchip.on{opacity:1;background:rgba(127,127,127,.22)}</style><script>(function(){
