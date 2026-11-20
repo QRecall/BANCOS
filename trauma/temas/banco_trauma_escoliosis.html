@@ -1,0 +1,998 @@
+<!--
+=============================================================
+  MOTOR BANCO MIR — v10
+  Novedades respecto a v9:
+  - Numeración correlativa fija por sección (no se mezcla)
+  - Badge neutro en pestaña "Todos" + mezcla real inter-secciones
+  - Temporizador sticky editable en header (play/pausa/reset)
+  - Buscador de texto en tiempo real
+  - Modo repaso rápido (muestra RC + explicación directamente)
+  - Estadísticas de errores recurrentes entre sesiones
+=============================================================
+-->
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title id="page-title">Banco MIR</title>
+<style>
+:root{
+  --bg:#f4f3ef;--surf:#fff;--bd:#e5e5e5;--bd2:#ddd;
+  --txt:#1a1a1a;--txt2:#555;--txt3:#999;--txt4:#666;
+  --hdr:#1a1a1a;--hdr-t:#fff;
+  --ok-bg:#e6f9ef;--ok-t:#0b6e52;--ok-bd:#2da060;
+  --ko-bg:#fdecea;--ko-t:#b91c1c;--ko-bd:#d94f45;
+  --sc-ok:#dcf5ed;--sc-ko:#fdecea;--sc-rem:#f0f0f0;--sc-rem-t:#666;
+  --exp:#fffbe6;--exp-bd:#f0c04a;--exp-t:#5a4500;
+  --prog:#e5e5e5;--prog-fill:#1a56db;
+  --star:#ccc;--star-on:#f59e0b;
+  --hint:#fafafa;--hint-bd:#eee;
+  --tab-bd:#ddd;--tab-t:#555;
+  --all-bg:#e8f0fe;--all-t:#1a56db;--all-bd:#1a56db;
+  --fab:#1a1a1a;--fab-t:#fff;
+  --nota-btn-t:#1a56db;--nota-btn-bd:#1a56db;--nota-btn-bg:var(--surf);
+  --timer-bg:#222;--timer-t:#fff;--timer-danger:#ef4444;
+}
+[data-theme="dark"]{
+  --bg:#0f0f1a;--surf:#1e1e30;--bd:#2a2a45;--bd2:#333355;
+  --txt:#e8e8f0;--txt2:#aaa;--txt3:#555;--txt4:#888;
+  --hdr:#0a0a14;--hdr-t:#e8e8f0;
+  --ok-bg:#0b3020;--ok-t:#4ade80;--ok-bd:#166534;
+  --ko-bg:#2d0a0a;--ko-t:#f87171;--ko-bd:#7f1d1d;
+  --sc-ok:#0b3020;--sc-ko:#2d0a0a;--sc-rem:#252540;--sc-rem-t:#aaa;
+  --exp:#1a1500;--exp-bd:#a37f10;--exp-t:#d4b84a;
+  --prog:#2a2a45;--prog-fill:#60a5fa;
+  --star:#444;--star-on:#f59e0b;
+  --hint:#1a1a2e;--hint-bd:#2a2a45;
+  --tab-bd:#2a2a45;--tab-t:#aaa;
+  --all-bg:#1a2a4a;--all-t:#60a5fa;--all-bd:#3b82f6;
+  --fab:#2a2a50;--fab-t:#e8e8f0;
+  --nota-btn-t:#60a5fa;--nota-btn-bd:#3b82f6;--nota-btn-bg:var(--surf);
+  --timer-bg:#1a1a2e;--timer-t:#e8e8f0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;transition:background .25s,color .25s}
+
+/* ── Header ── */
+header{background:var(--hdr);color:var(--hdr-t);padding:9px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;position:sticky;top:0;z-index:100}
+header h1{font-size:13.5px;font-weight:600;white-space:nowrap}
+.hright{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.hmeta{font-size:11px;color:#888}
+.hbtn{background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:3px 5px;border-radius:5px;transition:background .15s;color:var(--hdr-t)}
+.hbtn:hover{background:rgba(255,255,255,.12)}
+.sbadge{font-size:11px;padding:3px 9px;border-radius:5px;font-weight:500}
+.sbadge.ok{background:#15803d;color:#dcfce7}.sbadge.warn{background:#92400e;color:#fef3c7}
+
+/* ── Temporizador ── */
+#timer-wrap{display:flex;align-items:center;gap:4px;background:var(--timer-bg);border-radius:7px;padding:3px 8px;border:1px solid rgba(255,255,255,.1)}
+#timer-display{font-size:13px;font-weight:700;font-family:monospace;color:var(--timer-t);min-width:58px;text-align:center;cursor:pointer;border-radius:3px;padding:1px 3px}
+#timer-display:hover{background:rgba(255,255,255,.08)}
+#timer-display.editing{background:rgba(255,255,255,.15);outline:none;color:var(--timer-t)}
+#timer-display.danger{color:var(--timer-danger)}
+#timer-wrap button{background:none;border:none;cursor:pointer;color:rgba(255,255,255,.7);font-size:12px;padding:1px 3px;border-radius:3px;line-height:1}
+#timer-wrap button:hover{background:rgba(255,255,255,.12);color:#fff}
+
+/* ── Barra de progreso ── */
+#prog-wrap{height:3px;background:var(--prog);position:sticky;top:40px;z-index:99}
+#prog-bar{height:100%;background:var(--prog-fill);width:0%;transition:width .4s}
+
+/* ── Contenedor ── */
+.container{max-width:820px;margin:0 auto;padding:16px 12px}
+
+/* ── Buscador ── */
+.search-wrap{position:relative;margin-bottom:13px}
+.search-wrap input{width:100%;padding:8px 34px 8px 12px;border:1.5px solid var(--bd2);border-radius:8px;font-size:13px;background:var(--surf);color:var(--txt);outline:none;transition:border-color .15s}
+.search-wrap input:focus{border-color:var(--prog-fill)}
+.search-clear{position:absolute;right:9px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--txt3);font-size:16px;display:none;line-height:1}
+#search-count{font-size:11px;color:var(--txt3);margin-top:4px;display:none}
+
+/* ── Modo repaso ── */
+.mode-bar{display:flex;gap:6px;margin-bottom:12px;align-items:center}
+.mode-btn{padding:5px 12px;border:1.5px solid var(--bd2);border-radius:7px;cursor:pointer;font-size:12px;font-weight:500;background:var(--surf);color:var(--txt2);transition:all .15s}
+.mode-btn:hover{border-color:#999}
+.mode-btn.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Tabs ── */
+.tabs{display:flex;gap:7px;margin-bottom:13px;flex-wrap:wrap}
+.tab{padding:7px 14px;border:1.5px solid var(--tab-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;background:var(--surf);color:var(--tab-t);transition:all .15s}
+.tab:hover{border-color:#999;color:var(--txt)}
+.tab.t-all.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Score global ── */
+.ph-global{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 15px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-left:4px solid var(--prog-fill)}
+.score-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.sc{font-size:12px;font-weight:600;padding:3px 9px;border-radius:6px}
+.sc.ok{background:var(--sc-ok);color:var(--ok-t)}.sc.ko{background:var(--sc-ko);color:var(--ko-t)}.sc.rem{background:var(--sc-rem);color:var(--sc-rem-t)}
+
+/* ── Acciones ── */
+.global-actions{display:none;margin-bottom:10px;gap:7px;flex-wrap:wrap;align-items:center}
+.container[data-tab="all"] .global-actions{display:flex}
+.sec-actions{margin:6px 0 15px;display:flex;gap:7px;flex-wrap:wrap}
+.reset-btn{padding:7px 14px;background:var(--fab);color:var(--fab-t);border:none;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:opacity .15s}
+.reset-btn:hover{opacity:.82}
+.nota-btn{padding:7px 14px;background:var(--nota-btn-bg);color:var(--nota-btn-t);border:1.5px solid var(--nota-btn-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:background .15s}
+.nota-btn:hover{background:var(--all-bg)}
+
+/* ── Nota box ── */
+.nota-box,.global-nota-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:2px solid var(--bd2);font-size:13px;line-height:1.7;display:none}
+.nota-box.pass,.global-nota-box.pass{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t)}
+.nota-box.fail,.global-nota-box.fail{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t)}
+.nota-score{font-size:26px;font-weight:700;display:block;margin-bottom:4px}
+.nota-detail{font-size:12px;opacity:.85;font-family:monospace}
+
+/* ── Vista revisión ── */
+.review-list{margin-top:12px;border-top:1px solid var(--bd2);padding-top:10px}
+.review-title{font-size:12px;font-weight:700;margin-bottom:9px;color:var(--txt)}
+.review-sec-label{font-size:11.5px;font-weight:700;color:var(--txt3);margin:8px 0 5px;padding-top:6px;border-top:1px solid var(--bd)}
+.review-item{background:var(--surf);border-radius:8px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden}
+.review-item summary{padding:9px 12px;cursor:pointer;font-size:12.5px;color:var(--txt);list-style:none;display:flex;gap:8px;align-items:flex-start}
+.review-item summary::-webkit-details-marker{display:none}
+.review-item summary::before{content:'▶';font-size:9px;color:var(--txt3);flex-shrink:0;margin-top:4px;transition:transform .18s}
+details[open] summary::before{transform:rotate(90deg)}
+.review-body{padding:0 12px 11px}
+.review-ans{font-size:12px;color:var(--ok-t);margin-bottom:7px;font-weight:500}
+
+/* ── Estadísticas ── */
+.stats-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:1.5px solid var(--bd2);background:var(--surf);display:none}
+.stats-box.show{display:block}
+.stats-title{font-size:12px;font-weight:700;margin-bottom:10px;color:var(--txt)}
+.stats-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:12.5px}
+.stats-item:last-child{border-bottom:none}
+.stats-bar-wrap{flex:1;background:var(--sc-rem);border-radius:4px;height:6px;overflow:hidden}
+.stats-bar{height:100%;background:var(--ko-bd);border-radius:4px;transition:width .4s}
+.stats-n{font-size:11px;color:var(--txt3);white-space:nowrap}
+.stats-q{flex:2;color:var(--txt);font-size:12px;line-height:1.3}
+
+/* ── Panel secciones ── */
+.sec-panel{display:none}.sec-panel.visible{display:block}
+.ph{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ph-left{flex:1;display:flex;flex-direction:column;gap:5px}
+.ph-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt3);margin-bottom:1px}
+.ph-desc{font-size:12px;color:var(--txt4)}
+.fbtn{padding:6px 12px;font-size:12px;font-weight:500;border:1.5px solid var(--bd2);border-radius:8px;cursor:pointer;background:var(--surf);color:var(--txt2);transition:all .15s;white-space:nowrap}
+.fbtn:hover{border-color:#999;color:var(--txt)}.fbtn.on{background:var(--ko-bg);color:#b91c1c;border-color:#f87171}
+.no-failed{display:none;text-align:center;padding:16px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin-top:4px}
+.no-failed.show{display:block}
+.no-results{display:none;text-align:center;padding:20px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin:8px 0}
+
+/* ── Hint ── */
+.hint{font-size:11px;color:var(--txt3);margin-bottom:15px;padding:7px 11px;background:var(--hint);border-radius:6px;border:1px solid var(--hint-bd)}
+
+/* ── Tarjeta ── */
+.qcard{background:var(--surf);border-radius:10px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden;transition:box-shadow .15s}
+.qcard:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.qcard.kb-focus{outline:2px solid var(--prog-fill);outline-offset:-2px}
+.qcard.search-hidden{display:none}
+.qhead{padding:11px 13px;cursor:pointer;display:flex;align-items:flex-start;gap:9px}
+
+/* ── Badge numérico ── */
+.qnum{font-size:11px;font-weight:700;padding:3px 7px;border-radius:5px;white-space:nowrap;flex-shrink:0;margin-top:2px;background:var(--sc-rem);color:var(--sc-rem-t)}
+/* En pestaña "Todos" siempre neutro; en sección aplica color de sección */
+.qnum.sec-colored{background:var(--sec-dim);color:var(--sec-col)}
+
+.qtxt{font-size:13px;line-height:1.5;flex:1}
+.star-btn{background:none;border:none;cursor:pointer;font-size:15px;color:var(--star);padding:0 2px;flex-shrink:0;margin-top:2px;line-height:1;transition:color .15s,transform .15s}
+.star-btn:hover{transform:scale(1.2)}
+.star-btn .si{display:inline}.star-btn .sf{display:none}
+.star-btn.on .si{display:none}.star-btn.on .sf{display:inline;color:var(--star-on)}
+.chev{font-size:15px;color:var(--bd2);flex-shrink:0;margin-top:2px;transition:transform .2s}
+.qhead.open .chev{transform:rotate(180deg)}
+.qbody{display:none;padding:0 13px 13px}.qbody.open{display:block}
+
+/* ── Imagen ── */
+.clinimg-wrap{margin:9px 0 7px;background:#111;border-radius:8px;overflow:hidden;border:1px solid var(--bd2);text-align:center}
+.clinimg{max-width:100%;max-height:340px;object-fit:contain;display:block;margin:0 auto}
+.clinimg-cap{font-size:11px;color:var(--txt3);padding:4px 0 5px;background:var(--hint);border-top:1px solid var(--bd)}
+
+/* ── Opciones ── */
+.opts{list-style:none;margin-top:9px;display:flex;flex-direction:column;gap:5px}
+.opt{padding:9px 12px;border-radius:8px;border:1.5px solid var(--bd2);cursor:pointer;display:flex;align-items:flex-start;gap:9px;color:var(--txt);font-size:13px;line-height:1.45;transition:border-color .12s,background .12s;user-select:none}
+.opt:hover:not(.done){border-color:#999;background:var(--hint)}
+.opt.correct{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t);font-weight:500;cursor:default}
+.opt.wrong{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t);cursor:default}
+.opt.done:not(.correct):not(.wrong){cursor:default;opacity:.7}
+.onum{font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px;min-width:15px}
+
+/* ── Modo repaso rápido ── */
+.quick-card{padding:9px 12px;border-radius:8px;border:1.5px solid var(--ok-bd);background:var(--ok-bg);margin-top:8px}
+.quick-rc{font-size:12.5px;font-weight:600;color:var(--ok-t);margin-bottom:6px}
+
+/* ── Explicación ── */
+.expbox{margin-top:10px;padding:10px 12px;background:var(--exp);border-left:4px solid var(--exp-bd);border-radius:0 8px 8px 0;font-size:12.5px;color:var(--exp-t);line-height:1.65}
+.expbox b,.expbox strong{font-weight:600}
+.et{display:block;margin-bottom:4px;font-weight:600;font-size:13px}
+.atag{font-size:10px;padding:2px 6px;border-radius:4px;margin-left:5px;vertical-align:middle}
+.atag.ok{background:var(--sc-ok);color:var(--ok-t)}.atag.ko{background:var(--sc-ko);color:#c0392b}
+
+/* ── All-tab CSS ── */
+.container[data-tab="all"] .ph{display:none!important}
+.container[data-tab="all"] .sec-actions{display:none!important}
+.container[data-tab="all"] .no-failed{display:none!important}
+.container[data-tab="all"] .nota-box{display:none!important}
+.container:not([data-tab="all"]) .global-nota-box{display:none!important}
+.container:not([data-tab="all"]) #stats-global{display:none!important}
+
+/* ── Contadores ✓ ✗ ○ pulsables: filtran las preguntas ── */
+.sc.ok,.sc.ko,.sc.rem{cursor:pointer;user-select:none;-webkit-user-select:none;transition:box-shadow .15s}
+.sc.ok:hover,.sc.ko:hover,.sc.rem:hover{box-shadow:0 0 0 1px var(--bd2)}
+.sc.ok.on{box-shadow:0 0 0 1.5px var(--ok-t)}
+.sc.ko.on{box-shadow:0 0 0 1.5px var(--ko-t)}
+.sc.rem.on{box-shadow:0 0 0 1.5px var(--sc-rem-t)}
+.qcard.rem-hidden{display:none!important}
+.no-rem{display:none;text-align:center;padding:16px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin-top:4px}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="h-tit">Banco MIR</h1>
+  <div class="hright">
+    <span class="hmeta" id="h-meta"></span>
+    <!-- Temporizador -->
+    <div id="timer-wrap" title="Haz clic en el tiempo para editar">
+      <span id="timer-display">0:00:00</span>
+      <button id="btn-tplay" onclick="timerToggle()" title="Play/Pausa">▶</button>
+      <button onclick="timerReset()" title="Reset">↺</button>
+    </div>
+    <button class="hbtn" id="btn-dark" onclick="toggleDark()" title="Modo oscuro">🌙</button>
+    <span id="save-badge" class="sbadge"></span>
+  </div>
+</header>
+<div id="prog-wrap"><div id="prog-bar"></div></div>
+
+<div class="container" id="main-cont" data-tab="all">
+  <!-- Buscador -->
+  <div class="search-wrap">
+    <input type="text" id="search-input" placeholder="🔍 Buscar en enunciados..." oninput="onSearch(this.value)">
+    <button class="search-clear" id="search-clear" onclick="clearSearch()">✕</button>
+  </div>
+  <div id="search-count"></div>
+
+  <!-- Modo -->
+  <div class="mode-bar">
+    <span style="font-size:11.5px;color:var(--txt3);font-weight:600">MODO:</span>
+    <button class="mode-btn on" id="mode-test" onclick="setMode('test')">📝 Test</button>
+    <button class="mode-btn" id="mode-quick" onclick="setMode('quick')">⚡ Repaso rápido</button>
+    <button class="mode-btn" id="btn-stars" onclick="filterStarred()" style="margin-left:auto;border-color:#f59e0b;color:#b45309">⭐ Marcadas</button>
+    <button class="mode-btn" id="btn-stats" onclick="toggleStats()">📊 Errores</button>
+  </div>
+
+  <!-- Stats globales -->
+  <div class="stats-box" id="stats-global"></div>
+
+  <!-- Tabs -->
+  <div class="tabs" id="tabs-wrap"></div>
+
+  <!-- Score global -->
+  <div class="ph-global">
+    <div class="ph-left">
+      <span class="ph-desc" id="ph-gdesc"></span>
+      <div class="score-row">
+        <span class="sc ok" id="sc-ok-all">✓ 0</span>
+        <span class="sc ko" id="sc-ko-all">✗ 0</span>
+        <span class="sc rem" id="sc-rem-all">○ 0</span>
+      </div>
+    </div>
+  </div>
+  <div class="global-actions">
+    <button class="reset-btn" onclick="resetAll()">↺ Reiniciar y mezclar</button>
+    <button class="nota-btn" onclick="calcNotaAll()">✎ Calcular nota global</button>
+  </div>
+  <div class="global-nota-box" id="nota-all"></div>
+  <p class="hint">💡 <b>1–5</b> responde · <b>↑↓</b> navega · <b>S</b> marca ⭐ · Progreso guardado automáticamente</p>
+
+  <div id="panels-wrap"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════ MOTOR v10 ═══════════════════════════════════════ */
+
+var KEY=/*__KEY__*/'trauma_escoliosis_v1';
+var META=/*__META_JSON__*/{"titulo":"Traumatolog\u00eda \u00b7 Escoliosis y cifosis","subtitulo":"Tema 27 del programa \u00b7 Patolog\u00eda del Aparato Locomotor","examen":"Tema 27 \u00b7 preguntas estilo examen","secciones":{"concepto":{"label":"Concepto y etiolog\u00eda","emoji":"\ud83e\uddb4","color":"#2f80ed","colorDim":"#1b4a8a","desc":"estructural vs actitud \u00b7 cong\u00e9nita \u00b7 neuromuscular \u00b7 infantil y juvenil"},"eia_dx":{"label":"EIA: exploraci\u00f3n y radiolog\u00eda","emoji":"\ud83e\ude7b","color":"#9b51e0","colorDim":"#5b2d87","desc":"Adams \u00b7 Cobb \u00b7 Nash-Moe \u00b7 Risser \u00b7 banderas rojas"},"eia_tto":{"label":"EIA: evoluci\u00f3n y tratamiento","emoji":"\ud83e\ude7a","color":"#27ae60","colorDim":"#176a3a","desc":"historia natural \u00b7 observaci\u00f3n \u00b7 cors\u00e9 \u00b7 BrAIST \u00b7 cirug\u00eda"},"cifosis":{"label":"Cifosis y Scheuermann","emoji":"\ud83e\uddcd","color":"#f2994a","colorDim":"#8f5a2b","desc":"perfil sagital \u00b7 Scheuermann \u00b7 dorso redondo \u00b7 mal de Pott"},"ea":{"label":"Espondilitis anquilosante","emoji":"\ud83d\udd25","color":"#eb5757","colorDim":"#8a3333","desc":"dolor inflamatorio \u00b7 HLA-B27 \u00b7 pruebas \u00b7 tratamiento"}}};
+var D=/*__D_JSON__*/{"concepto":[{"n":"1","noShuffle":false,"img":null,"q":"Chica de 14 a\u00f1os remitida por asimetr\u00eda de la cintura. De pie se aprecia una leve curva lumbar; en la maniobra de Adams el dorso es sim\u00e9trico. El miembro inferior derecho mide 1,5 cm menos y, al colocar un alza bajo ese pie, la curva desaparece. \u00bfCu\u00e1l es el diagn\u00f3stico y la actitud?","o":["Actitud escoli\u00f3tica por dismetr\u00eda que se corrige con un alza","Escoliosis estructural lumbar que precisa cors\u00e9 de Boston","Escoliosis cong\u00e9nita por hemiv\u00e9rtebra que precisa una RM","Escoliosis idiop\u00e1tica lumbar con controles cada 4-6 meses"],"c":1,"e":"Adams negativo y correcci\u00f3n al eliminar la causa = <b>actitud escoli\u00f3tica (no estructural)</b>: sin rotaci\u00f3n ni acu\u00f1amiento. No requiere tratamiento ortop\u00e9dico, sino <b>corregir la dismetr\u00eda con un alza</b>. Fuente: texto del tema \u00b7 Escoliosis estructural frente a no estructural"},{"n":"2","noShuffle":false,"img":null,"q":"En la escoliosis estructural, la rotaci\u00f3n vertebral en el plano axial hace que:","o":["Los cuerpos giren hacia la concavidad y las espinosas hacia la convexidad","Los cuerpos giren hacia la convexidad y las espinosas hacia la concavidad","Cuerpos y espinosas giren a la vez en el sentido de la convexidad","Solo roten las v\u00e9rtebras l\u00edmite, mientras la apical permanece neutra"],"c":2,"e":"Los <b>cuerpos vertebrales rotan hacia la convexidad</b> y las <b>ap\u00f3fisis espinosas hacia la concavidad</b>; las costillas de la convexidad se van hacia atr\u00e1s y forman la giba. La apical es la <b>m\u00e1s rotada</b>. Fuente: texto del tema \u00b7 La deformidad en los tres planos"},{"n":"3","noShuffle":false,"img":null,"q":"Ni\u00f1o de 3 a\u00f1os con escoliosis tor\u00e1cica por una hemiv\u00e9rtebra completa. Antes de planificar el seguimiento, \u00bfqu\u00e9 estudios deben solicitarse?","o":["Solo control radiol\u00f3gico anual hasta el estir\u00f3n puberal","Cariotipo, densitometr\u00eda y gammagraf\u00eda \u00f3sea corporal total","RM de todo el neuroeje, ecograf\u00eda renal y ecocardiograma","TC tor\u00e1cica, espirometr\u00eda y electromiograma de las piernas"],"c":3,"e":"La escoliosis cong\u00e9nita se asocia a anomal\u00edas del <b>eje neural (hasta 35-40 %) \u2192 RM de todo el neuroeje</b>, <b>genitourinarias (20-30 %) \u2192 ecograf\u00eda renal</b> y <b>cardiopat\u00edas (10-15 %) \u2192 ecocardiograma</b>. Fuente: texto del tema \u00b7 Escoliosis cong\u00e9nita"},{"n":"4","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de las siguientes malformaciones vertebrales cong\u00e9nitas produce un crecimiento m\u00e1s asim\u00e9trico y una progresi\u00f3n m\u00e1s r\u00e1pida?","o":["V\u00e9rtebra en cu\u00f1a parcial aislada en la zona tor\u00e1cica","Bloque vertebral bilateral de dos niveles contiguos","Hemiv\u00e9rtebra completa aislada en la zona lumbar","Barra unilateral con hemiv\u00e9rtebra contralateral"],"c":4,"e":"Entre los defectos mixtos, la combinaci\u00f3n m\u00e1s grave es la <b>barra unilateral con hemiv\u00e9rtebra contralateral</b>: un lado no crece y el otro tiene una v\u00e9rtebra de m\u00e1s. Fuente: texto del tema \u00b7 Escoliosis cong\u00e9nita"},{"n":"5","noShuffle":false,"img":null,"q":"Ni\u00f1o de 12 a\u00f1os con par\u00e1lisis cerebral, no deambulante, que ha perdido la sedestaci\u00f3n estable. Presenta una curva toracolumbar larga, en \u00abC\u00bb, con oblicuidad p\u00e9lvica. Se\u00f1ale la afirmaci\u00f3n correcta:","o":["Lo definitivo suele ser una artrodesis larga hasta la pelvis","La curva dejar\u00e1 de progresar al alcanzar la madurez esquel\u00e9tica","El cors\u00e9 detiene la progresi\u00f3n y evita la cirug\u00eda en la mayor\u00eda","Probablemente es idiop\u00e1tica y basta con observaci\u00f3n semestral"],"c":1,"e":"La escoliosis neuromuscular progresa de forma <b>continua aunque acabe el crecimiento</b>; el cors\u00e9 no la detiene (solo ayuda a la sedestaci\u00f3n). El tratamiento definitivo suele ser la <b>artrodesis larga instrumentada, a menudo hasta la pelvis</b>. Fuente: texto del tema \u00b7 Escoliosis neuromuscular"},{"n":"6","noShuffle":false,"img":null,"q":"Lactante var\u00f3n de 14 meses con una escoliosis tor\u00e1cica izquierda de 20\u00b0. En la radiograf\u00eda, la diferencia del \u00e1ngulo costovertebral de Mehta (RVAD) en la v\u00e9rtebra apical es de 26\u00b0. \u00bfQu\u00e9 indica y qu\u00e9 se hace?","o":["Forma resolutiva: alta sin m\u00e1s controles posteriores","Predice progresi\u00f3n: yesos seriados seguidos de cors\u00e9","Forma progresiva: artrodesis posterior inmediata","Forma resolutiva: cors\u00e9 de Boston solo nocturno"],"c":2,"e":"En la infantil, un <b>RVAD > 20\u00b0</b> (o la fase 2 de Mehta) <b>predice progresi\u00f3n</b>. Las curvas progresivas se tratan con <b>yesos correctores seriados (Mehta o Cotrel) y despu\u00e9s cors\u00e9</b>, que en ni\u00f1os peque\u00f1os pueden curarla. Fuente: texto del tema \u00b7 Escoliosis idiop\u00e1tica infantil"},{"n":"7","noShuffle":false,"img":null,"q":"Ni\u00f1a de 7 a\u00f1os con escoliosis tor\u00e1cica derecha de 22\u00b0, sin malformaciones vertebrales en la radiograf\u00eda y con exploraci\u00f3n neurol\u00f3gica normal. \u00bfQu\u00e9 recomiendan muchos autores?","o":["Tranquilizar: es una forma resolutiva que desaparecer\u00e1","Artrodesis precoz, porque la juvenil no progresa nunca","RM del neuroeje por su mayor asociaci\u00f3n con anomal\u00edas","Solo ecograf\u00eda renal, porque se trata de una cong\u00e9nita"],"c":3,"e":"Es una <b>escoliosis idiop\u00e1tica juvenil (4-9 a\u00f1os)</b>: peor pron\u00f3stico por el crecimiento restante y <b>mayor asociaci\u00f3n con anomal\u00edas del neuroeje (hasta 20 %)</b>, por lo que se recomienda <b>RM a todo paciente diagnosticado antes de los 10 a\u00f1os</b>. Fuente: texto del tema \u00b7 Escoliosis idiop\u00e1tica juvenil"}],"eia_dx":[{"n":"1","noShuffle":false,"img":null,"q":"Ni\u00f1a de 12 a\u00f1os a la que, en la revisi\u00f3n escolar, se le aprecia una giba tor\u00e1cica derecha en la maniobra de Adams; el escoli\u00f3metro marca 8\u00b0. \u00bfCu\u00e1l es el siguiente paso?","o":["Rx de columna en dec\u00fabito supino, solo anteroposterior","RM urgente de todo el neuroeje sin radiograf\u00eda previa","Repetir el escoli\u00f3metro en dos a\u00f1os, sin radiograf\u00eda","Rx de columna completa en bipedestaci\u00f3n, PA y lateral"],"c":4,"e":"Un ATR de <b>5-7\u00b0</b> es el umbral habitual para pedir Rx (7\u00b0 \u2248 Cobb 20\u00b0). La prueba b\u00e1sica es la <b>Rx de columna completa en bipedestaci\u00f3n</b>, AP o PA y lateral, de C7 a las crestas. Fuente: texto del tema \u00b7 Exploraci\u00f3n f\u00edsica y estudio radiol\u00f3gico"},{"n":"2","noShuffle":false,"img":null,"q":"Para medir el \u00e1ngulo de Cobb se trazan l\u00edneas paralelas a:","o":["El platillo superior de la l\u00edmite superior y el inferior de la inferior","Los platillos superior e inferior de la propia v\u00e9rtebra apical de la curva","Los ped\u00edculos de la v\u00e9rtebra apical respecto a la l\u00ednea media","La plomada desde C7 respecto al centro del sacro en la Rx"],"c":1,"e":"Una l\u00ednea al <b>platillo superior de la v\u00e9rtebra l\u00edmite superior</b> y otra al <b>platillo inferior de la v\u00e9rtebra l\u00edmite inferior</b> (las m\u00e1s inclinadas); el Cobb es el \u00e1ngulo entre sus perpendiculares. Fuente: texto del tema \u00b7 M\u00e9todo de Cobb"},{"n":"3","noShuffle":false,"img":null,"q":"Ni\u00f1a de 13 a\u00f1os en observaci\u00f3n por escoliosis idiop\u00e1tica. Risser III. Hace 6 meses su curva med\u00eda 22\u00b0 de Cobb y en el control actual mide 25\u00b0, con el mismo Risser. \u00bfC\u00f3mo se interpreta?","o":["Ha progresado 3\u00b0: hay que indicar un cors\u00e9 de inmediato","Est\u00e1 dentro del error del m\u00e9todo: no se considera progresi\u00f3n","Ha progresado 3\u00b0: hay que indicar una artrodesis instrumentada","Es un cambio significativo que obliga a pedir RM del neuroeje"],"c":2,"e":"El Cobb tiene un <b>error intra e interobservador de hasta 5\u00b0</b>; solo se habla de progresi\u00f3n si el aumento es de <b>al menos 5-6\u00b0</b> entre dos controles. Fuente: texto del tema \u00b7 M\u00e9todo de Cobb"},{"n":"4","noShuffle":false,"img":null,"q":"En la radiograf\u00eda de un adolescente con escoliosis, el ped\u00edculo de la convexidad de la v\u00e9rtebra apical ha sobrepasado la l\u00ednea media del cuerpo vertebral. Seg\u00fan Nash-Moe, corresponde a:","o":["Grado 0","Grado II","Grado III","Grado IV"],"c":4,"e":"Nash-Moe grad\u00faa el <b>desplazamiento del ped\u00edculo de la convexidad</b> de <b>0 (ped\u00edculos sim\u00e9tricos) a IV (el ped\u00edculo convexo sobrepasa la l\u00ednea media)</b>. Es cualitativo; Perdriolle mide en grados. Fuente: texto del tema \u00b7 Medici\u00f3n de la rotaci\u00f3n vertebral"},{"n":"5","noShuffle":false,"img":null,"q":"En la radiograf\u00eda de columna de una ni\u00f1a de 12 a\u00f1os se ve osificada la mitad lateral de la ap\u00f3fisis de la cresta il\u00edaca, sin fusi\u00f3n con el ala. \u00bfQu\u00e9 grado de Risser tiene?","o":["Risser I","Risser II","Risser III","Risser IV"],"c":2,"e":"El Risser avanza de fuera (EIAS) hacia dentro: <b>I = 25 %, II = 50 %, III = 75 %, IV = 100 % sin fusi\u00f3n, V = fusi\u00f3n</b>. Con el 50 % es un <b>Risser II</b> (riesgo alto). Fuente: texto del tema \u00b7 Signo de Risser"},{"n":"6","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de los siguientes es, seg\u00fan el texto, el predictor m\u00e1s fiable del crecimiento restante y del riesgo de progresi\u00f3n de la curva?","o":["El signo de Risser en la radiograf\u00eda de columna","El estadio de Tanner en la exploraci\u00f3n f\u00edsica","El sistema de Sanders en la radiograf\u00eda de la mano","El \u00e1ngulo costovertebral de Mehta en la apical"],"c":3,"e":"Sobre la Rx PA de mano y mu\u00f1eca izquierdas se aplica el <b>sistema de Sanders</b> (osificaci\u00f3n y fusi\u00f3n de las ep\u00edfisis de las falanges), <b>hoy el predictor m\u00e1s fiable del crecimiento restante</b>. Fuente: texto del tema \u00b7 Valoraci\u00f3n de la madurez esquel\u00e9tica"},{"n":"7","noShuffle":false,"img":null,"q":"Chico de 14 a\u00f1os con escoliosis tor\u00e1cica derecha de 26\u00b0, sin dolor. En la exploraci\u00f3n neurol\u00f3gica, el reflejo cut\u00e1neo-abdominal est\u00e1 abolido en un lado y presente en el otro. \u00bfQu\u00e9 est\u00e1 indicado?","o":["Observaci\u00f3n con control cl\u00ednico y radiol\u00f3gico en 4-6 meses","Cors\u00e9 de Milwaukee porque el reflejo indica curva r\u00edgida","Electromiograma y biopsia muscular por probable miopat\u00eda","RM del neuroeje por sospecha de patolog\u00eda intrarraqu\u00eddea"],"c":4,"e":"La <b>asimetr\u00eda o abolici\u00f3n de los reflejos cut\u00e1neo-abdominales</b> es un signo sencillo y sensible de patolog\u00eda intrarraqu\u00eddea (<b>siringomielia</b>) y una bandera roja: obliga a <b>RM de todo el neuroeje</b>. Fuente: texto del tema \u00b7 Exploraci\u00f3n f\u00edsica y se\u00f1ales de alarma"},{"n":"8","noShuffle":false,"img":null,"q":"Chica de 15 a\u00f1os con escoliosis dorsolumbar dolorosa y r\u00edgida. El dolor es intenso, de predominio nocturno, y la despierta. \u00bfQu\u00e9 debe sospecharse?","o":["Bandera roja: descartar osteoma osteoide u osteoblastoma","EIA t\u00edpica: cors\u00e9 de Boston y analgesia a demanda","Actitud por dismetr\u00eda: alza en el zapato del lado corto","Escoliosis neuromuscular: artrodesis larga hasta la pelvis"],"c":1,"e":"La EIA t\u00edpica es <b>indolora</b>. El <b>dolor significativo o nocturno</b> es bandera roja: sospechar <b>osteoma osteoide, osteoblastoma</b> (escoliosis dolorosa anti\u00e1lgica), tumor medular o infecci\u00f3n. Fuente: texto del tema \u00b7 Se\u00f1ales de alarma"},{"n":"9","noShuffle":false,"img":null,"q":"Son se\u00f1ales de alarma que obligan a ampliar el estudio con RM en un paciente con escoliosis todas las siguientes EXCEPTO:","o":["Curva tor\u00e1cica izquierda en un chico de 14 a\u00f1os","Curva tor\u00e1cica derecha indolora en una ni\u00f1a de 13 a\u00f1os","Progresi\u00f3n de la curva de m\u00e1s de 1\u00b0 al mes","Curva r\u00edgida con la cifosis tor\u00e1cica claramente aumentada"],"c":2,"e":"La <b>curva tor\u00e1cica derecha, indolora, en una ni\u00f1a adolescente con neurolog\u00eda normal</b> es el patr\u00f3n t\u00edpico de la EIA. Son banderas rojas la curva tor\u00e1cica izquierda, la progresi\u00f3n <b>> 1\u00b0 al mes</b>, la rigidez y la <b>cifosis aumentada</b> (la EIA suele ser hipocif\u00f3tica). Fuente: texto del tema \u00b7 Se\u00f1ales de alarma"}],"eia_tto":[{"n":"1","noShuffle":false,"img":null,"q":"Ni\u00f1a de 13 a\u00f1os, menarquia hace 2 a\u00f1os, Risser IV, con escoliosis idiop\u00e1tica tor\u00e1cica derecha de 18\u00b0 de Cobb. \u00bfQu\u00e9 conducta es la adecuada?","o":["Cors\u00e9 de Boston a tiempo completo hasta Risser V","Artrodesis posterior con tornillos pediculares","Observaci\u00f3n con controles cl\u00ednicos y radiol\u00f3gicos","RM de todo el neuroeje antes de cualquier decisi\u00f3n"],"c":3,"e":"Curva <b>< 25-30\u00b0 \u2192 observaci\u00f3n</b>: control cl\u00ednico y radiol\u00f3gico peri\u00f3dico (menos frecuente desde Risser IV). El patr\u00f3n es t\u00edpico, sin banderas rojas. Fuente: texto del tema \u00b7 Tratamiento de la EIA"},{"n":"2","noShuffle":false,"img":null,"q":"Ni\u00f1a de 11 a\u00f1os, premen\u00e1rquica, Risser 0, con escoliosis idiop\u00e1tica tor\u00e1cica de 27\u00b0. Hace 6 meses med\u00eda 20\u00b0. \u00bfCu\u00e1l es el tratamiento indicado?","o":["Observaci\u00f3n, porque la curva a\u00fan es menor de 30\u00b0","Artrodesis instrumentada por v\u00eda posterior","Nataci\u00f3n diaria y nuevo control en un a\u00f1o","Cors\u00e9 hasta el final del crecimiento \u00f3seo"],"c":4,"e":"Curva de <b>25-30\u00b0 con Risser 0-2 o con progresi\u00f3n de 5-10\u00b0 en 6 meses \u2192 cors\u00e9</b> hasta el fin del crecimiento. La nataci\u00f3n no modifica la evoluci\u00f3n de la curva. Fuente: texto del tema \u00b7 Tratamiento de la EIA"},{"n":"3","noShuffle":false,"img":null,"q":"Chica de 14 a\u00f1os, Risser 2, con escoliosis idiop\u00e1tica tor\u00e1cica derecha de 55\u00b0 que ha progresado pese al cors\u00e9. \u00bfQu\u00e9 tratamiento procede?","o":["Artrodesis instrumentada por v\u00eda posterior","Cors\u00e9 de Milwaukee durante 23 horas al d\u00eda","Observaci\u00f3n hasta la madurez esquel\u00e9tica","Programa Schroth aislado, sin cors\u00e9 ni cirug\u00eda"],"c":1,"e":"Curvas <b>> 45-50\u00b0</b> o que progresan pese al cors\u00e9 \u2192 <b>cirug\u00eda</b>. La <b>v\u00eda posterior</b> (barras, ganchos y tornillos pediculares + artrodesis) es la t\u00e9cnica de elecci\u00f3n, t\u00edpicamente en curvas de <b>45 a 70\u00b0</b>. Fuente: texto del tema \u00b7 Tratamiento quir\u00fargico"},{"n":"4","noShuffle":false,"img":null,"q":"Mujer de 19 a\u00f1os, Risser V, con una escoliosis tor\u00e1cica de 40\u00b0 que se ha mantenido estable en los \u00faltimos controles. Pregunta si debe operarse. \u00bfQu\u00e9 se le responde?","o":["S\u00ed: toda curva > 30\u00b0 progresa en la edad adulta","No: es madura y la curva de 40\u00b0 est\u00e1 estable","Cors\u00e9 nocturno hasta que la curva baje de 30\u00b0","S\u00ed, por v\u00eda anterior aislada para fusionar menos"],"c":2,"e":"En el <b>paciente ya maduro, una curva estable de 40\u00b0 no requiere cirug\u00eda</b>. Las que siguen progresando de adulto (\u2248 1\u00b0/a\u00f1o) son las <b>> 50\u00b0</b>; el cors\u00e9 solo tiene sentido con crecimiento restante. Fuente: texto del tema \u00b7 Tratamiento de la EIA"},{"n":"5","noShuffle":false,"img":null,"q":"Respecto al ensayo BrAIST sobre el cors\u00e9 en la escoliosis idiop\u00e1tica del adolescente, se\u00f1ale la correcta:","o":["El cors\u00e9 no mejor\u00f3 los resultados frente a la observaci\u00f3n","La nataci\u00f3n diaria result\u00f3 tan eficaz como el propio cors\u00e9","\u00c9xito del 72 % con cors\u00e9 frente al 48 % con observaci\u00f3n","El cors\u00e9 corrigi\u00f3 la curva una media de 20\u00b0 al final"],"c":3,"e":"BrAIST (242 pacientes, curvas de 20-40\u00b0, Risser 0-2): \u00e9xito <b>72 % con cors\u00e9 frente a 48 %</b> con observaci\u00f3n; se detuvo precozmente. <b>> 12,9 h/d\u00eda \u2192 90 % de \u00e9xito</b>. El cors\u00e9 frena, no corrige. Fuente: texto del tema \u00b7 Estudio BrAIST"},{"n":"6","noShuffle":false,"img":null,"q":"Ni\u00f1a de 12 a\u00f1os, Risser 1, con escoliosis idiop\u00e1tica tor\u00e1cica de 32\u00b0 y v\u00e9rtebra apical en T9. \u00bfQu\u00e9 tipo de cors\u00e9 es el m\u00e1s indicado?","o":["Milwaukee (CTLSO), con anillo cervical","Providence, de uso exclusivamente nocturno","Yesos correctores seriados de tipo Mehta","Boston (TLSO), bajo y sin parte cervical"],"c":4,"e":"El <b>Boston (TLSO)</b> est\u00e1 indicado en curvas con <b>\u00e1pex por debajo de T7</b> (tor\u00e1cicas bajas, toracolumbares, lumbares) y es el m\u00e1s utilizado. Milwaukee: \u00e1pex <b>por encima de T7</b>. Providence: lumbares o toracolumbares. Fuente: texto del tema \u00b7 Tipos de cors\u00e9"},{"n":"7","noShuffle":false,"img":null,"q":"Sobre la artrodesis instrumentada en la escoliosis idiop\u00e1tica del adolescente, se\u00f1ale la correcta:","o":["Es obligatoria la monitorizaci\u00f3n neurofisiol\u00f3gica intraoperatoria","La v\u00eda anterior aislada es hoy la t\u00e9cnica de elecci\u00f3n","La lesi\u00f3n neurol\u00f3gica aparece aproximadamente en el 10 % de los casos","La v\u00eda combinada se reserva para curvas de 45 a 50\u00b0"],"c":1,"e":"La lesi\u00f3n neurol\u00f3gica ocurre en el <b>0,5-1 %</b>, por lo que la <b>monitorizaci\u00f3n neurofisiol\u00f3gica intraoperatoria es obligatoria</b>. La v\u00eda anterior aislada est\u00e1 en desuso y la combinada se reserva para <b>> 70\u00b0</b>. Fuente: texto del tema \u00b7 Complicaciones"},{"n":"8","noShuffle":false,"img":null,"q":"Chico de 11 a\u00f1os, Risser 0 con cart\u00edlago trirradiado abierto, con escoliosis tor\u00e1cica de 78\u00b0, muy r\u00edgida en las radiograf\u00edas de inclinaci\u00f3n. \u00bfQu\u00e9 abordaje quir\u00fargico es el indicado?","o":["Cors\u00e9 de Boston y control a los 6 meses","V\u00eda anterior y posterior combinada","V\u00eda anterior aislada con menos niveles","Observaci\u00f3n hasta alcanzar Risser V"],"c":2,"e":"La <b>v\u00eda anterior y posterior combinada</b> se reserva para curvas <b>> 70\u00b0, muy r\u00edgidas</b>, o pacientes muy inmaduros con riesgo de <b>fen\u00f3meno del cig\u00fce\u00f1al (crankshaft)</b>: discectom\u00eda y liberaci\u00f3n anterior + artrodesis posterior. Fuente: texto del tema \u00b7 Cirug\u00eda por v\u00eda anterior y combinada"},{"n":"9","noShuffle":false,"img":null,"q":"Respecto al tratamiento conservador de la escoliosis idiop\u00e1tica del adolescente, es FALSO que:","o":["El cors\u00e9 busca frenar la progresi\u00f3n, no corregir la curva","La SOSORT recomienda asociar al cors\u00e9 m\u00e9todos tipo Schroth","La nataci\u00f3n modifica favorablemente la evoluci\u00f3n de la curva","El cors\u00e9 es eficaz si queda crecimiento suficiente (Risser 0-2)"],"c":3,"e":"<b>La nataci\u00f3n, el deporte general o la gimnasia inespec\u00edfica no modifican la evoluci\u00f3n de la curva</b>, aunque sean recomendables por otros motivos. El cors\u00e9 frena la progresi\u00f3n y requiere crecimiento restante. Fuente: texto del tema \u00b7 Tratamiento con cors\u00e9"},{"n":"10","noShuffle":false,"img":null,"q":"Mujer de 30 a\u00f1os con escoliosis idiop\u00e1tica tor\u00e1cica de 55\u00b0 nunca tratada. Pregunta qu\u00e9 le ocurrir\u00e1 a su curva en los pr\u00f3ximos a\u00f1os. \u00bfQu\u00e9 se le explica?","o":["No progresar\u00e1: las curvas se estabilizan al acabar de crecer","Le acortar\u00e1 la esperanza de vida de forma significativa","Le producir\u00e1 insuficiencia respiratoria grave en pocos a\u00f1os","Progresar\u00e1 aproximadamente 1\u00b0 al a\u00f1o a lo largo de la vida"],"c":4,"e":"Tras el crecimiento, las curvas <b>> 50\u00b0</b> (sobre todo tor\u00e1cicas) <b>progresan \u2248 1\u00b0 al a\u00f1o</b> toda la vida. Seg\u00fan la cohorte de Iowa, la EIA <b>no acorta la esperanza de vida</b>; la restricci\u00f3n respiratoria significativa aparece en curvas de 70-90\u00b0. Fuente: texto del tema \u00b7 Historia natural"}],"cifosis":[{"n":"1","noShuffle":false,"img":null,"q":"Var\u00f3n de 40 a\u00f1os con dolor dorsolumbar. En la radiograf\u00eda lateral, el segmento T11-L1 presenta una cifosis de 15\u00b0; el resto del perfil sagital es normal. \u00bfC\u00f3mo se valora?","o":["Patol\u00f3gica: debe ser recto y obliga a buscar la causa","Normal: el tr\u00e1nsito toracolumbar tiene cifosis de 10-20\u00b0","Normal: es parte de la cifosis tor\u00e1cica de 20-45\u00b0","Patol\u00f3gica solo si superase los 45\u00b0 de cifosis"],"c":1,"e":"El <b>tr\u00e1nsito toracolumbar (T11-L1) debe ser recto (\u2248 0\u00b0)</b>: cualquier cifosis a ese nivel es patol\u00f3gica y hace sospechar <b>fractura, infecci\u00f3n o malformaci\u00f3n</b>. Fuente: texto del tema \u00b7 Valores normales del perfil sagital"},{"n":"2","noShuffle":false,"img":null,"q":"Chico de 15 a\u00f1os, Risser 2, con cifosis dorsal que no corrige en extensi\u00f3n, angular en flexi\u00f3n y con isquiotibiales acortados. La Rx lateral muestra acu\u00f1amiento de 7\u00b0 en T7, T8 y T9, platillos irregulares con hernias de Schmorl y cifosis de 58\u00b0. \u00bfQu\u00e9 tratamiento procede?","o":["Observaci\u00f3n y estiramiento de isquiotibiales","Cors\u00e9 de Milwaukee con control radiol\u00f3gico","Artrodesis instrumentada por v\u00eda posterior","Cors\u00e9 nocturno tipo Providence durante un a\u00f1o"],"c":2,"e":"Es una <b>enfermedad de Scheuermann</b>. En crecimiento: <b>< 50\u00b0 observaci\u00f3n, 50-70\u00b0 cors\u00e9 (cl\u00e1sicamente Milwaukee), > 70\u00b0 cirug\u00eda</b>. Con 58\u00b0 y Risser 2 corresponde cors\u00e9 con control radiol\u00f3gico. Fuente: texto del tema \u00b7 Tratamiento de la enfermedad de Scheuermann"},{"n":"3","noShuffle":false,"img":null,"q":"Chica de 14 a\u00f1os, alta y poco musculada, con hipercifosis dorsal de 50\u00b0 que desaparece al pedirle que se ponga recta; en flexi\u00f3n la curva es redondeada y arm\u00f3nica. La Rx no muestra acu\u00f1amiento ni alteraci\u00f3n de los platillos. \u00bfQu\u00e9 tratamiento procede?","o":["Cors\u00e9 de Milwaukee hasta el fin del crecimiento","Artrodesis con osteotom\u00edas por v\u00eda posterior","Medidas posturales y potenciaci\u00f3n muscular","Reposo relativo y AINE pautados varios meses"],"c":3,"e":"Es un <b>dorso redondo juvenil</b> (corrige en extensi\u00f3n, arm\u00f3nico en flexi\u00f3n, sin acu\u00f1amiento). Tratamiento: <b>medidas posturales y potenciaci\u00f3n muscular</b>; excepcionalmente cors\u00e9 y <b>jam\u00e1s cirug\u00eda</b>. Fuente: texto del tema \u00b7 Dorso redondo juvenil"},{"n":"4","noShuffle":false,"img":null,"q":"Respecto a las hernias de Schmorl, se\u00f1ale la afirmaci\u00f3n correcta:","o":["Son patognom\u00f3nicas y bastan solas para diagnosticar Scheuermann","Son herniaciones discales posterolaterales hacia el canal raqu\u00eddeo","Solo aparecen en la espondilitis anquilosante muy evolucionada","Son herniaciones del n\u00facleo pulposo a trav\u00e9s del platillo vertebral"],"c":4,"e":"Son <b>herniaciones del n\u00facleo pulposo a trav\u00e9s del platillo vertebral</b> hacia el esponjoso del cuerpo. Caracter\u00edsticas del Scheuermann, pero <b>tambi\u00e9n se ven en sujetos normales</b>: aisladas no bastan para el diagn\u00f3stico. Fuente: texto del tema \u00b7 Criterios diagn\u00f3sticos de Scheuermann"},{"n":"5","noShuffle":false,"img":null,"q":"Var\u00f3n de 17 a\u00f1os que practica halterofilia consulta por dolor lumbar mec\u00e1nico de meses. La radiograf\u00eda muestra irregularidad marcada de los platillos de T12-L2 con hernias de Schmorl y escaso acu\u00f1amiento, sin escoliosis. \u00bfCu\u00e1l es el diagn\u00f3stico m\u00e1s probable?","o":["Forma lumbar o at\u00edpica de la enfermedad de Scheuermann","Espondilitis anquilosante con sindesmofitos lumbares","Dorso redondo juvenil con hiperlordosis compensadora","Escoliosis idiop\u00e1tica lumbar de curva r\u00edgida y dolorosa"],"c":1,"e":"La <b>forma lumbar o toracolumbar (Scheuermann at\u00edpico o del deportista)</b> es m\u00e1s frecuente en varones con trabajo f\u00edsico o deporte de impacto, con <b>menos acu\u00f1amiento y m\u00e1s irregularidad de platillos</b>; el <b>dolor lumbar es el s\u00edntoma predominante</b>. Fuente: texto del tema \u00b7 Enfermedad de Scheuermann"},{"n":"6","noShuffle":false,"img":null,"q":"Sobre la enfermedad de Scheuermann, todas las afirmaciones son ciertas EXCEPTO:","o":["Nunca aparece antes de los 10 a\u00f1os de edad","El cors\u00e9 no consigue ninguna correcci\u00f3n real","Su incidencia es del 1-6 % de la poblaci\u00f3n","Hay dolor dorsal en el \u00e1pex en cerca del 50 %"],"c":2,"e":"A diferencia de la escoliosis, en el Scheuermann <b>el cors\u00e9 puede obtener cierta correcci\u00f3n real</b>, porque act\u00faa sobre v\u00e9rtebras a\u00fan en crecimiento y remodelables. Nunca aparece antes de los 10 a\u00f1os, su incidencia es del 1-6 % y duele en el \u00e1pex en \u2248 50 %. Fuente: texto del tema \u00b7 Enfermedad de Scheuermann"},{"n":"7","noShuffle":false,"img":null,"q":"Var\u00f3n de 45 a\u00f1os con fiebre vespertina, sudoraci\u00f3n nocturna y p\u00e9rdida de peso desde hace meses, que desarrolla progresivamente una giba dorsal angular. \u00bfCu\u00e1l es la causa m\u00e1s probable de su cifosis?","o":["Enfermedad de Scheuermann del adulto","Dorso redondo juvenil que ha persistido","Tuberculosis vertebral (mal de Pott)","Espondilitis anquilosante evolucionada"],"c":3,"e":"Entre las cifosis por tumores e infecciones, la <b>tuberculosis vertebral (mal de Pott)</b> produce una <b>cifosis angular o giba</b>. La espondilitis anquilosante da una cifosis global, redondeada y r\u00edgida. Fuente: texto del tema \u00b7 Clasificaci\u00f3n de las cifosis"}],"ea":[{"n":"1","noShuffle":false,"img":null,"q":"Var\u00f3n de 22 a\u00f1os con dolor lumbar de 7 meses, rigidez matutina de una hora que mejora con el ejercicio y dolor alternante en las nalgas. El HLA-B27 es positivo. \u00bfQu\u00e9 valor tiene este resultado?","o":["Confirma por s\u00ed solo una espondilitis anquilosante","Obliga a iniciar un f\u00e1rmaco biol\u00f3gico de inmediato","Descarta una enfermedad inflamatoria intestinal","Es un marcador de susceptibilidad, no diagn\u00f3stico"],"c":4,"e":"El <b>HLA-B27</b> es positivo en el 90 % de los pacientes, pero solo <b>\u2248 2 % de los portadores</b> enferman: es un <b>marcador de susceptibilidad, no una prueba diagn\u00f3stica</b>; ni su presencia confirma ni su ausencia excluye. Fuente: texto del tema \u00b7 Espondilitis anquilosante: etiolog\u00eda"},{"n":"2","noShuffle":false,"img":null,"q":"Var\u00f3n de 28 a\u00f1os con dolor lumbar inflamatorio de 5 meses que le despierta en la segunda mitad de la noche. La radiograf\u00eda de pelvis no muestra sacroile\u00edtis. Persiste la sospecha cl\u00ednica. \u00bfCu\u00e1l es la siguiente prueba?","o":["RM de sacroil\u00edacas buscando edema \u00f3seo","TC lumbar para descartar hernia discal","Gammagraf\u00eda \u00f3sea de cuerpo entero","Ninguna: la Rx normal descarta la enfermedad"],"c":1,"e":"Las alteraciones radiogr\u00e1ficas tardan a\u00f1os. La <b>RM de sacroil\u00edacas</b> detecta el <b>edema \u00f3seo subcondral (oste\u00edtis)</b> antes que la Rx y define la <b>espondiloartritis axial no radiogr\u00e1fica</b>. Fuente: texto del tema \u00b7 Pruebas complementarias"},{"n":"3","noShuffle":false,"img":null,"q":"Var\u00f3n de 30 a\u00f1os diagnosticado de espondilitis anquilosante pregunta qu\u00e9 afectaci\u00f3n fuera del esqueleto es la m\u00e1s probable en su enfermedad. \u00bfCu\u00e1l es la m\u00e1s frecuente?","o":["Insuficiencia a\u00f3rtica","Uve\u00edtis anterior aguda","Fibrosis pulmonar apical","Amiloidosis secundaria"],"c":2,"e":"La <b>uve\u00edtis anterior aguda (iritis)</b> es la manifestaci\u00f3n extraesquel\u00e9tica m\u00e1s frecuente (<b>25-30 %</b>). La insuficiencia a\u00f3rtica, la fibrosis pulmonar apical y la amiloidosis son menos frecuentes. Fuente: texto del tema \u00b7 Espondilitis anquilosante: cl\u00ednica"},{"n":"4","noShuffle":false,"img":null,"q":"Var\u00f3n de 35 a\u00f1os con espondilitis anquilosante que sigue con actividad inflamatoria axial pese a AINE a dosis plenas. Tiene adem\u00e1s una psoriasis extensa. \u00bfQu\u00e9 tratamiento se prefiere?","o":["Corticoide oral prolongado","Sulfasalazina a dosis plenas","Inhibidor de la IL-17","Fenilbutazona a dosis plenas"],"c":3,"e":"Si sigue activa pese a AINE: anti-TNF, anti-IL-17 o JAK (ASAS-EULAR 2022); se prefiere <b>anti-IL-17 si hay psoriasis significativa</b> (anti-TNF monoclonal si uve\u00edtis o EII). Los <b>corticoides sist\u00e9micos prolongados no est\u00e1n indicados</b> y la sulfasalazina solo sirve en lo perif\u00e9rico. Fuente: texto del tema \u00b7 Tratamiento de la espondilitis"},{"n":"5","noShuffle":false,"img":null,"q":"Var\u00f3n de 58 a\u00f1os con espondilitis anquilosante de larga evoluci\u00f3n y columna \u00aben ca\u00f1a de bamb\u00fa\u00bb. Tras una ca\u00edda banal desde su altura presenta dolor dorsal intenso. \u00bfCu\u00e1l es la actitud correcta?","o":["Contusi\u00f3n banal: analgesia y reposo en su domicilio","Brote inflamatorio: aumentar la dosis del AINE","Rigidez habitual: fisioterapia intensiva inmediata","Sospechar fractura inestable y tratarla como tal"],"c":4,"e":"La columna anquilosada es <b>r\u00edgida y osteopor\u00f3tica</b>: un traumatismo banal puede causar una <b>fractura transdiscal inestable</b> con alto riesgo neurol\u00f3gico. <b>Toda fractura sobre columna anquilosada se trata como inestable</b>. Fuente: texto del tema \u00b7 Espondilitis anquilosante: cl\u00ednica y tratamiento"},{"n":"6","noShuffle":false,"img":null,"q":"En la exploraci\u00f3n de un paciente con sospecha de espondilitis anquilosante, \u00bfqu\u00e9 valor de expansi\u00f3n tor\u00e1cica considera patol\u00f3gico el tema?","o":["Menor de 2,5 cm","Menor de 5 cm","Menor de 7,5 cm","Menor de 10 cm"],"c":1,"e":"Una <b>expansi\u00f3n tor\u00e1cica < 2,5 cm es patol\u00f3gica</b>. Junto con el <b>test de Schober</b>, la distancia occipucio-pared y el FABERE cuantifica la rigidez y permite seguir la evoluci\u00f3n. Fuente: texto del tema \u00b7 Pruebas complementarias"}]};
+var IMGS=/*__IMGS_JSON__*/{};
+
+/* ── Estado ── */
+var canSave=typeof localStorage!=='undefined';
+var saved={};try{saved=JSON.parse(localStorage.getItem(KEY)||'null')||{};}catch(e){}
+var state   =saved.state   ||{};
+var qOrd    =saved.qOrd    ||{};
+var oOrd    =saved.oOrd    ||{};
+var starred =saved.starred ||{};
+var failHist=saved.failHist||{};  // {qid: count} entre sesiones
+var darkMode=saved.dark    ||false;
+var timerSec=saved.timerSec||0;   // segundos configurados
+var SECS=Object.keys(META.secciones||{});
+var fFailed={};
+var qIdx={};           // {sec: {n: q}}
+var qNums={};          // {sec: {n: numero_correlativo}}
+var allOrder=null;     // orden mezclado inter-secciones para pestaña Todos
+var activeCid=null;
+var currentTab='all';
+var currentMode='test';
+var saveTimer=null;
+var starsFilter=false;
+var statsVisible=false;
+var timerRunning=false;
+var timerRemaining=timerSec;
+var timerInterval=null;
+
+/* ── INIT ── */
+(function init(){
+  SECS.forEach(function(s){fFailed[s]=false;});
+  injectSecCSS();
+  buildHeader();
+  buildTabs();
+  buildPanels();
+  buildIdx();
+  buildNums();
+  buildAllOrder();
+  SECS.forEach(render);
+  renderAll();
+  updateScores();
+  updateProg();
+  applyTheme();
+  initTimer();
+  setBadge(canSave?'Guardado':'Sin guardado',canSave?'ok':'warn');
+  document.addEventListener('keydown',handleKey);
+  var si=document.getElementById('search-input');
+  if(si)si.addEventListener('keydown',function(e){if(e.key==='Escape'){clearSearch();}});
+})();
+
+/* ── CSS dinámico ── */
+function injectSecCSS(){
+  var css='';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{};
+    var c=m.color||'#1a56db',cd=m.colorDim||'#e8f0fe';
+    css+='.tab.t-'+s+'.on{background:'+cd+';color:'+c+';border-color:'+c+'}\n';
+    css+='.ph.s-'+s+'{border-left:4px solid '+c+'}\n';
+    // Variables CSS por sección para el badge coloreado
+    css+='#panel-'+s+' .qnum.sec-colored{background:'+cd+';color:'+c+'}\n';
+  });
+  var st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+}
+
+/* ── Header ── */
+function buildHeader(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var t=document.getElementById('h-tit');if(t)t.textContent=META.titulo||'Banco MIR';
+  var pt=document.getElementById('page-title');if(pt)pt.textContent=META.titulo||'Banco MIR';
+  var m=document.getElementById('h-meta');
+  if(m){var p=[];if(total)p.push(total+' preguntas');if(META.examen)p.push(META.examen);m.textContent=p.join(' · ');}
+  var d=document.getElementById('ph-gdesc');if(d)d.textContent=META.subtitulo||'';
+  var r=document.getElementById('sc-rem-all');if(r)r.textContent='○ '+total;
+}
+
+/* ── Tabs ── */
+function buildTabs(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var h='<button class="tab t-all on" onclick="showTab(\'all\')">📋 Todos ('+total+')</button>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<button class="tab t-'+s+'" onclick="showTab(\''+s+'\')">'+(m.emoji?m.emoji+' ':'')+escH(m.label||s)+' ('+cnt+')</button>';
+  });
+  var w=document.getElementById('tabs-wrap');if(w)w.innerHTML=h;
+}
+
+/* ── Paneles ── */
+function buildPanels(){
+  var h='<div id="panel-all" class="sec-panel visible"><div id="qs-all"></div><div class="no-results" id="nr-all">No se encontraron preguntas</div></div>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<div id="panel-'+s+'" class="sec-panel">';
+    h+='<div class="ph s-'+s+'">';
+    h+='<div class="ph-left">';
+    h+='<span class="ph-label">'+(m.emoji?m.emoji+'&nbsp;':'')+escH(m.label||s)+'</span>';
+    if(m.desc)h+='<span class="ph-desc">'+escH(m.desc)+'</span>';
+    h+='<div class="score-row">';
+    h+='<span class="sc ok" id="sc-ok-'+s+'">✓ 0</span>';
+    h+='<span class="sc ko" id="sc-ko-'+s+'">✗ 0</span>';
+    h+='<span class="sc rem" id="sc-rem-'+s+'">○ '+cnt+'</span>';
+    h+='</div></div>';
+    h+='<button class="fbtn" id="fb-'+s+'" onclick="toggleFail(\''+s+'\')">Solo falladas</button>';
+    h+='</div>';
+    h+='<div id="qs-'+s+'"></div>';
+    h+='<div class="no-failed" id="nf-'+s+'">Aún no has fallado ninguna 🎉</div>';
+    h+='<div class="no-results" id="nr-'+s+'">No se encontraron preguntas</div>';
+    h+='<div class="sec-actions">';
+    h+='<button class="reset-btn" onclick="resetSec(\''+s+'\')">↺ Reiniciar</button>';
+    h+='<button class="nota-btn" onclick="calcNota(\''+s+'\')">✎ Calcular nota</button>';
+    h+='</div>';
+    h+='<div class="nota-box" id="nota-'+s+'"></div>';
+    h+='</div>';
+  });
+  var pw=document.getElementById('panels-wrap');if(pw)pw.innerHTML=h;
+}
+
+/* ── Índice O(1) + numeración fija ── */
+function buildIdx(){
+  SECS.forEach(function(s){
+    qIdx[s]={};
+    if(D[s])D[s].forEach(function(q){qIdx[s][q.n]=q;});
+  });
+}
+function buildNums(){
+  // Numeración correlativa fija: 1, 2, 3... por sección
+  SECS.forEach(function(s){
+    qNums[s]={};
+    if(D[s])D[s].forEach(function(q,i){qNums[s][q.n]=i+1;});
+  });
+}
+function getNum(sec,n){return qNums[sec]?qNums[sec][n]||n:n;}
+function findQ(qid){
+  var d=qid.indexOf('-'),s=qid.substring(0,d),n=qid.substring(d+1);
+  return(qIdx[s]&&qIdx[s][n])||null;
+}
+function getSecFromQid(qid){return qid.substring(0,qid.indexOf('-'));}
+function getNFromQid(qid){return qid.substring(qid.indexOf('-')+1);}
+
+/* ── Orden inter-secciones para Todos ── */
+function buildAllOrder(){
+  var all=[];
+  SECS.forEach(function(s){if(D[s])D[s].forEach(function(q){all.push({sec:s,n:q.n});});});
+  if(!qOrd['__all__'])qOrd['__all__']=shuffle(all.map(function(x){return x.sec+'|'+x.n;}));
+  allOrder=qOrd['__all__'].map(function(key){
+    var p=key.indexOf('|'),sec=key.substring(0,p),n=key.substring(p+1);
+    return{sec:sec,n:n,q:qIdx[sec]&&qIdx[sec][n]};
+  }).filter(function(x){return x.q;});
+}
+
+/* ── Utilidades ── */
+function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function shuffle(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=b[i];b[i]=b[j];b[j]=t;}return b;}
+function getQOrd(s,qs){if(!qOrd[s])qOrd[s]=shuffle(qs.map(function(q){return q.n;}));return qOrd[s];}
+function getOOrd(qid){
+  var q=findQ(qid);var n=q&&q.o?q.o.length:4;
+  if(q&&q.noShuffle){var a=[];for(var i=0;i<n;i++)a.push(i);return a;}
+  if(!oOrd[qid]){var a=[];for(var i=0;i<n;i++)a.push(i);oOrd[qid]=shuffle(a);}
+  return oOrd[qid];
+}
+function imgHtml(key){
+  if(!IMGS[key]){console.warn('IMGS: clave no encontrada →',key);return'';}
+  return'<div class="clinimg-wrap"><img src="'+IMGS[key]+'" class="clinimg" alt="Imagen clínica" loading="lazy"><div class="clinimg-cap">Imagen clínica</div></div>';
+}
+
+/* ── localStorage debounce ── */
+function saveLocal(){
+  if(!canSave)return;
+  if(saveTimer)clearTimeout(saveTimer);
+  saveTimer=setTimeout(function(){
+    try{
+      localStorage.setItem(KEY,JSON.stringify({state:state,qOrd:qOrd,oOrd:oOrd,starred:starred,failHist:failHist,dark:darkMode,timerSec:timerSec}));
+      setBadge('Guardado','ok');
+    }catch(e){setBadge('Sin guardado','warn');}
+  },300);
+}
+function setBadge(t,c){var b=document.getElementById('save-badge');if(b){b.textContent=t;b.className='sbadge '+c;}}
+
+/* ── Construcción de tarjeta ── */
+function buildCard(q,sec,inAll,allPos){
+  var qid=sec+'-'+q.n;
+  var cid=(inAll?'A-':'S-')+qid;
+  var num=inAll?(allPos+1):getNum(sec,q.n);
+  var oo=getOOrd(qid);
+  var sOpts=oo.map(function(i){return q.o[i];});
+  var nc=oo.indexOf(q.c-1)+1;
+  var ans=state[qid];
+  var cc=ans?(ans.r?' answered-ok':' answered-wrong'):'';
+  var badgeCls='qnum'+(inAll?'':' sec-colored');
+  var h='<div class="qcard s-'+sec+cc+'" id="card-'+cid+'">';
+  h+='<div class="qhead" id="h-'+cid+'" data-cid="'+cid+'" data-qid="'+qid+'" data-sec="'+sec+'" onclick="tog(this.dataset.cid)">';
+  h+='<span class="'+badgeCls+'">'+num+'</span>';
+  h+='<span class="qtxt">'+q.q+(ans?'<span class="atag '+(ans.r?'ok':'ko')+'">'+(ans.r?'✓ acertada':'✗ fallada')+'</span>':'')+'</span>';
+  h+='<button class="star-btn'+(starred[qid]?' on':'')+'\" id="star-'+cid+'" onclick="event.stopPropagation();toggleStar(\''+qid+'\')" title="Marcar (S)"><span class="si">\u2606</span><span class="sf">\u2605</span></button>';
+  h+='<span class="chev">▾</span>';
+  h+='</div>';
+  h+='<div class="qbody" id="b-'+cid+'">';
+  if(q.img)h+=imgHtml(q.img);
+  if(currentMode==='quick'){
+    h+='<div class="quick-card"><div class="quick-rc">✓ Respuesta correcta: opción '+nc+' — '+escH(q.o[q.c-1])+'</div><div class="expbox">'+q.e+'</div></div>';
+  } else {
+    h+='<ul class="opts" id="opts-'+cid+'">';
+    h+=sOpts.map(function(o,i){
+      var p=i+1,oc='opt';
+      if(ans){oc+=' done';if(p===nc)oc+=' correct';else if(p===ans.c&&!ans.r)oc+=' wrong';}
+      return'<li class="'+oc+'" data-qid="'+qid+'" data-pos="'+p+'" data-sec="'+sec+'" onclick="answer(this.dataset.qid,+this.dataset.pos,this.dataset.sec)"><span class="onum">'+p+'.</span><span>'+o+'</span></li>';
+    }).join('');
+    h+='</ul>';
+    if(ans){h+='<div class="expbox"><span class="et">'+(ans.r?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e+'</div>';}
+  }
+  h+='</div></div>';
+  return h;
+}
+
+/* ── Render sección ── */
+function render(sec){
+  var qs=D[sec];if(!qs)return;
+  var ord=getQOrd(sec,qs);
+  var sorted=ord.map(function(n){return qIdx[sec]&&qIdx[sec][n];}).filter(Boolean);
+  var el=document.getElementById('qs-'+sec);
+  if(el)el.innerHTML=sorted.map(function(q){return buildCard(q,sec,false,0);}).join('');
+}
+
+/* ── Render Todos (mezcla inter-secciones) ── */
+function renderAll(){
+  if(!allOrder)buildAllOrder();
+  var el=document.getElementById('qs-all');
+  if(el)el.innerHTML=allOrder.map(function(x,i){return buildCard(x.q,x.sec,true,i);}).join('');
+}
+
+/* ── Toggle open/close ── */
+function tog(cid){
+  var b=document.getElementById('b-'+cid),h=document.getElementById('h-'+cid);
+  if(!b||!h)return;
+  var opening=!b.classList.contains('open');
+  b.classList.toggle('open');h.classList.toggle('open');
+  if(opening){
+    if(activeCid&&activeCid!==cid){var pc=document.getElementById('card-'+activeCid);if(pc)pc.classList.remove('kb-focus');}
+    activeCid=cid;
+    var card=document.getElementById('card-'+cid);if(card)card.classList.add('kb-focus');
+  }else{
+    if(activeCid===cid){activeCid=null;var card=document.getElementById('card-'+cid);if(card)card.classList.remove('kb-focus');}
+  }
+}
+
+/* ── Responder ── */
+function answer(qid,pos,sec){
+  if(state[qid])return;
+  var q=findQ(qid);if(!q)return;
+  var oo=getOOrd(qid);
+  var nc=oo.indexOf(q.c-1)+1;
+  var isRight=pos===nc;
+  state[qid]={c:pos,r:isRight};
+  // Registro de errores
+  if(!isRight){failHist[qid]=(failHist[qid]||0)+1;}
+  saveLocal();
+  // Actualizar todas las instancias del card (panel sección + panel all)
+  // Actualizar opciones en todas las instancias del card
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var optsEl=document.querySelectorAll('#opts-'+cid+' .opt');
+    optsEl.forEach(function(el,i){
+      el.classList.add('done');
+      if(i+1===nc)el.classList.add('correct');
+      else if(i+1===pos&&!isRight)el.classList.add('wrong');
+    });
+    var bdy=document.getElementById('b-'+cid);
+    if(bdy){
+      var eb=bdy.querySelector('.expbox');
+      if(!eb){eb=document.createElement('div');eb.className='expbox';bdy.appendChild(eb);}
+      eb.innerHTML='<span class="et">'+(isRight?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e;
+    }
+    var hd=document.getElementById('h-'+cid);
+    if(hd){var qt=hd.querySelector('.qtxt');if(qt&&!qt.querySelector('.atag')){var at=document.createElement('span');at.className='atag '+(isRight?'ok':'ko');at.innerHTML=isRight?'✓ acertada':'✗ fallada';qt.appendChild(at);}}
+    var card=document.getElementById('card-'+cid);
+    if(card)card.classList.add(isRight?'answered-ok':'answered-wrong');
+  });
+  updateScores();updateProg();
+  if(fFailed[sec]&&isRight){
+    var fcard=document.getElementById('card-S-'+qid);
+    if(fcard)fcard.style.display='none';
+    refreshNF(sec);
+  }
+}
+
+/* ── Estrella ── */
+function toggleStar(qid){
+  starred[qid]=!starred[qid];
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var btn=document.getElementById('star-'+cid);
+    if(btn)btn.classList.toggle('on',starred[qid]);
+  });
+  saveLocal();
+}
+function filterStarred(){
+  starsFilter=!starsFilter;
+  var btn=document.getElementById('btn-stars');
+  if(btn){btn.style.background=starsFilter?'#fef3c7':'';btn.style.fontWeight=starsFilter?'700':'';}
+  document.querySelectorAll('.qcard').forEach(function(card){
+    if(starsFilter){
+      var hd=card.querySelector('.qhead');
+      var qid=hd?hd.dataset.qid:'';
+      card.style.display=starred[qid]?'':'none';
+    }else{card.style.display='';}
+  });
+}
+
+/* ── Filtro falladas ── */
+function refreshNF(sec){
+  var c=document.getElementById('qs-'+sec);if(!c||!fFailed[sec])return;
+  var n=c.querySelectorAll('.qcard.answered-wrong').length;
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',n===0);
+}
+function toggleFail(sec){
+  fFailed[sec]=!fFailed[sec];
+  var btn=document.getElementById('fb-'+sec);
+  if(btn){btn.classList.toggle('on',fFailed[sec]);btn.textContent=fFailed[sec]?'← Ver todas':'Solo falladas';}
+  var c=document.getElementById('qs-'+sec);if(!c)return;
+  var nf=0;
+  c.querySelectorAll('.qcard').forEach(function(card){
+    if(fFailed[sec]){var show=card.classList.contains('answered-wrong');card.style.display=show?'':'none';if(show)nf++;}
+    else{card.style.display='';}
+  });
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',fFailed[sec]&&nf===0);
+}
+
+/* ── Scores y progreso ── */
+function updateScores(){
+  var tok=0,tok2=0,tok3=0;
+  SECS.forEach(function(sec){
+    var ok=0,ko=0;
+    if(D[sec])D[sec].forEach(function(q){var a=state[sec+'-'+q.n];if(a){if(a.r)ok++;else ko++;}});
+    var tot=D[sec]?D[sec].length:0,rem=tot-ok-ko;
+    tok+=ok;tok2+=ko;tok3+=rem;
+    var eok=document.getElementById('sc-ok-'+sec),eko=document.getElementById('sc-ko-'+sec),erm=document.getElementById('sc-rem-'+sec);
+    if(eok)eok.textContent='✓ '+ok;if(eko)eko.textContent='✗ '+ko;if(erm)erm.textContent='○ '+rem;
+  });
+  var eok=document.getElementById('sc-ok-all'),eko=document.getElementById('sc-ko-all'),erm=document.getElementById('sc-rem-all');
+  if(eok)eok.textContent='✓ '+tok;if(eko)eko.textContent='✗ '+tok2;if(erm)erm.textContent='○ '+tok3;
+}
+function updateProg(){
+  var total=0,done=Object.keys(state).length;
+  SECS.forEach(function(s){if(D[s])total+=D[s].length;});
+  var pct=total>0?Math.round(done/total*100):0;
+  var bar=document.getElementById('prog-bar');if(bar)bar.style.width=pct+'%';
+}
+
+/* ── Tabs ── */
+function showTab(t){
+  currentTab=t;
+  document.querySelectorAll('.tab').forEach(function(b){b.classList.remove('on');});
+  var tb=document.querySelector('.tab.t-'+t);if(tb)tb.classList.add('on');
+  var mc=document.getElementById('main-cont');if(mc)mc.setAttribute('data-tab',t);
+  var panelAll=document.getElementById('panel-all');
+  if(panelAll)panelAll.classList.toggle('visible',t==='all');
+  SECS.forEach(function(s){
+    var p=document.getElementById('panel-'+s);
+    if(p)p.classList.toggle('visible',t===s);
+  });
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  clearSearch();
+}
+
+/* ── Reset ── */
+function resetSec(sec){
+  if(D[sec])D[sec].forEach(function(q){var qid=sec+'-'+q.n;delete state[qid];delete oOrd[qid];});
+  delete qOrd[sec];fFailed[sec]=false;activeCid=null;
+  var btn=document.getElementById('fb-'+sec);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+  var nb=document.getElementById('nota-'+sec);if(nb){nb.style.display='none';nb.className='nota-box';}
+  saveLocal();render(sec);
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.remove('show');
+  updateScores();updateProg();
+  // Reconstruir panel all para reflejar cambios
+  buildAllOrder();renderAll();
+}
+function resetAll(){
+  Object.keys(state).forEach(function(k){delete state[k];});
+  Object.keys(oOrd).forEach(function(k){delete oOrd[k];});
+  Object.keys(qOrd).forEach(function(k){delete qOrd[k];});
+  activeCid=null;starsFilter=false;allOrder=null;
+  var bs=document.getElementById('btn-stars');if(bs){bs.style.background='';bs.style.fontWeight='';}
+  SECS.forEach(function(s){
+    fFailed[s]=false;
+    var btn=document.getElementById('fb-'+s);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+    var nb=document.getElementById('nota-'+s);if(nb){nb.style.display='none';nb.className='nota-box';}
+  });
+  saveLocal();
+  SECS.forEach(render);
+  buildAllOrder();renderAll();
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  updateScores();updateProg();
+}
+
+/* ── Nota y revisión ── */
+function buildRevList(sec){
+  var qs=D[sec];if(!qs)return'';
+  var failed=qs.filter(function(q){var a=state[sec+'-'+q.n];return a&&!a.r;});
+  if(!failed.length)return'';
+  var html='<div class="review-list"><div class="review-title">📋 '+failed.length+' pregunta'+(failed.length>1?'s':'')+' fallada'+(failed.length>1?'s':'')+' — repasa aquí:</div>';
+  failed.forEach(function(q){
+    var qid=sec+'-'+q.n;var oo=getOOrd(qid);var nc=oo.indexOf(q.c-1)+1;
+    html+='<details class="review-item"><summary><span><b>'+getNum(sec,q.n)+'.</b> '+q.q+'</span></summary>';
+    html+='<div class="review-body"><div class="review-ans">✓ Opción '+nc+': '+escH(q.o[q.c-1]||'')+'</div>';
+    html+='<div class="expbox">'+q.e+'</div></div></details>';
+  });
+  return html+'</div>';
+}
+function calcNota(sec){
+  var qs=D[sec];if(!qs)return;
+  var total=qs.length,ok=0,ko=0,skip=0;
+  qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-'+sec);if(!box)return;
+  box.className='nota-box '+(pass?'pass':'fail');
+  box.innerHTML='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>'
+    +buildRevList(sec);
+  box.style.display='block';
+}
+function calcNotaAll(){
+  var total=0,ok=0,ko=0,skip=0;
+  SECS.forEach(function(sec){
+    var qs=D[sec];if(!qs)return;
+    total+=qs.length;
+    qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  });
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-all');if(!box)return;
+  box.className='global-nota-box '+(pass?'pass':'fail');
+  var html='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10 (global)</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>';
+  SECS.forEach(function(sec){
+    var rv=buildRevList(sec);
+    if(rv){var m=META.secciones[sec]||{};html+='<div class="review-sec-label">'+(m.emoji?m.emoji+' ':'')+escH(m.label||sec)+'</div>'+rv;}
+  });
+  box.innerHTML=html;box.style.display='block';
+}
+
+/* ── Estadísticas de errores ── */
+function toggleStats(){
+  statsVisible=!statsVisible;
+  var btn=document.getElementById('btn-stats');
+  if(btn){btn.style.background=statsVisible?'var(--ko-bg)':'';btn.style.color=statsVisible?'var(--ko-t)':'';}
+  var box=document.getElementById('stats-global');
+  if(!box)return;
+  if(!statsVisible){box.classList.remove('show');return;}
+  var entries=Object.entries(failHist).filter(function(e){return e[1]>0;});
+  if(!entries.length){box.innerHTML='<div class="stats-title">📊 Sin errores registrados todavía</div>';box.classList.add('show');return;}
+  entries.sort(function(a,b){return b[1]-a[1];});
+  var top=entries.slice(0,10);
+  var maxV=top[0][1];
+  var html='<div class="stats-title">📊 Preguntas más falladas (acumulado entre sesiones)</div>';
+  top.forEach(function(e,i){
+    var qid=e[0],count=e[1];
+    var q=findQ(qid);if(!q)return;
+    var sec=getSecFromQid(qid),n=getNFromQid(qid);
+    var m=META.secciones[sec]||{};
+    var pct=Math.round(count/maxV*100);
+    html+='<div class="stats-item">';
+    html+='<span class="stats-n" style="min-width:18px;color:var(--ko-t);font-weight:700">'+(i+1)+'.</span>';
+    html+='<span class="stats-q">'+(m.emoji?m.emoji+' ':'')+getNum(sec,n)+'. '+q.q.substring(0,60)+(q.q.length>60?'…':'')+'</span>';
+    html+='<div class="stats-bar-wrap"><div class="stats-bar" style="width:'+pct+'%"></div></div>';
+    html+='<span class="stats-n">'+count+'✗</span>';
+    html+='</div>';
+  });
+  box.innerHTML=html;box.classList.add('show');
+}
+
+/* ── Buscador ── */
+function onSearch(val){
+  var v=val.trim().toLowerCase();
+  var clr=document.getElementById('search-clear');
+  var cnt=document.getElementById('search-count');
+  if(clr)clr.style.display=v?'block':'none';
+  var found=0,total=0;
+  document.querySelectorAll('.qcard').forEach(function(card){
+    total++;
+    if(!v){card.classList.remove('search-hidden');found++;}
+    else{
+      var qtxt=card.querySelector('.qtxt');
+      var match=qtxt&&qtxt.textContent.toLowerCase().indexOf(v)!==-1;
+      card.classList.toggle('search-hidden',!match);
+      if(match)found++;
+    }
+  });
+  if(cnt){
+    if(v){cnt.textContent=found+' de '+total+' preguntas';cnt.style.display='block';}
+    else{cnt.style.display='none';}
+  }
+  // Mostrar "sin resultados" por panel
+  ['all'].concat(SECS).forEach(function(s){
+    var panel=document.getElementById('panel-'+s);if(!panel||!panel.classList.contains('visible'))return;
+    var cards=panel.querySelectorAll('.qcard:not(.search-hidden)');
+    var nr=document.getElementById('nr-'+s);if(nr)nr.style.display=cards.length===0&&v?'block':'none';
+  });
+}
+function clearSearch(){
+  var si=document.getElementById('search-input');if(si)si.value='';
+  onSearch('');
+}
+
+/* ── Modo ── */
+function setMode(mode){
+  currentMode=mode;
+  document.getElementById('mode-test').classList.toggle('on',mode==='test');
+  document.getElementById('mode-quick').classList.toggle('on',mode==='quick');
+  // Rerenderizar todo
+  SECS.forEach(render);renderAll();
+}
+
+/* ── Modo oscuro ── */
+function applyTheme(){
+  document.documentElement.setAttribute('data-theme',darkMode?'dark':'light');
+  var btn=document.getElementById('btn-dark');if(btn)btn.textContent=darkMode?'☀️':'🌙';
+}
+function toggleDark(){darkMode=!darkMode;applyTheme();saveLocal();}
+
+/* ── Temporizador ── */
+function initTimer(){
+  timerRemaining=timerSec;
+  renderTimer();
+  var disp=document.getElementById('timer-display');
+  if(disp){
+    disp.addEventListener('click',function(){startEditTimer();});
+  }
+}
+function fmtTime(s){
+  var h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60;
+  return h+':'+(m<10?'0':'')+m+':'+(ss<10?'0':'')+ss;
+}
+function renderTimer(){
+  var disp=document.getElementById('timer-display');
+  if(!disp)return;
+  disp.textContent=fmtTime(timerRemaining);
+  disp.classList.toggle('danger',timerSec>0&&timerRemaining===0);
+}
+function timerToggle(){
+  if(timerRunning){
+    clearInterval(timerInterval);timerRunning=false;
+    document.getElementById('btn-tplay').textContent='▶';
+  }else{
+    if(timerRemaining<=0&&timerSec>0)timerRemaining=timerSec;
+    timerRunning=true;
+    document.getElementById('btn-tplay').textContent='⏸';
+    timerInterval=setInterval(function(){
+      if(timerRemaining>0){timerRemaining--;renderTimer();}
+      else{clearInterval(timerInterval);timerRunning=false;document.getElementById('btn-tplay').textContent='▶';renderTimer();}
+    },1000);
+  }
+}
+function timerReset(){
+  clearInterval(timerInterval);timerRunning=false;
+  timerRemaining=timerSec;
+  document.getElementById('btn-tplay').textContent='▶';
+  renderTimer();
+}
+function startEditTimer(){
+  var disp=document.getElementById('timer-display');if(!disp)return;
+  if(timerRunning){timerToggle();}
+  var old=fmtTime(timerRemaining);
+  disp.contentEditable='true';disp.classList.add('editing');
+  disp.textContent=old;
+  disp.focus();
+  var range=document.createRange();range.selectNodeContents(disp);
+  var sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
+  function commit(){
+    disp.contentEditable='false';disp.classList.remove('editing');
+    var txt=disp.textContent.trim();
+    var parts=txt.split(':').map(Number);
+    var secs=0;
+    if(parts.length===3)secs=parts[0]*3600+parts[1]*60+parts[2];
+    else if(parts.length===2)secs=parts[0]*60+parts[1];
+    else if(parts.length===1)secs=parts[0]*60;
+    if(!isNaN(secs)&&secs>=0){timerSec=secs;timerRemaining=secs;saveLocal();}
+    renderTimer();
+  }
+  disp.addEventListener('blur',commit,{once:true});
+  disp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();disp.blur();}});
+}
+
+/* ── Helpers cid ── */
+function cidToQid(cid){return cid.replace(/^[AS]-/,'');}
+
+/* ── Teclado ── */
+function handleKey(e){
+  var tg=e.target.tagName;
+  if(tg==='INPUT'||tg==='TEXTAREA'||e.target.contentEditable==='true')return;
+  var k=e.key;
+  if(k>='1'&&k<='5'){
+    if(activeCid&&!state[cidToQid(activeCid)]){
+      var aqid=cidToQid(activeCid);
+      var pos=parseInt(k),q=findQ(aqid);
+      if(q&&pos<=q.o.length){e.preventDefault();answer(aqid,pos,getSecFromQid(aqid));}
+    }
+  }else if(k==='ArrowDown'||k==='ArrowUp'){
+    e.preventDefault();navigateQ(k==='ArrowDown'?1:-1);
+  }else if(k==='s'||k==='S'){
+    if(activeCid)toggleStar(cidToQid(activeCid));
+  }
+}
+function navigateQ(dir){
+  var cards=Array.from(document.querySelectorAll('.sec-panel.visible .qcard')).filter(function(c){return c.style.display!=='none'&&!c.classList.contains('search-hidden')&&!c.classList.contains('rem-hidden');});
+  var cids=cards.map(function(c){return c.id.replace('card-','');});
+  if(!cids.length)return;
+  var idx=activeCid?cids.indexOf(activeCid):-1;
+  var nidx=Math.max(0,Math.min(cids.length-1,idx+dir));
+  var ncid=cids[nidx];if(!ncid||ncid===activeCid)return;
+  if(activeCid){var ob=document.getElementById('b-'+activeCid);var oh=document.getElementById('h-'+activeCid);if(ob)ob.classList.remove('open');if(oh)oh.classList.remove('open');var oc=document.getElementById('card-'+activeCid);if(oc)oc.classList.remove('kb-focus');}
+  activeCid=ncid;
+  var nb=document.getElementById('b-'+ncid);var nh=document.getElementById('h-'+ncid);
+  if(nb)nb.classList.add('open');if(nh)nh.classList.add('open');
+  var nc2=document.getElementById('card-'+ncid);if(nc2){nc2.classList.add('kb-focus');nc2.scrollIntoView({behavior:'smooth',block:'nearest'});}
+}
+/*REM_FILTER_v2*/
+/* ── Filtros por contador: ✓ acertadas · ✗ falladas · ○ sin contestar ── */
+var scF={};
+var SC_EMPTY={rem:'No te queda ninguna por contestar 🎉',ok:'Aún no has acertado ninguna',ko:'Aún no has fallado ninguna 🎉'};
+function scMatch(mode,qid){var a=state[qid];return mode==='rem'?!a:(mode==='ok'?!!(a&&a.r):!!(a&&!a.r));}
+function scApply(p){
+  var mode=scF[p]||null,vis=0,qs=document.getElementById('qs-'+p);
+  if(qs)Array.prototype.forEach.call(qs.querySelectorAll('.qcard'),function(card){
+    var hd=card.querySelector('.qhead'),qid=hd?hd.dataset.qid:'',hide=!!mode&&!scMatch(mode,qid);
+    card.classList.toggle('rem-hidden',hide);if(mode&&!hide)vis++;
+  });
+  ['ok','ko','rem'].forEach(function(k){var c=document.getElementById('sc-'+k+'-'+p);if(c)c.classList.toggle('on',mode===k);});
+  var msg=document.getElementById('nrem-'+p);
+  if(mode&&!msg&&qs){msg=document.createElement('div');msg.id='nrem-'+p;msg.className='no-rem';qs.parentNode.insertBefore(msg,qs.nextSibling);}
+  if(msg){msg.textContent=SC_EMPTY[mode]||'';msg.style.display=mode&&vis===0?'block':'none';}
+}
+function scToggle(p,k){
+  if(p!=='all'&&SECS.indexOf(p)<0)return;
+  var next=scF[p]===k?null:k,targets=p==='all'?['all'].concat(SECS):[p];
+  targets.forEach(function(t){if(next&&t!=='all'&&fFailed[t])toggleFail(t);scF[t]=next;scApply(t);});
+}
+function scDecorate(){
+  var T={ok:'Pulsa para ver solo las acertadas',ko:'Pulsa para ver solo las falladas',rem:'Pulsa para ver solo las que te quedan por contestar'};
+  document.querySelectorAll('.sc').forEach(function(c){var m=/^sc-(ok|ko|rem)-/.exec(c.id||'');if(m&&!c.title)c.title=T[m[1]];});
+}
+(function(){
+  var _tf=toggleFail;toggleFail=function(sec){if(!fFailed[sec]&&scF[sec]){scF[sec]=null;scApply(sec);}_tf(sec);};
+  var _r=render;render=function(sec){_r(sec);if(scF[sec])scApply(sec);};
+  var _ra=renderAll;renderAll=function(){_ra();if(scF.all)scApply('all');};
+  var _st=showTab;showTab=function(t){_st(t);['all'].concat(SECS).forEach(function(p){if(scF[p])scApply(p);});};
+  var _us=updateScores;updateScores=function(){_us();scDecorate();};
+  document.addEventListener('click',function(e){
+    var c=e.target&&e.target.closest?e.target.closest('.sc'):null;
+    var m=c&&c.id?/^sc-(ok|ko|rem)-(.+)$/.exec(c.id):null;if(!m)return;
+    scToggle(m[2],m[1]);
+  });
+  scDecorate();
+})();
+</script>
+<!-- QRecall · medición anónima del sprint (sin nombre, sin email, sin IP guardada) -->
+<script>
+(function(){
+  var ENDPOINT='https://script.google.com/macros/s/AKfycbzDOUNVlK0wD1y0Xc4V0efc2asUI2-x0OlNbDzd6stsaLNz5avSIn1o1whusnkNC5I/exec'; // URL del Web App de Google Apps Script
+  if(!ENDPOINT||ENDPOINT.indexOf('http')!==0)return;
+  var ls;try{ls=window.localStorage;if(!ls)return;}catch(e){return;}
+  var banco=(typeof KEY==='string'&&KEY)||location.pathname.split('/').pop()||'desconocido';
+  var today=new Date().toISOString().slice(0,10);
+  function get(k){try{return ls.getItem(k);}catch(e){return null;}}
+  function set(k,v){try{ls.setItem(k,v);}catch(e){}}
+  var SRC=(function(){var m=location.search.match(/[?&]src=([A-Za-z0-9_-]+)/);if(m){set('qr_src',m[1]);return m[1];}return get('qr_src')||'';})();
+  var uid=get('qr_uid');
+  if(!uid){uid=Math.random().toString(36).slice(2,10)+Date.now().toString(36);set('qr_uid',uid);}
+  var first=get('qr_first');
+  if(!first){first=today;set('qr_first',first);}
+  var sentKey='qr_sent_'+banco;
+  var sent={};try{sent=JSON.parse(get(sentKey)||'{}')||{};}catch(e){}
+  function send(ev){
+    var q='uid='+encodeURIComponent(uid)+'&banco='+encodeURIComponent(banco)+'&ev='+encodeURIComponent(ev)+'&d='+today+'&t='+encodeURIComponent(new Date().toISOString())+'&p='+encodeURIComponent(location.pathname+(SRC?'?src='+SRC:''))+'&_='+Date.now();
+    var url=ENDPOINT+'?'+q;
+    try{fetch(url,{method:'GET',mode:'no-cors',keepalive:true,cache:'no-store'}).catch(function(){});}
+    catch(e){try{var im=new Image();im.src=url;}catch(e2){}}
+  }
+  function once(ev){if(sent[ev])return;sent[ev]=today;set(sentKey,JSON.stringify(sent));send(ev);}
+  // 1) abre: cada carga
+  send('abre');
+  // 2) vuelve: carga en un día distinto al de la primera visita (una vez)
+  if(first!==today)once('vuelve');
+  // 3) respuestas: se cuentan tarjetas contestadas en el DOM (dedupe por pregunta)
+  function answered(){
+    var seen={},n=0;
+    var cards=document.querySelectorAll('[id^="card-"].answered-ok,[id^="card-"].answered-wrong');
+    for(var i=0;i<cards.length;i++){
+      var qid=cards[i].id.replace(/^card-[AS]-/,'');
+      if(!seen[qid]){seen[qid]=1;n++;}
+    }
+    return n;
+  }
+  function check(){
+    var n=answered();
+    if(n>=1)once('primera_respuesta');
+    if(n>=10)once('10_respuestas');
+  }
+  document.addEventListener('click',function(e){
+    var t=e.target;
+    while(t&&t!==document){if(t.classList&&t.classList.contains('opt')){setTimeout(check,50);break;}t=t.parentNode;}
+  },true);
+  document.addEventListener('keydown',function(e){if(/^[1-5]$/.test(e.key))setTimeout(check,50);},true);
+  setTimeout(check,1500); // por si ya había respuestas guardadas de otra sesión
+})();
+</script>
+
+
+</body>
+</html>
