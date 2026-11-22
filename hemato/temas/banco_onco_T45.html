@@ -1,0 +1,996 @@
+<!--
+=============================================================
+  MOTOR BANCO MIR — v10
+  Novedades respecto a v9:
+  - Numeración correlativa fija por sección (no se mezcla)
+  - Badge neutro en pestaña "Todos" + mezcla real inter-secciones
+  - Temporizador sticky editable en header (play/pausa/reset)
+  - Buscador de texto en tiempo real
+  - Modo repaso rápido (muestra RC + explicación directamente)
+  - Estadísticas de errores recurrentes entre sesiones
+=============================================================
+-->
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title id="page-title">Banco MIR</title>
+<style>
+:root{
+  --bg:#f4f3ef;--surf:#fff;--bd:#e5e5e5;--bd2:#ddd;
+  --txt:#1a1a1a;--txt2:#555;--txt3:#999;--txt4:#666;
+  --hdr:#1a1a1a;--hdr-t:#fff;
+  --ok-bg:#e6f9ef;--ok-t:#0b6e52;--ok-bd:#2da060;
+  --ko-bg:#fdecea;--ko-t:#b91c1c;--ko-bd:#d94f45;
+  --sc-ok:#dcf5ed;--sc-ko:#fdecea;--sc-rem:#f0f0f0;--sc-rem-t:#666;
+  --exp:#fffbe6;--exp-bd:#f0c04a;--exp-t:#5a4500;
+  --prog:#e5e5e5;--prog-fill:#1a56db;
+  --star:#ccc;--star-on:#f59e0b;
+  --hint:#fafafa;--hint-bd:#eee;
+  --tab-bd:#ddd;--tab-t:#555;
+  --all-bg:#e8f0fe;--all-t:#1a56db;--all-bd:#1a56db;
+  --fab:#1a1a1a;--fab-t:#fff;
+  --nota-btn-t:#1a56db;--nota-btn-bd:#1a56db;--nota-btn-bg:var(--surf);
+  --timer-bg:#222;--timer-t:#fff;--timer-danger:#ef4444;
+}
+[data-theme="dark"]{
+  --bg:#0f0f1a;--surf:#1e1e30;--bd:#2a2a45;--bd2:#333355;
+  --txt:#e8e8f0;--txt2:#aaa;--txt3:#555;--txt4:#888;
+  --hdr:#0a0a14;--hdr-t:#e8e8f0;
+  --ok-bg:#0b3020;--ok-t:#4ade80;--ok-bd:#166534;
+  --ko-bg:#2d0a0a;--ko-t:#f87171;--ko-bd:#7f1d1d;
+  --sc-ok:#0b3020;--sc-ko:#2d0a0a;--sc-rem:#252540;--sc-rem-t:#aaa;
+  --exp:#1a1500;--exp-bd:#a37f10;--exp-t:#d4b84a;
+  --prog:#2a2a45;--prog-fill:#60a5fa;
+  --star:#444;--star-on:#f59e0b;
+  --hint:#1a1a2e;--hint-bd:#2a2a45;
+  --tab-bd:#2a2a45;--tab-t:#aaa;
+  --all-bg:#1a2a4a;--all-t:#60a5fa;--all-bd:#3b82f6;
+  --fab:#2a2a50;--fab-t:#e8e8f0;
+  --nota-btn-t:#60a5fa;--nota-btn-bd:#3b82f6;--nota-btn-bg:var(--surf);
+  --timer-bg:#1a1a2e;--timer-t:#e8e8f0;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;transition:background .25s,color .25s}
+
+/* ── Header ── */
+header{background:var(--hdr);color:var(--hdr-t);padding:9px 16px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;position:sticky;top:0;z-index:100}
+header h1{font-size:13.5px;font-weight:600;white-space:nowrap}
+.hright{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.hmeta{font-size:11px;color:#888}
+.hbtn{background:none;border:none;cursor:pointer;font-size:16px;line-height:1;padding:3px 5px;border-radius:5px;transition:background .15s;color:var(--hdr-t)}
+.hbtn:hover{background:rgba(255,255,255,.12)}
+.sbadge{font-size:11px;padding:3px 9px;border-radius:5px;font-weight:500}
+.sbadge.ok{background:#15803d;color:#dcfce7}.sbadge.warn{background:#92400e;color:#fef3c7}
+
+/* ── Temporizador ── */
+#timer-wrap{display:flex;align-items:center;gap:4px;background:var(--timer-bg);border-radius:7px;padding:3px 8px;border:1px solid rgba(255,255,255,.1)}
+#timer-display{font-size:13px;font-weight:700;font-family:monospace;color:var(--timer-t);min-width:58px;text-align:center;cursor:pointer;border-radius:3px;padding:1px 3px}
+#timer-display:hover{background:rgba(255,255,255,.08)}
+#timer-display.editing{background:rgba(255,255,255,.15);outline:none;color:var(--timer-t)}
+#timer-display.danger{color:var(--timer-danger)}
+#timer-wrap button{background:none;border:none;cursor:pointer;color:rgba(255,255,255,.7);font-size:12px;padding:1px 3px;border-radius:3px;line-height:1}
+#timer-wrap button:hover{background:rgba(255,255,255,.12);color:#fff}
+
+/* ── Barra de progreso ── */
+#prog-wrap{height:3px;background:var(--prog);position:sticky;top:40px;z-index:99}
+#prog-bar{height:100%;background:var(--prog-fill);width:0%;transition:width .4s}
+
+/* ── Contenedor ── */
+.container{max-width:820px;margin:0 auto;padding:16px 12px}
+
+/* ── Buscador ── */
+.search-wrap{position:relative;margin-bottom:13px}
+.search-wrap input{width:100%;padding:8px 34px 8px 12px;border:1.5px solid var(--bd2);border-radius:8px;font-size:13px;background:var(--surf);color:var(--txt);outline:none;transition:border-color .15s}
+.search-wrap input:focus{border-color:var(--prog-fill)}
+.search-clear{position:absolute;right:9px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--txt3);font-size:16px;display:none;line-height:1}
+#search-count{font-size:11px;color:var(--txt3);margin-top:4px;display:none}
+
+/* ── Modo repaso ── */
+.mode-bar{display:flex;gap:6px;margin-bottom:12px;align-items:center}
+.mode-btn{padding:5px 12px;border:1.5px solid var(--bd2);border-radius:7px;cursor:pointer;font-size:12px;font-weight:500;background:var(--surf);color:var(--txt2);transition:all .15s}
+.mode-btn:hover{border-color:#999}
+.mode-btn.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Tabs ── */
+.tabs{display:flex;gap:7px;margin-bottom:13px;flex-wrap:wrap}
+.tab{padding:7px 14px;border:1.5px solid var(--tab-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;background:var(--surf);color:var(--tab-t);transition:all .15s}
+.tab:hover{border-color:#999;color:var(--txt)}
+.tab.t-all.on{background:var(--all-bg);color:var(--all-t);border-color:var(--all-bd)}
+
+/* ── Score global ── */
+.ph-global{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 15px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border-left:4px solid var(--prog-fill)}
+.score-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.sc{font-size:12px;font-weight:600;padding:3px 9px;border-radius:6px}
+.sc.ok{background:var(--sc-ok);color:var(--ok-t)}.sc.ko{background:var(--sc-ko);color:var(--ko-t)}.sc.rem{background:var(--sc-rem);color:var(--sc-rem-t)}
+
+/* ── Acciones ── */
+.global-actions{display:none;margin-bottom:10px;gap:7px;flex-wrap:wrap;align-items:center}
+.container[data-tab="all"] .global-actions{display:flex}
+.sec-actions{margin:6px 0 15px;display:flex;gap:7px;flex-wrap:wrap}
+.reset-btn{padding:7px 14px;background:var(--fab);color:var(--fab-t);border:none;border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:opacity .15s}
+.reset-btn:hover{opacity:.82}
+.nota-btn{padding:7px 14px;background:var(--nota-btn-bg);color:var(--nota-btn-t);border:1.5px solid var(--nota-btn-bd);border-radius:8px;cursor:pointer;font-size:12.5px;font-weight:500;transition:background .15s}
+.nota-btn:hover{background:var(--all-bg)}
+
+/* ── Nota box ── */
+.nota-box,.global-nota-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:2px solid var(--bd2);font-size:13px;line-height:1.7;display:none}
+.nota-box.pass,.global-nota-box.pass{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t)}
+.nota-box.fail,.global-nota-box.fail{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t)}
+.nota-score{font-size:26px;font-weight:700;display:block;margin-bottom:4px}
+.nota-detail{font-size:12px;opacity:.85;font-family:monospace}
+
+/* ── Vista revisión ── */
+.review-list{margin-top:12px;border-top:1px solid var(--bd2);padding-top:10px}
+.review-title{font-size:12px;font-weight:700;margin-bottom:9px;color:var(--txt)}
+.review-sec-label{font-size:11.5px;font-weight:700;color:var(--txt3);margin:8px 0 5px;padding-top:6px;border-top:1px solid var(--bd)}
+.review-item{background:var(--surf);border-radius:8px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden}
+.review-item summary{padding:9px 12px;cursor:pointer;font-size:12.5px;color:var(--txt);list-style:none;display:flex;gap:8px;align-items:flex-start}
+.review-item summary::-webkit-details-marker{display:none}
+.review-item summary::before{content:'▶';font-size:9px;color:var(--txt3);flex-shrink:0;margin-top:4px;transition:transform .18s}
+details[open] summary::before{transform:rotate(90deg)}
+.review-body{padding:0 12px 11px}
+.review-ans{font-size:12px;color:var(--ok-t);margin-bottom:7px;font-weight:500}
+
+/* ── Estadísticas ── */
+.stats-box{margin-top:8px;padding:12px 15px;border-radius:10px;border:1.5px solid var(--bd2);background:var(--surf);display:none}
+.stats-box.show{display:block}
+.stats-title{font-size:12px;font-weight:700;margin-bottom:10px;color:var(--txt)}
+.stats-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:12.5px}
+.stats-item:last-child{border-bottom:none}
+.stats-bar-wrap{flex:1;background:var(--sc-rem);border-radius:4px;height:6px;overflow:hidden}
+.stats-bar{height:100%;background:var(--ko-bd);border-radius:4px;transition:width .4s}
+.stats-n{font-size:11px;color:var(--txt3);white-space:nowrap}
+.stats-q{flex:2;color:var(--txt);font-size:12px;line-height:1.3}
+
+/* ── Panel secciones ── */
+.sec-panel{display:none}.sec-panel.visible{display:block}
+.ph{background:var(--surf);border-radius:10px;border:1px solid var(--bd);padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ph-left{flex:1;display:flex;flex-direction:column;gap:5px}
+.ph-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--txt3);margin-bottom:1px}
+.ph-desc{font-size:12px;color:var(--txt4)}
+.fbtn{padding:6px 12px;font-size:12px;font-weight:500;border:1.5px solid var(--bd2);border-radius:8px;cursor:pointer;background:var(--surf);color:var(--txt2);transition:all .15s;white-space:nowrap}
+.fbtn:hover{border-color:#999;color:var(--txt)}.fbtn.on{background:var(--ko-bg);color:#b91c1c;border-color:#f87171}
+.no-failed{display:none;text-align:center;padding:16px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin-top:4px}
+.no-failed.show{display:block}
+.no-results{display:none;text-align:center;padding:20px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin:8px 0}
+
+/* ── Hint ── */
+.hint{font-size:11px;color:var(--txt3);margin-bottom:15px;padding:7px 11px;background:var(--hint);border-radius:6px;border:1px solid var(--hint-bd)}
+
+/* ── Tarjeta ── */
+.qcard{background:var(--surf);border-radius:10px;border:1px solid var(--bd);margin-bottom:7px;overflow:hidden;transition:box-shadow .15s}
+.qcard:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.qcard.kb-focus{outline:2px solid var(--prog-fill);outline-offset:-2px}
+.qcard.search-hidden{display:none}
+.qhead{padding:11px 13px;cursor:pointer;display:flex;align-items:flex-start;gap:9px}
+
+/* ── Badge numérico ── */
+.qnum{font-size:11px;font-weight:700;padding:3px 7px;border-radius:5px;white-space:nowrap;flex-shrink:0;margin-top:2px;background:var(--sc-rem);color:var(--sc-rem-t)}
+/* En pestaña "Todos" siempre neutro; en sección aplica color de sección */
+.qnum.sec-colored{background:var(--sec-dim);color:var(--sec-col)}
+
+.qtxt{font-size:13px;line-height:1.5;flex:1}
+.star-btn{background:none;border:none;cursor:pointer;font-size:15px;color:var(--star);padding:0 2px;flex-shrink:0;margin-top:2px;line-height:1;transition:color .15s,transform .15s}
+.star-btn:hover{transform:scale(1.2)}
+.star-btn .si{display:inline}.star-btn .sf{display:none}
+.star-btn.on .si{display:none}.star-btn.on .sf{display:inline;color:var(--star-on)}
+.chev{font-size:15px;color:var(--bd2);flex-shrink:0;margin-top:2px;transition:transform .2s}
+.qhead.open .chev{transform:rotate(180deg)}
+.qbody{display:none;padding:0 13px 13px}.qbody.open{display:block}
+
+/* ── Imagen ── */
+.clinimg-wrap{margin:9px 0 7px;background:#111;border-radius:8px;overflow:hidden;border:1px solid var(--bd2);text-align:center}
+.clinimg{max-width:100%;max-height:340px;object-fit:contain;display:block;margin:0 auto}
+.clinimg-cap{font-size:11px;color:var(--txt3);padding:4px 0 5px;background:var(--hint);border-top:1px solid var(--bd)}
+
+/* ── Opciones ── */
+.opts{list-style:none;margin-top:9px;display:flex;flex-direction:column;gap:5px}
+.opt{padding:9px 12px;border-radius:8px;border:1.5px solid var(--bd2);cursor:pointer;display:flex;align-items:flex-start;gap:9px;color:var(--txt);font-size:13px;line-height:1.45;transition:border-color .12s,background .12s;user-select:none}
+.opt:hover:not(.done){border-color:#999;background:var(--hint)}
+.opt.correct{background:var(--ok-bg);border-color:var(--ok-bd);color:var(--ok-t);font-weight:500;cursor:default}
+.opt.wrong{background:var(--ko-bg);border-color:var(--ko-bd);color:var(--ko-t);cursor:default}
+.opt.done:not(.correct):not(.wrong){cursor:default;opacity:.7}
+.onum{font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px;min-width:15px}
+
+/* ── Modo repaso rápido ── */
+.quick-card{padding:9px 12px;border-radius:8px;border:1.5px solid var(--ok-bd);background:var(--ok-bg);margin-top:8px}
+.quick-rc{font-size:12.5px;font-weight:600;color:var(--ok-t);margin-bottom:6px}
+
+/* ── Explicación ── */
+.expbox{margin-top:10px;padding:10px 12px;background:var(--exp);border-left:4px solid var(--exp-bd);border-radius:0 8px 8px 0;font-size:12.5px;color:var(--exp-t);line-height:1.65}
+.expbox b,.expbox strong{font-weight:600}
+.et{display:block;margin-bottom:4px;font-weight:600;font-size:13px}
+.atag{font-size:10px;padding:2px 6px;border-radius:4px;margin-left:5px;vertical-align:middle}
+.atag.ok{background:var(--sc-ok);color:var(--ok-t)}.atag.ko{background:var(--sc-ko);color:#c0392b}
+
+/* ── All-tab CSS ── */
+.container[data-tab="all"] .ph{display:none!important}
+.container[data-tab="all"] .sec-actions{display:none!important}
+.container[data-tab="all"] .no-failed{display:none!important}
+.container[data-tab="all"] .nota-box{display:none!important}
+.container:not([data-tab="all"]) .global-nota-box{display:none!important}
+.container:not([data-tab="all"]) #stats-global{display:none!important}
+
+/* ── Contadores ✓ ✗ ○ pulsables: filtran las preguntas ── */
+.sc.ok,.sc.ko,.sc.rem{cursor:pointer;user-select:none;-webkit-user-select:none;transition:box-shadow .15s}
+.sc.ok:hover,.sc.ko:hover,.sc.rem:hover{box-shadow:0 0 0 1px var(--bd2)}
+.sc.ok.on{box-shadow:0 0 0 1.5px var(--ok-t)}
+.sc.ko.on{box-shadow:0 0 0 1.5px var(--ko-t)}
+.sc.rem.on{box-shadow:0 0 0 1.5px var(--sc-rem-t)}
+.qcard.rem-hidden{display:none!important}
+.no-rem{display:none;text-align:center;padding:16px;color:var(--txt3);font-size:13px;border:1.5px dashed var(--bd2);border-radius:8px;margin-top:4px}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="h-tit">Banco MIR</h1>
+  <div class="hright">
+    <span class="hmeta" id="h-meta"></span>
+    <!-- Temporizador -->
+    <div id="timer-wrap" title="Haz clic en el tiempo para editar">
+      <span id="timer-display">0:00:00</span>
+      <button id="btn-tplay" onclick="timerToggle()" title="Play/Pausa">▶</button>
+      <button onclick="timerReset()" title="Reset">↺</button>
+    </div>
+    <button class="hbtn" id="btn-dark" onclick="toggleDark()" title="Modo oscuro">🌙</button>
+    <span id="save-badge" class="sbadge"></span>
+  </div>
+</header>
+<div id="prog-wrap"><div id="prog-bar"></div></div>
+
+<div class="container" id="main-cont" data-tab="all">
+  <!-- Buscador -->
+  <div class="search-wrap">
+    <input type="text" id="search-input" placeholder="🔍 Buscar en enunciados..." oninput="onSearch(this.value)">
+    <button class="search-clear" id="search-clear" onclick="clearSearch()">✕</button>
+  </div>
+  <div id="search-count"></div>
+
+  <!-- Modo -->
+  <div class="mode-bar">
+    <span style="font-size:11.5px;color:var(--txt3);font-weight:600">MODO:</span>
+    <button class="mode-btn on" id="mode-test" onclick="setMode('test')">📝 Test</button>
+    <button class="mode-btn" id="mode-quick" onclick="setMode('quick')">⚡ Repaso rápido</button>
+    <button class="mode-btn" id="btn-stars" onclick="filterStarred()" style="margin-left:auto;border-color:#f59e0b;color:#b45309">⭐ Marcadas</button>
+    <button class="mode-btn" id="btn-stats" onclick="toggleStats()">📊 Errores</button>
+  </div>
+
+  <!-- Stats globales -->
+  <div class="stats-box" id="stats-global"></div>
+
+  <!-- Tabs -->
+  <div class="tabs" id="tabs-wrap"></div>
+
+  <!-- Score global -->
+  <div class="ph-global">
+    <div class="ph-left">
+      <span class="ph-desc" id="ph-gdesc"></span>
+      <div class="score-row">
+        <span class="sc ok" id="sc-ok-all">✓ 0</span>
+        <span class="sc ko" id="sc-ko-all">✗ 0</span>
+        <span class="sc rem" id="sc-rem-all">○ 0</span>
+      </div>
+    </div>
+  </div>
+  <div class="global-actions">
+    <button class="reset-btn" onclick="resetAll()">↺ Reiniciar y mezclar</button>
+    <button class="nota-btn" onclick="calcNotaAll()">✎ Calcular nota global</button>
+  </div>
+  <div class="global-nota-box" id="nota-all"></div>
+  <p class="hint">💡 <b>1–5</b> responde · <b>↑↓</b> navega · <b>S</b> marca ⭐ · Progreso guardado automáticamente</p>
+
+  <div id="panels-wrap"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════ MOTOR v10 ═══════════════════════════════════════ */
+
+var KEY=/*__KEY__*/'onco_T45_SNC_v1';
+var META=/*__META_JSON__*/{"titulo":"Oncolog\u00eda \u00b7 T45 Tumores del SNC","subtitulo":"Hematolog\u00eda-Oncolog\u00eda \u00b7 4.\u00ba","examen":"preguntas estilo examen","secciones":{"gen":{"label":"Epidemiolog\u00eda y clasificaci\u00f3n","emoji":"\ud83e\udde0","color":"#2f80ed","colorDim":"#1b4a8a","desc":"adulto y ni\u00f1o \u00b7 OMS 2021 \u00b7 crecimiento \u00b7 diseminaci\u00f3n \u00b7 cl\u00ednica"},"diag":{"label":"Diagn\u00f3stico, pron\u00f3stico y tratamiento","emoji":"\ud83d\udd2c","color":"#27ae60","colorDim":"#17693a","desc":"TAC y RM \u00b7 PET \u00b7 punci\u00f3n lumbar \u00b7 pron\u00f3stico \u00b7 radioterapia y protones"},"glia":{"label":"Gliomas y meduloblastoma","emoji":"\ud83e\uddec","color":"#9b51e0","colorDim":"#5c2f87","desc":"gradaci\u00f3n \u00b7 astrocitomas \u00b7 glioblastoma y Stupp \u00b7 oligodendroglioma \u00b7 meduloblastoma"},"otros":{"label":"Benignos, espinales y linfoma","emoji":"\ud83e\ude7a","color":"#f2994a","colorDim":"#8f5a2b","desc":"meningioma y Simpson \u00b7 craneofaringioma \u00b7 hip\u00f3fisis \u00b7 schwannoma \u00b7 compresi\u00f3n medular \u00b7 linfoma"}}};
+var D=/*__D_JSON__*/{"gen":[{"n":"1","noShuffle":false,"img":null,"q":"En relaci\u00f3n con los tumores cerebrales primarios del ni\u00f1o, se\u00f1ale la correcta:","o":["Son el segundo tumor infantil tras la leucemia","Predominan los supratentoriales, un 60 % del total","Su pico de incidencia se sit\u00faa entre los 60 y 65 a\u00f1os","El tipo m\u00e1s frecuente es el meningioma de la convexidad"],"c":1,"e":"Son el <b>20 % de los tumores pedi\u00e1tricos</b> y el <b>2.\u00ba tras la leucemia</b>; aparecen a los 3-12 a\u00f1os, son <b>infratentoriales en el 60 %</b> y el primero es el meduloblastoma. 60-65 a\u00f1os es la edad del adulto. Fuente: diapositivas del tema \u00b7 Tumores primarios en ni\u00f1os"},{"n":"2","noShuffle":false,"img":null,"q":"Glioma difuso con IDH mutado, ATRX retenida y codeleci\u00f3n 1p/19q. Seg\u00fan la clasificaci\u00f3n de la OMS de 2021, el diagn\u00f3stico es:","o":["Astrocitoma IDH-mutante con ATRX mutado, grado 2-3","Oligodendroglioma IDH-mutante, 1p/19q-codelecionado","Glioblastoma IDH-wildtype con promotor TERT mutado, grado 4","Astrocitoma IDH-mutante, grado 4"],"c":2,"e":"En la rama IDH-mutante, <b>ATRX retenida + codeleci\u00f3n 1p/19q = oligodendroglioma</b> (grado 2/3). El astrocitoma IDH-mutante lleva ATRX mutado, 1p/19q intacto y TP53 mutado; el glioblastoma es IDH-wildtype. Fuente: diapositivas del tema \u00b7 Clasificaci\u00f3n OMS 2021"},{"n":"3","noShuffle":false,"img":null,"q":"Un astrocitoma IDH-mutante pasa a considerarse de grado 4 de la OMS cuando presenta:","o":["Codeleci\u00f3n 1p/19q con ATRX retenida","Deleci\u00f3n homocig\u00f3tica de CDKN2A/B","Metilaci\u00f3n del promotor del gen MGMT","Mutaci\u00f3n de IDH1 sin alteraci\u00f3n de TP53"],"c":2,"e":"Con CDKN2A/B wildtype es grado 2-3; la <b>deleci\u00f3n homocig\u00f3tica de CDKN2A/B</b> (o la necrosis/proliferaci\u00f3n microvascular) lo convierte en <b>grado 4</b>. La codeleci\u00f3n 1p/19q define el oligodendroglioma. Fuente: diapositivas del tema \u00b7 Clasificaci\u00f3n OMS 2021"},{"n":"4","noShuffle":false,"img":null,"q":"Glioma difuso IDH-wildtype. \u00bfCu\u00e1l de los siguientes hallazgos NO es uno de los criterios de glioblastoma grado 4 en la OMS 2021?","o":["Amplificaci\u00f3n de EGFR","Mutaci\u00f3n del promotor de TERT","Ganancia del 7 y p\u00e9rdida del 10","Codeleci\u00f3n de los brazos 1p y 19q"],"c":4,"e":"Con IDH-wildtype basta uno de estos: <b>necrosis, proliferaci\u00f3n microvascular, mutaci\u00f3n de TERT, amplificaci\u00f3n de EGFR o +7/\u221210</b>. La codeleci\u00f3n 1p/19q es del oligodendroglioma IDH-mutante. Fuente: diapositivas del tema \u00b7 Clasificaci\u00f3n OMS 2021"},{"n":"5","noShuffle":false,"img":null,"q":"Seg\u00fan la histog\u00e9nesis de los tumores cerebrales, el meningioma deriva de:","o":["Las c\u00e9lulas aracnoideas-piamadre","Los oligodendrocitos de la gl\u00eda","Las c\u00e9lulas de Schwann perif\u00e9ricas","Las c\u00e9lulas ependimarias ventriculares"],"c":1,"e":"De las <b>c\u00e9lulas aracnoideas-piamadre</b> deriva el meningioma; de la c\u00e9lula de Schwann, los neurinomas; de oligodendrocitos, c\u00e9lulas ependimarias y astrocitos, los oligodendrogliomas, ependimomas y astrocitomas. Fuente: diapositivas del tema \u00b7 Histog\u00e9nesis"},{"n":"6","noShuffle":false,"img":null,"q":"Respecto a la incidencia de los tumores primarios del SNC, \u00bfcu\u00e1l es el glioma m\u00e1s frecuente?","o":["Astrocitoma piloc\u00edtico","Glioblastoma multiforme","Oligodendroglioma","Ependimoma del IV ventr\u00edculo"],"c":2,"e":"Dentro de los gliomas, el <b>glioblastoma multiforme</b> supone el 45-50 %, seguido del astrocitoma anapl\u00e1sico (20-25 %), piloc\u00edtico (10 %), oligodendroglioma (10 %) y ependimoma (8 %). Fuente: diapositivas del tema \u00b7 Incidencia"},{"n":"7","noShuffle":false,"img":null,"q":"El mecanismo de crecimiento en el que la misma masa tumoral crece en varias localizaciones se denomina multic\u00e9ntrico. Seg\u00fan el material, es t\u00edpico de:","o":["La meningiomatosis m\u00faltiple","Las met\u00e1stasis cerebrales","Los gliomas de alto grado","Los tumores benignos"],"c":3,"e":"<b>Multic\u00e9ntrico</b>: la misma masa en varias localizaciones \u2192 <b>gliomas de alto grado/glioblastoma</b>. La meningiomatosis es crecimiento m\u00faltiple (varias masas); benignos y met\u00e1stasis crecen de forma expansiva. Fuente: diapositivas del tema \u00b7 Mecanismos de crecimiento"},{"n":"8","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de los siguientes tumores NO figura en el material entre los que diseminan por el LCR?","o":["Meduloblastoma","Pinealoblastoma","Ependimoma","Meningioma"],"c":4,"e":"Diseminan por LCR el <b>meduloblastoma, el pinealoblastoma, los tumores germinales y el ependimoma</b>. El meningioma no est\u00e1 en esa lista. Fuente: diapositivas del tema \u00b7 Formas de diseminaci\u00f3n"},{"n":"9","noShuffle":false,"img":null,"q":"Var\u00f3n de 55 a\u00f1os con cefalea, v\u00f3mitos en escopetazo y edema de papila en el fondo de ojo. Este cuadro corresponde a:","o":["S\u00edntomas focales del l\u00f3bulo occipital derecho","S\u00edntomas de hipertensi\u00f3n intracraneal","S\u00edntomas de afectaci\u00f3n del cerebelo","S\u00edntomas de compresi\u00f3n medular"],"c":2,"e":"Los <b>s\u00edntomas de HTIC</b> son cefalea, n\u00e1useas y <b>v\u00f3mitos en escopetazo</b> y <b>edema de papila</b>. Los otros grupos son los generales y los focales. Fuente: diapositivas del tema \u00b7 Manifestaciones cl\u00ednicas"},{"n":"10","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de los siguientes NO aparece como factor de riesgo de los tumores cerebrales primarios?","o":["Exposici\u00f3n a benceno o tolueno","Radiaciones ionizantes","Ser mujer (sexo femenino)","Factores gen\u00e9ticos"],"c":3,"e":"Son m\u00e1s frecuentes en <b>hombres</b> (hombres > mujeres). Qu\u00edmicos (benceno, tolueno\u2026), f\u00edsicos (radiaciones) y gen\u00e9ticos s\u00ed figuran como factores de riesgo. Fuente: diapositivas del tema \u00b7 Factores de riesgo"}],"diag":[{"n":"1","noShuffle":false,"img":null,"q":"Se\u00f1ale cu\u00e1l es una indicaci\u00f3n de la TAC craneal con contraste seg\u00fan el material:","o":["Estudio del tronco y la fosa posterior","Sospecha de hemorragia intratumoral","Localizaci\u00f3n de tractos elocuentes","Metabolismo de amino\u00e1cidos tumoral"],"c":2,"e":"La TAC con contraste sirve para afectaci\u00f3n \u00f3sea o vascular, met\u00e1stasis de base de cr\u00e1neo, <b>emergencias (hemorragia intratumoral)</b> y contraindicaci\u00f3n de RM. Tronco y fosa posterior son terreno de la RM. Fuente: diapositivas del tema \u00b7 Diagn\u00f3stico"},{"n":"2","noShuffle":false,"img":null,"q":"La RM con espectroscopia en los tumores cerebrales estudia, seg\u00fan el material:","o":["La colina y el acetilaspartato","La hemoglobina desoxigenada","El metabolismo de la glucosa cerebral","La integridad de los tractos"],"c":1,"e":"<b>Espectroscopia \u2192 colina y acetilaspartato</b>. La hemoglobina desoxigenada es de la RM funcional; la glucosa, del PET con 18-FDG; los tractos, de la tractograf\u00eda. Fuente: diapositivas del tema \u00b7 Resonancia magn\u00e9tica"},{"n":"3","noShuffle":false,"img":null,"q":"En un paciente con un glioma cerca de \u00e1reas motoras, la tractograf\u00eda se utiliza para:","o":["Medir la captaci\u00f3n de glucosa","Cuantificar la colina del tumor","Localizar los tractos elocuentes","Ver la afectaci\u00f3n \u00f3sea de la base"],"c":3,"e":"La <b>tractograf\u00eda</b> identifica los <b>tractos nerviosos elocuentes</b> cercanos al tumor, desplazados o invadidos, para preservarlos en la cirug\u00eda. Fuente: diapositivas del tema \u00b7 Resonancia magn\u00e9tica"},{"n":"4","noShuffle":false,"img":null,"q":"En el PET de los tumores cerebrales, la 11C-metionina refleja:","o":["El metabolismo gluc\u00eddico","El metabolismo de amino\u00e1cidos","El flujo sangu\u00edneo cerebral regional","La hemoglobina desoxigenada"],"c":2,"e":"PET con <b>18-FDG \u2192 metabolismo gluc\u00eddico</b>; con <b>11C-metionina \u2192 metabolismo de amino\u00e1cidos</b>. Fuente: diapositivas del tema \u00b7 PET"},{"n":"5","noShuffle":false,"img":null,"q":"Mujer de 60 a\u00f1os con cefalea, v\u00f3mitos y edema de papila; el TAC muestra una masa frontal con efecto masa. \u00bfQu\u00e9 prueba est\u00e1 contraindicada?","o":["RM cerebral con gadolinio","Punci\u00f3n lumbar","PET con 18-FDG","Biopsia estereot\u00e1xica"],"c":2,"e":"La <b>punci\u00f3n lumbar est\u00e1 contraindicada si se sospecha HTIC</b>; se reserva para tumores con riesgo de diseminaci\u00f3n por el neuroeje y sospecha de linfoma primario. Fuente: diapositivas del tema \u00b7 Punci\u00f3n lumbar"},{"n":"6","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de los siguientes NO figura entre los factores pron\u00f3sticos de los gliomas en el material?","o":["La edad","El \u00edndice de Karnofsky","El grado de resecci\u00f3n quir\u00fargica","El hemisferio afectado"],"c":4,"e":"Factores pron\u00f3sticos de gliomas: <b>edad, situaci\u00f3n funcional (Karnofsky), grado de resecci\u00f3n</b> y factores moleculares (<b>metilaci\u00f3n de MGMT, 1p/19q</b>), adem\u00e1s del tipo y grado. El lado no aparece. Fuente: diapositivas del tema \u00b7 Factores pron\u00f3sticos"},{"n":"7","noShuffle":false,"img":null,"q":"La radioterapia holocraneal se caracteriza por:","o":["Una sesi\u00f3n \u00fanica con dosis muy alta","Dos campos laterales y opuestos","Haces que se adaptan a la forma del tumor","Uso solo en tumores benignos"],"c":2,"e":"La holocraneal irradia <b>todo el par\u00e9nquima</b> con <b>2 campos laterales y opuestos</b>, en tumores primarios y met\u00e1stasis. La sesi\u00f3n \u00fanica es de la radiocirug\u00eda; los haces que se \u00abadaptan\u00bb a la forma del tumor (pico de Bragg) son los protones. Fuente: diapositivas del tema \u00b7 Radioterapia holocraneal"},{"n":"8","noShuffle":false,"img":null,"q":"Respecto a la radiocirug\u00eda estereot\u00e1xica cerebral, se\u00f1ale la FALSA:","o":["La desarroll\u00f3 Lars Leksell en 1951","Administra altas dosis de radiaci\u00f3n","Se aplica en una sesi\u00f3n \u00fanica","Solo trata lesiones extracraneales"],"c":4,"e":"La radiocirug\u00eda (<b>Leksell, 1951</b>) trata <b>lesiones intracraneales y extracraneales</b> con altas dosis, gran precisi\u00f3n y sesi\u00f3n \u00fanica. Fuente: diapositivas del tema \u00b7 Radiocirug\u00eda estereot\u00e1xica"},{"n":"9","noShuffle":false,"img":null,"q":"\u00bfCu\u00e1l de los siguientes NO es una ventaja de la protonterapia seg\u00fan el material?","o":["Menor dosis integral en ni\u00f1os","Mayor eficacia biol\u00f3gica que los fotones","T\u00e9cnica barata y muy accesible","Menos segundos tumores radioinducidos"],"c":3,"e":"Ventajas: <b>menor dosis integral en ni\u00f1os</b>, <b>menos segundos tumores</b> en largos supervivientes y <b>mayor eficacia biol\u00f3gica</b>. Es una t\u00e9cnica <b>costosa y poco accesible</b>. Fuente: diapositivas del tema \u00b7 Protones"},{"n":"10","noShuffle":false,"img":null,"q":"Ni\u00f1a de 7 a\u00f1os con un meduloblastoma que necesita radioterapia. \u00bfPor qu\u00e9 el material la incluye entre las indicaciones de protones?","o":["Por ser un tumor cerebral pedi\u00e1trico","Por tratarse de un tumor benigno","Por haber recibido radioterapia previa","Por ser un cordoma de base de cr\u00e1neo"],"c":1,"e":"Entre las indicaciones de protones est\u00e1n los <b>tumores cerebrales pedi\u00e1tricos</b> (piloc\u00edticos, ependimomas, <b>meduloblastomas</b>). El meduloblastoma no es benigno ni cordoma. Fuente: diapositivas del tema \u00b7 Protones, indicaciones"}],"glia":[{"n":"1","noShuffle":false,"img":null,"q":"Respecto a la gradaci\u00f3n de la OMS de los tumores gliales, se\u00f1ale la correcta:","o":["El grado I es infiltrante y recidiva a menudo","El grado II es infiltrante, con pocas mitosis","El grado III crece lento y se extirpa entero","El grado IV no presenta \u00e1reas de necrosis tumoral"],"c":2,"e":"<b>Grado II</b>: infiltrante, <b>baja actividad mit\u00f3tica</b>, crece lento pero puede recidivar. El grado I se puede extirpar entero; el III crece r\u00e1pido; el IV tiene <b>necrosis</b> y el peor pron\u00f3stico. Fuente: diapositivas del tema \u00b7 Gradaci\u00f3n OMS"},{"n":"2","noShuffle":false,"img":null,"q":"Ni\u00f1o de 9 a\u00f1os con una lesi\u00f3n qu\u00edstica cerebelosa resecada por completo; la anatom\u00eda patol\u00f3gica informa astrocitoma piloc\u00edtico juvenil. \u00bfCu\u00e1l es la actitud?","o":["Radioterapia adyuvante en todos los casos","Seguimiento, sin radioterapia adyuvante","Temozolomida concomitante con radioterapia","Irradiaci\u00f3n craneoespinal completa"],"c":2,"e":"En el piloc\u00edtico (grado 1): <b>cirug\u00eda siempre que sea posible</b> y <b>no RT salvo</b> cirug\u00eda no factible, recidiva, resto tumoral o persistencia de s\u00edntomas. Supervivencia del 90 % a 5 a\u00f1os. Fuente: diapositivas del tema \u00b7 Astrocitoma piloc\u00edtico juvenil"},{"n":"3","noShuffle":false,"img":null,"q":"La pauta PCV, que con radioterapia es el r\u00e9gimen adyuvante preferente en los gliomas de bajo grado del adulto, incluye:","o":["Platino, ciclofosfamida y vinblastina","Prednisona, carmustina y vincristina","Procarbazina, citarabina y vinorelbina","Procarbazina, lomustina y vincristina"],"c":4,"e":"<b>PCV = procarbazina, lomustina (CCNU) y vincristina</b>. La gu\u00eda NCCN de la diapositiva recuadra \u00abRT + PCV adyuvante (categor\u00eda 1)\u00bb en gliomas de bajo grado. Fuente: diapositivas del tema \u00b7 Gliomas de bajo grado, gu\u00eda NCCN"},{"n":"4","noShuffle":false,"img":null,"q":"Var\u00f3n de 47 a\u00f1os con lesi\u00f3n hemisf\u00e9rica heterog\u00e9nea en RM, con captaci\u00f3n anular de contraste y edema perilesional; la biopsia informa astrocitoma anapl\u00e1sico. El tratamiento indicado es:","o":["Cirug\u00eda sola y seguimiento","Cirug\u00eda + radioterapia + quimioterapia","Radiocirug\u00eda en una sesi\u00f3n \u00fanica","Corticoides y radioterapia holocraneal sola"],"c":2,"e":"Astrocitoma anapl\u00e1sico (grado 3): 45-50 a\u00f1os, hemisferios, captaci\u00f3n anular con edema; <b>tratamiento: cirug\u00eda + RT + QT</b>. Fuente: diapositivas del tema \u00b7 Astrocitoma anapl\u00e1sico"},{"n":"5","noShuffle":false,"img":null,"q":"Respecto al glioblastoma multiforme, se\u00f1ale la FALSA:","o":["Es el glioma m\u00e1s frecuente","Predomina en hombres (3:2)","Su pico de incidencia es a los 50-60 a\u00f1os","Rara vez muestra necrosis o edema"],"c":4,"e":"El glioblastoma es una lesi\u00f3n heterog\u00e9nea con <b>efecto masa, gran edema, realce anular, \u00e1reas de necrosis y hemorragias</b>. Es el glioma m\u00e1s frecuente, con pico a los 50-60 a\u00f1os y H:M 3:2. Fuente: diapositivas del tema \u00b7 Glioblastoma multiforme"},{"n":"6","noShuffle":false,"img":null,"q":"Var\u00f3n de 62 a\u00f1os con un glioblastoma resecado. El esquema Stupp consiste en:","o":["RT con temozolomida y luego temozolomida 6 meses","Bevacizumab e irinotec\u00e1n con radioterapia holocraneal","Radiocirug\u00eda y temozolomida durante 12 ciclos","PCV adyuvante tras radioterapia conformada"],"c":1,"e":"<b>Stupp</b>: cirug\u00eda (si es factible) y despu\u00e9s <b>QT con temozolomida + radioterapia</b>, seguida de <b>temozolomida adyuvante 6 meses</b>. Fuente: diapositivas del tema \u00b7 Glioblastoma, tratamiento"},{"n":"7","noShuffle":false,"img":null,"q":"En el glioblastoma, la metilaci\u00f3n del gen MGMT se asocia a:","o":["Peor respuesta a la radioterapia","Mejor respuesta a la temozolomida","Mayor siembra por el LCR","Uso de bevacizumab en primera l\u00ednea"],"c":2,"e":"Los pacientes con <b>metilaci\u00f3n del gen MGMT responden mejor a la temozolomida</b>; la metilaci\u00f3n de MGMT es adem\u00e1s un factor pron\u00f3stico de los gliomas. Fuente: diapositivas del tema \u00b7 Glioblastoma, tratamiento"},{"n":"8","noShuffle":false,"img":null,"q":"Respecto al bevacizumab en el glioblastoma, se\u00f1ale la FALSA:","o":["Tiene efecto antiangiog\u00e9nico","Disminuye el edema cerebral","Potencia el efecto de la temozolomida","Aumenta la supervivencia global"],"c":4,"e":"El bevacizumab es antiangiog\u00e9nico, <b>disminuye el edema</b> y potencia la RT, la temozolomida y el irinotec\u00e1n, pero <b>no aporta beneficio en la supervivencia global</b>. Fuente: diapositivas del tema \u00b7 Bevacizumab"},{"n":"9","noShuffle":false,"img":null,"q":"Tumor glial frontal con calcificaciones, \u00e1reas qu\u00edsticas y hemorr\u00e1gicas, que puede no captar contraste. Si presenta deleci\u00f3n o translocaci\u00f3n de 1p y 19q, esto implica:","o":["Peor pron\u00f3stico y m\u00e1s resistencia","Mejor pron\u00f3stico y mejor respuesta","Mayor riesgo de siembra por el LCR","Transformaci\u00f3n precoz a glioblastoma"],"c":2,"e":"Es un <b>oligodendroglioma</b> (frontal, calcificaciones). La <b>deleci\u00f3n o translocaci\u00f3n 1p/19q</b> (50 %) da <b>mejor pron\u00f3stico y mejor respuesta</b> a los tratamientos. Fuente: diapositivas del tema \u00b7 Oligodendrogliomas"},{"n":"10","noShuffle":false,"img":null,"q":"Respecto a los ependimomas, se\u00f1ale la correcta:","o":["Son t\u00edpicos de la infancia y del IV ventr\u00edculo","Derivan de los oligodendrocitos del l\u00f3bulo frontal","No diseminan nunca por el l\u00edquido cefalorraqu\u00eddeo","Se tratan solo con radiocirug\u00eda en sesi\u00f3n \u00fanica"],"c":1,"e":"Los ependimomas nacen de la <b>capa de c\u00e9lulas ependimarias</b> de los ventr\u00edculos y del canal ependimario; son de <b>edad infantil</b> y del <b>IV ventr\u00edculo</b>, figuran entre los que <b>diseminan por el LCR</b> y se tratan con <b>cirug\u00eda \u00b1 RT y/o QT</b>. Los oligodendrogliomas son los frontales. Fuente: diapositivas del tema \u00b7 Ependimomas"},{"n":"11","noShuffle":false,"img":null,"q":"Respecto al meduloblastoma, se\u00f1ale la correcta:","o":["Asienta en el vermis cerebeloso y el IV ventr\u00edculo","Es m\u00e1s frecuente en mujeres de 50-60 a\u00f1os","No disemina por el espacio subaracnoideo","Su localizaci\u00f3n t\u00edpica es el l\u00f3bulo frontal izquierdo"],"c":1,"e":"Meduloblastoma: tumor embrionario m\u00e1s frecuente del SNC, dos primeras d\u00e9cadas, varones, <b>vermis cerebeloso y IV ventr\u00edculo</b>, con tendencia a extenderse por el <b>espacio subaracnoideo (30-40 %)</b> y el neuroeje. Fuente: diapositivas del tema \u00b7 Meduloblastoma"},{"n":"12","noShuffle":false,"img":null,"q":"Ni\u00f1o de 6 a\u00f1os con un meduloblastoma resecado. \u00bfQu\u00e9 t\u00e9cnica de radioterapia se emplea por su tendencia a sembrar el neuroeje?","o":["Radiocirug\u00eda en una sesi\u00f3n \u00fanica","Irradiaci\u00f3n craneoespinal completa","Holocraneal que preserva el hipocampo","Conformada sobre el lecho quir\u00fargico"],"c":2,"e":"Por la diseminaci\u00f3n por LCR, en el meduloblastoma se hace <b>irradiaci\u00f3n craneoespinal</b> (volumen holocraneal + espinal superior + espinal inferior), adem\u00e1s de QT. Fuente: diapositivas del tema \u00b7 Meduloblastoma, tratamiento"}],"otros":[{"n":"1","noShuffle":false,"img":null,"q":"Respecto a los meningiomas, se\u00f1ale la FALSA:","o":["Crecen desde c\u00e9lulas aracnoideas o meningoteliales","Su incidencia disminuye con la edad","En mujeres se asocian a c\u00e1ncer de mama","Suelen dar cefaleas localizadas"],"c":2,"e":"La incidencia del meningioma <b>aumenta con la edad</b>. Nace de c\u00e9lulas aracnoideas o meningoteliales, en mujeres se asocia a c\u00e1ncer de mama y receptores hormonales, y da <b>cefaleas localizadas</b>. Fuente: diapositivas del tema \u00b7 Meningiomas"},{"n":"2","noShuffle":true,"img":null,"q":"La ex\u00e9resis macrosc\u00f3pica completa de un meningioma con coagulaci\u00f3n de la duramadre afecta corresponde, en la escala de Simpson, al grado:","o":["I","II","III","IV"],"c":2,"e":"<b>Simpson II</b>: ex\u00e9resis completa con <b>coagulaci\u00f3n</b> de la duramadre (recurrencia 19 %). El I reseca duramadre y hueso (9 %); el III no trata la duramadre (29 %); el IV es subtotal (44 %). Fuente: diapositivas del tema \u00b7 Grados de Simpson"},{"n":"3","noShuffle":false,"img":null,"q":"Ni\u00f1o de 10 a\u00f1os con cefalea, v\u00f3mitos y alteraciones visuales; la RM muestra una masa supraselar. El tumor supraselar m\u00e1s frecuente en ni\u00f1os deriva de:","o":["Restos de la bolsa de Rathke","C\u00e9lulas de la notocorda primitiva","C\u00e9lulas de Schwann","C\u00e9lulas ependimarias"],"c":1,"e":"El <b>craneofaringioma</b> es el <b>tumor supraselar m\u00e1s frecuente en ni\u00f1os</b> y deriva de <b>restos de la bolsa de Rathke</b>; da alteraciones visuales y d\u00e9ficit de pares II-VI. Fuente: diapositivas del tema \u00b7 Craneofaringiomas"},{"n":"4","noShuffle":false,"img":null,"q":"Respecto a los adenomas hipofisarios, se\u00f1ale la correcta:","o":["La mayor\u00eda son no funcionantes","El m\u00e1s frecuente es el prolactinoma","Los secretores de ACTH son los m\u00e1s comunes","Se operan por craneotom\u00eda frontal"],"c":2,"e":"Son <b>funcionantes en el 75 %</b>; el <b>prolactinoma (30 %)</b> supera a los productores de GH (25 %); ACTH y TSH son raros. Cirug\u00eda: <b>resecci\u00f3n transesfenoidal</b> \u00b1 RT. Fuente: diapositivas del tema \u00b7 Adenomas de hip\u00f3fisis"},{"n":"5","noShuffle":false,"img":null,"q":"Mujer de 25 a\u00f1os con hipoacusia bilateral y neurinomas del ac\u00fastico en ambos \u00e1ngulos pontocerebelosos. \u00bfQu\u00e9 entidad sugiere?","o":["Neurofibromatosis tipo I","Esclerosis tuberosa","Neurofibromatosis tipo II","S\u00edndrome de Li-Fraumeni (P53)"],"c":3,"e":"Los schwannomas asientan en el <b>\u00e1ngulo pontocerebeloso</b>; si son <b>bilaterales \u2192 neurofibromatosis tipo II</b>. El neurinoma bilateral (NF2) es adem\u00e1s indicaci\u00f3n de radiocirug\u00eda. Fuente: diapositivas del tema \u00b7 Schwannomas y neurinomas del ac\u00fastico"},{"n":"6","noShuffle":false,"img":null,"q":"Mujer de 58 a\u00f1os con c\u00e1ncer de mama que presenta dorsalgia y debilidad en las piernas de horas de evoluci\u00f3n por una met\u00e1stasis vertebral con compresi\u00f3n medular. Se\u00f1ale la correcta:","o":["Es una urgencia de oncolog\u00eda radioter\u00e1pica","Se puede diferir el tratamiento varias semanas","El da\u00f1o neurol\u00f3gico es siempre reversible","Lo indicado es una punci\u00f3n lumbar"],"c":1,"e":"La compresi\u00f3n medular metast\u00e1sica (mama, pulm\u00f3n, mieloma, linfoma) es una <b>urgencia de oncolog\u00eda radioter\u00e1pica</b>: en <b>72 horas</b> el da\u00f1o es <b>irreversible</b>. Fuente: diapositivas del tema \u00b7 Tumores espinales"},{"n":"7","noShuffle":false,"img":null,"q":"En la carcinomatosis men\u00edngea, los f\u00e1rmacos que el material indica por v\u00eda intratecal son:","o":["Metotrexato y citarabina","Temozolomida y lomustina","Bevacizumab e irinotec\u00e1n","Vincristina y etop\u00f3sido oral"],"c":1,"e":"Tratamiento de la carcinomatosis men\u00edngea: esteroides (dexametasona), radioterapia y QT <b>intratecal por punci\u00f3n lumbar con metotrexato y citarabina</b>. Fuente: diapositivas del tema \u00b7 Carcinomatosis men\u00edngea"},{"n":"8","noShuffle":false,"img":null,"q":"Respecto al linfoma cerebral primario del SNC, se\u00f1ale la correcta:","o":["Se asocia a estados de inmunodeficiencia","Es siempre una lesi\u00f3n \u00fanica y bien delimitada","La citolog\u00eda del LCR nunca es positiva","Predomina en la segunda d\u00e9cada"],"c":1,"e":"El linfoma cerebral primario se asocia a <b>inmunodeficiencia</b> (cong\u00e9nita, adquirida o yatrog\u00e9nica), aparece en la 6.\u00aa-7.\u00aa d\u00e9cada, es <b>multifocal en el 40 %</b> y tiene <b>citolog\u00eda positiva en el 42 %</b>. Fuente: diapositivas del tema \u00b7 Linfoma cerebral primario"}]};
+var IMGS=/*__IMGS_JSON__*/{};
+
+/* ── Estado ── */
+var canSave=typeof localStorage!=='undefined';
+var saved={};try{saved=JSON.parse(localStorage.getItem(KEY)||'null')||{};}catch(e){}
+var state   =saved.state   ||{};
+var qOrd    =saved.qOrd    ||{};
+var oOrd    =saved.oOrd    ||{};
+var starred =saved.starred ||{};
+var failHist=saved.failHist||{};  // {qid: count} entre sesiones
+var darkMode=saved.dark    ||false;
+var timerSec=saved.timerSec||0;   // segundos configurados
+var SECS=Object.keys(META.secciones||{});
+var fFailed={};
+var qIdx={};           // {sec: {n: q}}
+var qNums={};          // {sec: {n: numero_correlativo}}
+var allOrder=null;     // orden mezclado inter-secciones para pestaña Todos
+var activeCid=null;
+var currentTab='all';
+var currentMode='test';
+var saveTimer=null;
+var starsFilter=false;
+var statsVisible=false;
+var timerRunning=false;
+var timerRemaining=timerSec;
+var timerInterval=null;
+
+/* ── INIT ── */
+(function init(){
+  SECS.forEach(function(s){fFailed[s]=false;});
+  injectSecCSS();
+  buildHeader();
+  buildTabs();
+  buildPanels();
+  buildIdx();
+  buildNums();
+  buildAllOrder();
+  SECS.forEach(render);
+  renderAll();
+  updateScores();
+  updateProg();
+  applyTheme();
+  initTimer();
+  setBadge(canSave?'Guardado':'Sin guardado',canSave?'ok':'warn');
+  document.addEventListener('keydown',handleKey);
+  var si=document.getElementById('search-input');
+  if(si)si.addEventListener('keydown',function(e){if(e.key==='Escape'){clearSearch();}});
+})();
+
+/* ── CSS dinámico ── */
+function injectSecCSS(){
+  var css='';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{};
+    var c=m.color||'#1a56db',cd=m.colorDim||'#e8f0fe';
+    css+='.tab.t-'+s+'.on{background:'+cd+';color:'+c+';border-color:'+c+'}\n';
+    css+='.ph.s-'+s+'{border-left:4px solid '+c+'}\n';
+    // Variables CSS por sección para el badge coloreado
+    css+='#panel-'+s+' .qnum.sec-colored{background:'+cd+';color:'+c+'}\n';
+  });
+  var st=document.createElement('style');st.textContent=css;document.head.appendChild(st);
+}
+
+/* ── Header ── */
+function buildHeader(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var t=document.getElementById('h-tit');if(t)t.textContent=META.titulo||'Banco MIR';
+  var pt=document.getElementById('page-title');if(pt)pt.textContent=META.titulo||'Banco MIR';
+  var m=document.getElementById('h-meta');
+  if(m){var p=[];if(total)p.push(total+' preguntas');if(META.examen)p.push(META.examen);m.textContent=p.join(' · ');}
+  var d=document.getElementById('ph-gdesc');if(d)d.textContent=META.subtitulo||'';
+  var r=document.getElementById('sc-rem-all');if(r)r.textContent='○ '+total;
+}
+
+/* ── Tabs ── */
+function buildTabs(){
+  var total=SECS.reduce(function(a,s){return a+(D[s]?D[s].length:0);},0);
+  var h='<button class="tab t-all on" onclick="showTab(\'all\')">📋 Todos ('+total+')</button>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<button class="tab t-'+s+'" onclick="showTab(\''+s+'\')">'+(m.emoji?m.emoji+' ':'')+escH(m.label||s)+' ('+cnt+')</button>';
+  });
+  var w=document.getElementById('tabs-wrap');if(w)w.innerHTML=h;
+}
+
+/* ── Paneles ── */
+function buildPanels(){
+  var h='<div id="panel-all" class="sec-panel visible"><div id="qs-all"></div><div class="no-results" id="nr-all">No se encontraron preguntas</div></div>';
+  SECS.forEach(function(s){
+    var m=META.secciones[s]||{},cnt=D[s]?D[s].length:0;
+    h+='<div id="panel-'+s+'" class="sec-panel">';
+    h+='<div class="ph s-'+s+'">';
+    h+='<div class="ph-left">';
+    h+='<span class="ph-label">'+(m.emoji?m.emoji+'&nbsp;':'')+escH(m.label||s)+'</span>';
+    if(m.desc)h+='<span class="ph-desc">'+escH(m.desc)+'</span>';
+    h+='<div class="score-row">';
+    h+='<span class="sc ok" id="sc-ok-'+s+'">✓ 0</span>';
+    h+='<span class="sc ko" id="sc-ko-'+s+'">✗ 0</span>';
+    h+='<span class="sc rem" id="sc-rem-'+s+'">○ '+cnt+'</span>';
+    h+='</div></div>';
+    h+='<button class="fbtn" id="fb-'+s+'" onclick="toggleFail(\''+s+'\')">Solo falladas</button>';
+    h+='</div>';
+    h+='<div id="qs-'+s+'"></div>';
+    h+='<div class="no-failed" id="nf-'+s+'">Aún no has fallado ninguna 🎉</div>';
+    h+='<div class="no-results" id="nr-'+s+'">No se encontraron preguntas</div>';
+    h+='<div class="sec-actions">';
+    h+='<button class="reset-btn" onclick="resetSec(\''+s+'\')">↺ Reiniciar</button>';
+    h+='<button class="nota-btn" onclick="calcNota(\''+s+'\')">✎ Calcular nota</button>';
+    h+='</div>';
+    h+='<div class="nota-box" id="nota-'+s+'"></div>';
+    h+='</div>';
+  });
+  var pw=document.getElementById('panels-wrap');if(pw)pw.innerHTML=h;
+}
+
+/* ── Índice O(1) + numeración fija ── */
+function buildIdx(){
+  SECS.forEach(function(s){
+    qIdx[s]={};
+    if(D[s])D[s].forEach(function(q){qIdx[s][q.n]=q;});
+  });
+}
+function buildNums(){
+  // Numeración correlativa fija: 1, 2, 3... por sección
+  SECS.forEach(function(s){
+    qNums[s]={};
+    if(D[s])D[s].forEach(function(q,i){qNums[s][q.n]=i+1;});
+  });
+}
+function getNum(sec,n){return qNums[sec]?qNums[sec][n]||n:n;}
+function findQ(qid){
+  var d=qid.indexOf('-'),s=qid.substring(0,d),n=qid.substring(d+1);
+  return(qIdx[s]&&qIdx[s][n])||null;
+}
+function getSecFromQid(qid){return qid.substring(0,qid.indexOf('-'));}
+function getNFromQid(qid){return qid.substring(qid.indexOf('-')+1);}
+
+/* ── Orden inter-secciones para Todos ── */
+function buildAllOrder(){
+  var all=[];
+  SECS.forEach(function(s){if(D[s])D[s].forEach(function(q){all.push({sec:s,n:q.n});});});
+  if(!qOrd['__all__'])qOrd['__all__']=shuffle(all.map(function(x){return x.sec+'|'+x.n;}));
+  allOrder=qOrd['__all__'].map(function(key){
+    var p=key.indexOf('|'),sec=key.substring(0,p),n=key.substring(p+1);
+    return{sec:sec,n:n,q:qIdx[sec]&&qIdx[sec][n]};
+  }).filter(function(x){return x.q;});
+}
+
+/* ── Utilidades ── */
+function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function shuffle(a){var b=a.slice();for(var i=b.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=b[i];b[i]=b[j];b[j]=t;}return b;}
+function getQOrd(s,qs){if(!qOrd[s])qOrd[s]=shuffle(qs.map(function(q){return q.n;}));return qOrd[s];}
+function getOOrd(qid){
+  var q=findQ(qid);var n=q&&q.o?q.o.length:4;
+  if(q&&q.noShuffle){var a=[];for(var i=0;i<n;i++)a.push(i);return a;}
+  if(!oOrd[qid]){var a=[];for(var i=0;i<n;i++)a.push(i);oOrd[qid]=shuffle(a);}
+  return oOrd[qid];
+}
+function imgHtml(key){
+  if(!IMGS[key]){console.warn('IMGS: clave no encontrada →',key);return'';}
+  return'<div class="clinimg-wrap"><img src="'+IMGS[key]+'" class="clinimg" alt="Imagen clínica" loading="lazy"><div class="clinimg-cap">Imagen clínica</div></div>';
+}
+
+/* ── localStorage debounce ── */
+function saveLocal(){
+  if(!canSave)return;
+  if(saveTimer)clearTimeout(saveTimer);
+  saveTimer=setTimeout(function(){
+    try{
+      localStorage.setItem(KEY,JSON.stringify({state:state,qOrd:qOrd,oOrd:oOrd,starred:starred,failHist:failHist,dark:darkMode,timerSec:timerSec}));
+      setBadge('Guardado','ok');
+    }catch(e){setBadge('Sin guardado','warn');}
+  },300);
+}
+function setBadge(t,c){var b=document.getElementById('save-badge');if(b){b.textContent=t;b.className='sbadge '+c;}}
+
+/* ── Construcción de tarjeta ── */
+function buildCard(q,sec,inAll,allPos){
+  var qid=sec+'-'+q.n;
+  var cid=(inAll?'A-':'S-')+qid;
+  var num=inAll?(allPos+1):getNum(sec,q.n);
+  var oo=getOOrd(qid);
+  var sOpts=oo.map(function(i){return q.o[i];});
+  var nc=oo.indexOf(q.c-1)+1;
+  var ans=state[qid];
+  var cc=ans?(ans.r?' answered-ok':' answered-wrong'):'';
+  var badgeCls='qnum'+(inAll?'':' sec-colored');
+  var h='<div class="qcard s-'+sec+cc+'" id="card-'+cid+'">';
+  h+='<div class="qhead" id="h-'+cid+'" data-cid="'+cid+'" data-qid="'+qid+'" data-sec="'+sec+'" onclick="tog(this.dataset.cid)">';
+  h+='<span class="'+badgeCls+'">'+num+'</span>';
+  h+='<span class="qtxt">'+q.q+(ans?'<span class="atag '+(ans.r?'ok':'ko')+'">'+(ans.r?'✓ acertada':'✗ fallada')+'</span>':'')+'</span>';
+  h+='<button class="star-btn'+(starred[qid]?' on':'')+'\" id="star-'+cid+'" onclick="event.stopPropagation();toggleStar(\''+qid+'\')" title="Marcar (S)"><span class="si">\u2606</span><span class="sf">\u2605</span></button>';
+  h+='<span class="chev">▾</span>';
+  h+='</div>';
+  h+='<div class="qbody" id="b-'+cid+'">';
+  if(q.img)h+=imgHtml(q.img);
+  if(currentMode==='quick'){
+    h+='<div class="quick-card"><div class="quick-rc">✓ Respuesta correcta: opción '+nc+' — '+escH(q.o[q.c-1])+'</div><div class="expbox">'+q.e+'</div></div>';
+  } else {
+    h+='<ul class="opts" id="opts-'+cid+'">';
+    h+=sOpts.map(function(o,i){
+      var p=i+1,oc='opt';
+      if(ans){oc+=' done';if(p===nc)oc+=' correct';else if(p===ans.c&&!ans.r)oc+=' wrong';}
+      return'<li class="'+oc+'" data-qid="'+qid+'" data-pos="'+p+'" data-sec="'+sec+'" onclick="answer(this.dataset.qid,+this.dataset.pos,this.dataset.sec)"><span class="onum">'+p+'.</span><span>'+o+'</span></li>';
+    }).join('');
+    h+='</ul>';
+    if(ans){h+='<div class="expbox"><span class="et">'+(ans.r?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e+'</div>';}
+  }
+  h+='</div></div>';
+  return h;
+}
+
+/* ── Render sección ── */
+function render(sec){
+  var qs=D[sec];if(!qs)return;
+  var ord=getQOrd(sec,qs);
+  var sorted=ord.map(function(n){return qIdx[sec]&&qIdx[sec][n];}).filter(Boolean);
+  var el=document.getElementById('qs-'+sec);
+  if(el)el.innerHTML=sorted.map(function(q){return buildCard(q,sec,false,0);}).join('');
+}
+
+/* ── Render Todos (mezcla inter-secciones) ── */
+function renderAll(){
+  if(!allOrder)buildAllOrder();
+  var el=document.getElementById('qs-all');
+  if(el)el.innerHTML=allOrder.map(function(x,i){return buildCard(x.q,x.sec,true,i);}).join('');
+}
+
+/* ── Toggle open/close ── */
+function tog(cid){
+  var b=document.getElementById('b-'+cid),h=document.getElementById('h-'+cid);
+  if(!b||!h)return;
+  var opening=!b.classList.contains('open');
+  b.classList.toggle('open');h.classList.toggle('open');
+  if(opening){
+    if(activeCid&&activeCid!==cid){var pc=document.getElementById('card-'+activeCid);if(pc)pc.classList.remove('kb-focus');}
+    activeCid=cid;
+    var card=document.getElementById('card-'+cid);if(card)card.classList.add('kb-focus');
+  }else{
+    if(activeCid===cid){activeCid=null;var card=document.getElementById('card-'+cid);if(card)card.classList.remove('kb-focus');}
+  }
+}
+
+/* ── Responder ── */
+function answer(qid,pos,sec){
+  if(state[qid])return;
+  var q=findQ(qid);if(!q)return;
+  var oo=getOOrd(qid);
+  var nc=oo.indexOf(q.c-1)+1;
+  var isRight=pos===nc;
+  state[qid]={c:pos,r:isRight};
+  // Registro de errores
+  if(!isRight){failHist[qid]=(failHist[qid]||0)+1;}
+  saveLocal();
+  // Actualizar todas las instancias del card (panel sección + panel all)
+  // Actualizar opciones en todas las instancias del card
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var optsEl=document.querySelectorAll('#opts-'+cid+' .opt');
+    optsEl.forEach(function(el,i){
+      el.classList.add('done');
+      if(i+1===nc)el.classList.add('correct');
+      else if(i+1===pos&&!isRight)el.classList.add('wrong');
+    });
+    var bdy=document.getElementById('b-'+cid);
+    if(bdy){
+      var eb=bdy.querySelector('.expbox');
+      if(!eb){eb=document.createElement('div');eb.className='expbox';bdy.appendChild(eb);}
+      eb.innerHTML='<span class="et">'+(isRight?'✓ Correcto':'✗ Incorrecto — Respuesta correcta: opción '+nc)+'</span>'+q.e;
+    }
+    var hd=document.getElementById('h-'+cid);
+    if(hd){var qt=hd.querySelector('.qtxt');if(qt&&!qt.querySelector('.atag')){var at=document.createElement('span');at.className='atag '+(isRight?'ok':'ko');at.innerHTML=isRight?'✓ acertada':'✗ fallada';qt.appendChild(at);}}
+    var card=document.getElementById('card-'+cid);
+    if(card)card.classList.add(isRight?'answered-ok':'answered-wrong');
+  });
+  updateScores();updateProg();
+  if(fFailed[sec]&&isRight){
+    var fcard=document.getElementById('card-S-'+qid);
+    if(fcard)fcard.style.display='none';
+    refreshNF(sec);
+  }
+}
+
+/* ── Estrella ── */
+function toggleStar(qid){
+  starred[qid]=!starred[qid];
+  ['A-'+qid,'S-'+qid].forEach(function(cid){
+    var btn=document.getElementById('star-'+cid);
+    if(btn)btn.classList.toggle('on',starred[qid]);
+  });
+  saveLocal();
+}
+function filterStarred(){
+  starsFilter=!starsFilter;
+  var btn=document.getElementById('btn-stars');
+  if(btn){btn.style.background=starsFilter?'#fef3c7':'';btn.style.fontWeight=starsFilter?'700':'';}
+  document.querySelectorAll('.qcard').forEach(function(card){
+    if(starsFilter){
+      var hd=card.querySelector('.qhead');
+      var qid=hd?hd.dataset.qid:'';
+      card.style.display=starred[qid]?'':'none';
+    }else{card.style.display='';}
+  });
+}
+
+/* ── Filtro falladas ── */
+function refreshNF(sec){
+  var c=document.getElementById('qs-'+sec);if(!c||!fFailed[sec])return;
+  var n=c.querySelectorAll('.qcard.answered-wrong').length;
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',n===0);
+}
+function toggleFail(sec){
+  fFailed[sec]=!fFailed[sec];
+  var btn=document.getElementById('fb-'+sec);
+  if(btn){btn.classList.toggle('on',fFailed[sec]);btn.textContent=fFailed[sec]?'← Ver todas':'Solo falladas';}
+  var c=document.getElementById('qs-'+sec);if(!c)return;
+  var nf=0;
+  c.querySelectorAll('.qcard').forEach(function(card){
+    if(fFailed[sec]){var show=card.classList.contains('answered-wrong');card.style.display=show?'':'none';if(show)nf++;}
+    else{card.style.display='';}
+  });
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.toggle('show',fFailed[sec]&&nf===0);
+}
+
+/* ── Scores y progreso ── */
+function updateScores(){
+  var tok=0,tok2=0,tok3=0;
+  SECS.forEach(function(sec){
+    var ok=0,ko=0;
+    if(D[sec])D[sec].forEach(function(q){var a=state[sec+'-'+q.n];if(a){if(a.r)ok++;else ko++;}});
+    var tot=D[sec]?D[sec].length:0,rem=tot-ok-ko;
+    tok+=ok;tok2+=ko;tok3+=rem;
+    var eok=document.getElementById('sc-ok-'+sec),eko=document.getElementById('sc-ko-'+sec),erm=document.getElementById('sc-rem-'+sec);
+    if(eok)eok.textContent='✓ '+ok;if(eko)eko.textContent='✗ '+ko;if(erm)erm.textContent='○ '+rem;
+  });
+  var eok=document.getElementById('sc-ok-all'),eko=document.getElementById('sc-ko-all'),erm=document.getElementById('sc-rem-all');
+  if(eok)eok.textContent='✓ '+tok;if(eko)eko.textContent='✗ '+tok2;if(erm)erm.textContent='○ '+tok3;
+}
+function updateProg(){
+  var total=0,done=Object.keys(state).length;
+  SECS.forEach(function(s){if(D[s])total+=D[s].length;});
+  var pct=total>0?Math.round(done/total*100):0;
+  var bar=document.getElementById('prog-bar');if(bar)bar.style.width=pct+'%';
+}
+
+/* ── Tabs ── */
+function showTab(t){
+  currentTab=t;
+  document.querySelectorAll('.tab').forEach(function(b){b.classList.remove('on');});
+  var tb=document.querySelector('.tab.t-'+t);if(tb)tb.classList.add('on');
+  var mc=document.getElementById('main-cont');if(mc)mc.setAttribute('data-tab',t);
+  var panelAll=document.getElementById('panel-all');
+  if(panelAll)panelAll.classList.toggle('visible',t==='all');
+  SECS.forEach(function(s){
+    var p=document.getElementById('panel-'+s);
+    if(p)p.classList.toggle('visible',t===s);
+  });
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  clearSearch();
+}
+
+/* ── Reset ── */
+function resetSec(sec){
+  if(D[sec])D[sec].forEach(function(q){var qid=sec+'-'+q.n;delete state[qid];delete oOrd[qid];});
+  delete qOrd[sec];fFailed[sec]=false;activeCid=null;
+  var btn=document.getElementById('fb-'+sec);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+  var nb=document.getElementById('nota-'+sec);if(nb){nb.style.display='none';nb.className='nota-box';}
+  saveLocal();render(sec);
+  var m=document.getElementById('nf-'+sec);if(m)m.classList.remove('show');
+  updateScores();updateProg();
+  // Reconstruir panel all para reflejar cambios
+  buildAllOrder();renderAll();
+}
+function resetAll(){
+  Object.keys(state).forEach(function(k){delete state[k];});
+  Object.keys(oOrd).forEach(function(k){delete oOrd[k];});
+  Object.keys(qOrd).forEach(function(k){delete qOrd[k];});
+  activeCid=null;starsFilter=false;allOrder=null;
+  var bs=document.getElementById('btn-stars');if(bs){bs.style.background='';bs.style.fontWeight='';}
+  SECS.forEach(function(s){
+    fFailed[s]=false;
+    var btn=document.getElementById('fb-'+s);if(btn){btn.classList.remove('on');btn.textContent='Solo falladas';}
+    var nb=document.getElementById('nota-'+s);if(nb){nb.style.display='none';nb.className='nota-box';}
+  });
+  saveLocal();
+  SECS.forEach(render);
+  buildAllOrder();renderAll();
+  var gnb=document.getElementById('nota-all');if(gnb){gnb.style.display='none';gnb.className='global-nota-box';}
+  updateScores();updateProg();
+}
+
+/* ── Nota y revisión ── */
+function buildRevList(sec){
+  var qs=D[sec];if(!qs)return'';
+  var failed=qs.filter(function(q){var a=state[sec+'-'+q.n];return a&&!a.r;});
+  if(!failed.length)return'';
+  var html='<div class="review-list"><div class="review-title">📋 '+failed.length+' pregunta'+(failed.length>1?'s':'')+' fallada'+(failed.length>1?'s':'')+' — repasa aquí:</div>';
+  failed.forEach(function(q){
+    var qid=sec+'-'+q.n;var oo=getOOrd(qid);var nc=oo.indexOf(q.c-1)+1;
+    html+='<details class="review-item"><summary><span><b>'+getNum(sec,q.n)+'.</b> '+q.q+'</span></summary>';
+    html+='<div class="review-body"><div class="review-ans">✓ Opción '+nc+': '+escH(q.o[q.c-1]||'')+'</div>';
+    html+='<div class="expbox">'+q.e+'</div></div></details>';
+  });
+  return html+'</div>';
+}
+function calcNota(sec){
+  var qs=D[sec];if(!qs)return;
+  var total=qs.length,ok=0,ko=0,skip=0;
+  qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-'+sec);if(!box)return;
+  box.className='nota-box '+(pass?'pass':'fail');
+  box.innerHTML='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>'
+    +buildRevList(sec);
+  box.style.display='block';
+}
+function calcNotaAll(){
+  var total=0,ok=0,ko=0,skip=0;
+  SECS.forEach(function(sec){
+    var qs=D[sec];if(!qs)return;
+    total+=qs.length;
+    qs.forEach(function(q){var a=state[sec+'-'+q.n];if(!a)skip++;else if(a.r)ok++;else ko++;});
+  });
+  var nota=Math.max(0,(ok-ko/3)/total*10),str=nota.toFixed(2),pass=nota>=5;
+  var box=document.getElementById('nota-all');if(!box)return;
+  box.className='global-nota-box '+(pass?'pass':'fail');
+  var html='<span class="nota-score">'+(pass?'✓':'✗')+' '+str+' / 10 (global)</span>'
+    +'<div class="nota-detail">Aciertos: '+ok+' | Fallos: '+ko+' | Sin responder: '+skip+'<br>'
+    +'('+ok+' − '+ko+'/3) / '+total+' × 10 = '+str+'</div>';
+  SECS.forEach(function(sec){
+    var rv=buildRevList(sec);
+    if(rv){var m=META.secciones[sec]||{};html+='<div class="review-sec-label">'+(m.emoji?m.emoji+' ':'')+escH(m.label||sec)+'</div>'+rv;}
+  });
+  box.innerHTML=html;box.style.display='block';
+}
+
+/* ── Estadísticas de errores ── */
+function toggleStats(){
+  statsVisible=!statsVisible;
+  var btn=document.getElementById('btn-stats');
+  if(btn){btn.style.background=statsVisible?'var(--ko-bg)':'';btn.style.color=statsVisible?'var(--ko-t)':'';}
+  var box=document.getElementById('stats-global');
+  if(!box)return;
+  if(!statsVisible){box.classList.remove('show');return;}
+  var entries=Object.entries(failHist).filter(function(e){return e[1]>0;});
+  if(!entries.length){box.innerHTML='<div class="stats-title">📊 Sin errores registrados todavía</div>';box.classList.add('show');return;}
+  entries.sort(function(a,b){return b[1]-a[1];});
+  var top=entries.slice(0,10);
+  var maxV=top[0][1];
+  var html='<div class="stats-title">📊 Preguntas más falladas (acumulado entre sesiones)</div>';
+  top.forEach(function(e,i){
+    var qid=e[0],count=e[1];
+    var q=findQ(qid);if(!q)return;
+    var sec=getSecFromQid(qid),n=getNFromQid(qid);
+    var m=META.secciones[sec]||{};
+    var pct=Math.round(count/maxV*100);
+    html+='<div class="stats-item">';
+    html+='<span class="stats-n" style="min-width:18px;color:var(--ko-t);font-weight:700">'+(i+1)+'.</span>';
+    html+='<span class="stats-q">'+(m.emoji?m.emoji+' ':'')+getNum(sec,n)+'. '+q.q.substring(0,60)+(q.q.length>60?'…':'')+'</span>';
+    html+='<div class="stats-bar-wrap"><div class="stats-bar" style="width:'+pct+'%"></div></div>';
+    html+='<span class="stats-n">'+count+'✗</span>';
+    html+='</div>';
+  });
+  box.innerHTML=html;box.classList.add('show');
+}
+
+/* ── Buscador ── */
+function onSearch(val){
+  var v=val.trim().toLowerCase();
+  var clr=document.getElementById('search-clear');
+  var cnt=document.getElementById('search-count');
+  if(clr)clr.style.display=v?'block':'none';
+  var found=0,total=0;
+  document.querySelectorAll('.qcard').forEach(function(card){
+    total++;
+    if(!v){card.classList.remove('search-hidden');found++;}
+    else{
+      var qtxt=card.querySelector('.qtxt');
+      var match=qtxt&&qtxt.textContent.toLowerCase().indexOf(v)!==-1;
+      card.classList.toggle('search-hidden',!match);
+      if(match)found++;
+    }
+  });
+  if(cnt){
+    if(v){cnt.textContent=found+' de '+total+' preguntas';cnt.style.display='block';}
+    else{cnt.style.display='none';}
+  }
+  // Mostrar "sin resultados" por panel
+  ['all'].concat(SECS).forEach(function(s){
+    var panel=document.getElementById('panel-'+s);if(!panel||!panel.classList.contains('visible'))return;
+    var cards=panel.querySelectorAll('.qcard:not(.search-hidden)');
+    var nr=document.getElementById('nr-'+s);if(nr)nr.style.display=cards.length===0&&v?'block':'none';
+  });
+}
+function clearSearch(){
+  var si=document.getElementById('search-input');if(si)si.value='';
+  onSearch('');
+}
+
+/* ── Modo ── */
+function setMode(mode){
+  currentMode=mode;
+  document.getElementById('mode-test').classList.toggle('on',mode==='test');
+  document.getElementById('mode-quick').classList.toggle('on',mode==='quick');
+  // Rerenderizar todo
+  SECS.forEach(render);renderAll();
+}
+
+/* ── Modo oscuro ── */
+function applyTheme(){
+  document.documentElement.setAttribute('data-theme',darkMode?'dark':'light');
+  var btn=document.getElementById('btn-dark');if(btn)btn.textContent=darkMode?'☀️':'🌙';
+}
+function toggleDark(){darkMode=!darkMode;applyTheme();saveLocal();}
+
+/* ── Temporizador ── */
+function initTimer(){
+  timerRemaining=timerSec;
+  renderTimer();
+  var disp=document.getElementById('timer-display');
+  if(disp){
+    disp.addEventListener('click',function(){startEditTimer();});
+  }
+}
+function fmtTime(s){
+  var h=Math.floor(s/3600),m=Math.floor((s%3600)/60),ss=s%60;
+  return h+':'+(m<10?'0':'')+m+':'+(ss<10?'0':'')+ss;
+}
+function renderTimer(){
+  var disp=document.getElementById('timer-display');
+  if(!disp)return;
+  disp.textContent=fmtTime(timerRemaining);
+  disp.classList.toggle('danger',timerSec>0&&timerRemaining===0);
+}
+function timerToggle(){
+  if(timerRunning){
+    clearInterval(timerInterval);timerRunning=false;
+    document.getElementById('btn-tplay').textContent='▶';
+  }else{
+    if(timerRemaining<=0&&timerSec>0)timerRemaining=timerSec;
+    timerRunning=true;
+    document.getElementById('btn-tplay').textContent='⏸';
+    timerInterval=setInterval(function(){
+      if(timerRemaining>0){timerRemaining--;renderTimer();}
+      else{clearInterval(timerInterval);timerRunning=false;document.getElementById('btn-tplay').textContent='▶';renderTimer();}
+    },1000);
+  }
+}
+function timerReset(){
+  clearInterval(timerInterval);timerRunning=false;
+  timerRemaining=timerSec;
+  document.getElementById('btn-tplay').textContent='▶';
+  renderTimer();
+}
+function startEditTimer(){
+  var disp=document.getElementById('timer-display');if(!disp)return;
+  if(timerRunning){timerToggle();}
+  var old=fmtTime(timerRemaining);
+  disp.contentEditable='true';disp.classList.add('editing');
+  disp.textContent=old;
+  disp.focus();
+  var range=document.createRange();range.selectNodeContents(disp);
+  var sel=window.getSelection();sel.removeAllRanges();sel.addRange(range);
+  function commit(){
+    disp.contentEditable='false';disp.classList.remove('editing');
+    var txt=disp.textContent.trim();
+    var parts=txt.split(':').map(Number);
+    var secs=0;
+    if(parts.length===3)secs=parts[0]*3600+parts[1]*60+parts[2];
+    else if(parts.length===2)secs=parts[0]*60+parts[1];
+    else if(parts.length===1)secs=parts[0]*60;
+    if(!isNaN(secs)&&secs>=0){timerSec=secs;timerRemaining=secs;saveLocal();}
+    renderTimer();
+  }
+  disp.addEventListener('blur',commit,{once:true});
+  disp.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();disp.blur();}});
+}
+
+/* ── Helpers cid ── */
+function cidToQid(cid){return cid.replace(/^[AS]-/,'');}
+
+/* ── Teclado ── */
+function handleKey(e){
+  var tg=e.target.tagName;
+  if(tg==='INPUT'||tg==='TEXTAREA'||e.target.contentEditable==='true')return;
+  var k=e.key;
+  if(k>='1'&&k<='5'){
+    if(activeCid&&!state[cidToQid(activeCid)]){
+      var aqid=cidToQid(activeCid);
+      var pos=parseInt(k),q=findQ(aqid);
+      if(q&&pos<=q.o.length){e.preventDefault();answer(aqid,pos,getSecFromQid(aqid));}
+    }
+  }else if(k==='ArrowDown'||k==='ArrowUp'){
+    e.preventDefault();navigateQ(k==='ArrowDown'?1:-1);
+  }else if(k==='s'||k==='S'){
+    if(activeCid)toggleStar(cidToQid(activeCid));
+  }
+}
+function navigateQ(dir){
+  var cards=Array.from(document.querySelectorAll('.sec-panel.visible .qcard')).filter(function(c){return c.style.display!=='none'&&!c.classList.contains('search-hidden')&&!c.classList.contains('rem-hidden');});
+  var cids=cards.map(function(c){return c.id.replace('card-','');});
+  if(!cids.length)return;
+  var idx=activeCid?cids.indexOf(activeCid):-1;
+  var nidx=Math.max(0,Math.min(cids.length-1,idx+dir));
+  var ncid=cids[nidx];if(!ncid||ncid===activeCid)return;
+  if(activeCid){var ob=document.getElementById('b-'+activeCid);var oh=document.getElementById('h-'+activeCid);if(ob)ob.classList.remove('open');if(oh)oh.classList.remove('open');var oc=document.getElementById('card-'+activeCid);if(oc)oc.classList.remove('kb-focus');}
+  activeCid=ncid;
+  var nb=document.getElementById('b-'+ncid);var nh=document.getElementById('h-'+ncid);
+  if(nb)nb.classList.add('open');if(nh)nh.classList.add('open');
+  var nc2=document.getElementById('card-'+ncid);if(nc2){nc2.classList.add('kb-focus');nc2.scrollIntoView({behavior:'smooth',block:'nearest'});}
+}
+/*REM_FILTER_v2*/
+/* ── Filtros por contador: ✓ acertadas · ✗ falladas · ○ sin contestar ── */
+var scF={};
+var SC_EMPTY={rem:'No te queda ninguna por contestar 🎉',ok:'Aún no has acertado ninguna',ko:'Aún no has fallado ninguna 🎉'};
+function scMatch(mode,qid){var a=state[qid];return mode==='rem'?!a:(mode==='ok'?!!(a&&a.r):!!(a&&!a.r));}
+function scApply(p){
+  var mode=scF[p]||null,vis=0,qs=document.getElementById('qs-'+p);
+  if(qs)Array.prototype.forEach.call(qs.querySelectorAll('.qcard'),function(card){
+    var hd=card.querySelector('.qhead'),qid=hd?hd.dataset.qid:'',hide=!!mode&&!scMatch(mode,qid);
+    card.classList.toggle('rem-hidden',hide);if(mode&&!hide)vis++;
+  });
+  ['ok','ko','rem'].forEach(function(k){var c=document.getElementById('sc-'+k+'-'+p);if(c)c.classList.toggle('on',mode===k);});
+  var msg=document.getElementById('nrem-'+p);
+  if(mode&&!msg&&qs){msg=document.createElement('div');msg.id='nrem-'+p;msg.className='no-rem';qs.parentNode.insertBefore(msg,qs.nextSibling);}
+  if(msg){msg.textContent=SC_EMPTY[mode]||'';msg.style.display=mode&&vis===0?'block':'none';}
+}
+function scToggle(p,k){
+  if(p!=='all'&&SECS.indexOf(p)<0)return;
+  var next=scF[p]===k?null:k,targets=p==='all'?['all'].concat(SECS):[p];
+  targets.forEach(function(t){if(next&&t!=='all'&&fFailed[t])toggleFail(t);scF[t]=next;scApply(t);});
+}
+function scDecorate(){
+  var T={ok:'Pulsa para ver solo las acertadas',ko:'Pulsa para ver solo las falladas',rem:'Pulsa para ver solo las que te quedan por contestar'};
+  document.querySelectorAll('.sc').forEach(function(c){var m=/^sc-(ok|ko|rem)-/.exec(c.id||'');if(m&&!c.title)c.title=T[m[1]];});
+}
+(function(){
+  var _tf=toggleFail;toggleFail=function(sec){if(!fFailed[sec]&&scF[sec]){scF[sec]=null;scApply(sec);}_tf(sec);};
+  var _r=render;render=function(sec){_r(sec);if(scF[sec])scApply(sec);};
+  var _ra=renderAll;renderAll=function(){_ra();if(scF.all)scApply('all');};
+  var _st=showTab;showTab=function(t){_st(t);['all'].concat(SECS).forEach(function(p){if(scF[p])scApply(p);});};
+  var _us=updateScores;updateScores=function(){_us();scDecorate();};
+  document.addEventListener('click',function(e){
+    var c=e.target&&e.target.closest?e.target.closest('.sc'):null;
+    var m=c&&c.id?/^sc-(ok|ko|rem)-(.+)$/.exec(c.id):null;if(!m)return;
+    scToggle(m[2],m[1]);
+  });
+  scDecorate();
+})();
+</script>
+<!-- QRecall · medición anónima del sprint (sin nombre, sin email, sin IP guardada) -->
+<script>
+(function(){
+  var ENDPOINT='https://script.google.com/macros/s/AKfycbzDOUNVlK0wD1y0Xc4V0efc2asUI2-x0OlNbDzd6stsaLNz5avSIn1o1whusnkNC5I/exec'; // URL del Web App de Google Apps Script
+  if(!ENDPOINT||ENDPOINT.indexOf('http')!==0)return;
+  var ls;try{ls=window.localStorage;if(!ls)return;}catch(e){return;}
+  var banco=(typeof KEY==='string'&&KEY)||location.pathname.split('/').pop()||'desconocido';
+  var today=new Date().toISOString().slice(0,10);
+  function get(k){try{return ls.getItem(k);}catch(e){return null;}}
+  function set(k,v){try{ls.setItem(k,v);}catch(e){}}
+  var SRC=(function(){var m=location.search.match(/[?&]src=([A-Za-z0-9_-]+)/);if(m){set('qr_src',m[1]);return m[1];}return get('qr_src')||'';})();
+  var uid=get('qr_uid');
+  if(!uid){uid=Math.random().toString(36).slice(2,10)+Date.now().toString(36);set('qr_uid',uid);}
+  var first=get('qr_first');
+  if(!first){first=today;set('qr_first',first);}
+  var sentKey='qr_sent_'+banco;
+  var sent={};try{sent=JSON.parse(get(sentKey)||'{}')||{};}catch(e){}
+  function send(ev){
+    var q='uid='+encodeURIComponent(uid)+'&banco='+encodeURIComponent(banco)+'&ev='+encodeURIComponent(ev)+'&d='+today+'&t='+encodeURIComponent(new Date().toISOString())+'&p='+encodeURIComponent(location.pathname+(SRC?'?src='+SRC:''))+'&_='+Date.now();
+    var url=ENDPOINT+'?'+q;
+    try{fetch(url,{method:'GET',mode:'no-cors',keepalive:true,cache:'no-store'}).catch(function(){});}
+    catch(e){try{var im=new Image();im.src=url;}catch(e2){}}
+  }
+  function once(ev){if(sent[ev])return;sent[ev]=today;set(sentKey,JSON.stringify(sent));send(ev);}
+  // 1) abre: cada carga
+  send('abre');
+  // 2) vuelve: carga en un día distinto al de la primera visita (una vez)
+  if(first!==today)once('vuelve');
+  // 3) respuestas: se cuentan tarjetas contestadas en el DOM (dedupe por pregunta)
+  function answered(){
+    var seen={},n=0;
+    var cards=document.querySelectorAll('[id^="card-"].answered-ok,[id^="card-"].answered-wrong');
+    for(var i=0;i<cards.length;i++){
+      var qid=cards[i].id.replace(/^card-[AS]-/,'');
+      if(!seen[qid]){seen[qid]=1;n++;}
+    }
+    return n;
+  }
+  function check(){
+    var n=answered();
+    if(n>=1)once('primera_respuesta');
+    if(n>=10)once('10_respuestas');
+  }
+  document.addEventListener('click',function(e){
+    var t=e.target;
+    while(t&&t!==document){if(t.classList&&t.classList.contains('opt')){setTimeout(check,50);break;}t=t.parentNode;}
+  },true);
+  document.addEventListener('keydown',function(e){if(/^[1-5]$/.test(e.key))setTimeout(check,50);},true);
+  setTimeout(check,1500); // por si ya había respuestas guardadas de otra sesión
+})();
+</script>
+</body>
+</html>
